@@ -1,6 +1,5 @@
 /**
  * Official MIDI CC maps from the Valeton GP-5 and GP-50 manuals.
- * Stored with the device layer; live-controller sends these later.
  */
 export const gp5Cc = {
   patch: 0,
