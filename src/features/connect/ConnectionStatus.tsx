@@ -143,40 +143,6 @@ export function ConnectionStatus() {
     };
   }, [open, connected, linkTab, session]);
 
-  useEffect(() => {
-    if (!open || connected || linkTab !== "bluetooth") {
-      return;
-    }
-    let cancelled = false;
-    setBusy(true);
-    setError(null);
-    void session
-      .discoverBluetooth({ interactive: false })
-      .then((list) => {
-        if (!cancelled) {
-          setBleEndpoints(list);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setBleEndpoints([]);
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Could not list Bluetooth pedals.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setBusy(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, connected, linkTab, session]);
-
   async function connectWith(endpoint: LinkEndpoint, model: DeviceModel) {
     setBusy(true);
     setError(null);
@@ -324,9 +290,13 @@ export function ConnectionStatus() {
               <Tabs
                 value={linkTab}
                 onValueChange={(value) => {
-                  if (value === "usb" || value === "bluetooth") {
-                    setError(null);
-                    setLinkTab(value);
+                  if (value !== "usb" && value !== "bluetooth") {
+                    return;
+                  }
+                  setError(null);
+                  setLinkTab(value);
+                  if (value === "bluetooth" && bleEndpoints.length === 0) {
+                    void scanBluetooth(true);
                   }
                 }}
                 className="gap-4"
