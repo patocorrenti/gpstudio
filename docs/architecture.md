@@ -68,6 +68,7 @@ valeton/
     config.yaml
     specs/
     changes/
+  .cursor/               # skills y commands OPSX (openspec init --tools cursor)
   src/
     app/                 # shell React: layout, routing
     features/
@@ -87,7 +88,6 @@ valeton/
       tauri.ts
   src-tauri/             # Tauri 2 + midir
   package.json
-  AGENTS.md              # lo genera openspec init
 ```
 
 Perfiles de dispositivo (fase 1, CC oficial):
@@ -136,7 +136,7 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 
 ## Roadmap
 
-- [ ] Init git + OpenSpec (Cursor) y completar `openspec/config.yaml` con el contexto del stack
+- [x] Init git + OpenSpec (Cursor) y completar `openspec/config.yaml` con el contexto del stack
 - [ ] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind
 - [ ] Change `midi-transport`: interfaz `MidiTransport`, Web MIDI y backend Tauri/midir
 - [ ] Change `device-connection`: perfiles GP-5/GP-50, detección y sesión
