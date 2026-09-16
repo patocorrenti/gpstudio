@@ -5,6 +5,7 @@ import { DeviceSessionProvider } from "@/features/connect/DeviceSessionProvider"
 import { ControllerPage } from "@/features/controller/ControllerPage";
 import { EditorPage } from "@/features/editor/EditorPage";
 import { LibraryPage } from "@/features/library/LibraryPage";
+import { LogPage } from "@/features/log/LogPage";
 
 export function App() {
   return (
@@ -23,6 +24,7 @@ export function App() {
                 path="/controller"
                 element={<Navigate to="/" replace />}
               />
+              <Route path="/log" element={<LogPage />} />
               <Route path="/editor" element={<EditorPage />} />
               <Route path="/library" element={<LibraryPage />} />
             </Route>

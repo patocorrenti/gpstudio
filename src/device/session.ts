@@ -1,7 +1,13 @@
 import { gp5Cc } from "@/device/cc";
+import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
+
+export type { InboundMidiEvent } from "@/device/midi-log";
+
+const EMPTY_INBOUND: InboundMidiEvent[] = [];
+const INBOUND_LIMIT = 40;
 
 export const PATCH_COUNT = 100;
 
@@ -36,14 +42,26 @@ export function formatPatch(patch: number): string {
 export class DeviceSession {
   private readonly transport: MidiTransport;
   private snapshot: SessionSnapshot = { status: "disconnected" };
+  private inboundLog: InboundMidiEvent[] = EMPTY_INBOUND;
+  private inboundSeq = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(transport: MidiTransport = createMidiTransport()) {
     this.transport = transport;
+    this.transport.subscribe((bytes) => this.handleInbound(bytes));
   }
 
   getSnapshot(): SessionSnapshot {
     return this.snapshot;
+  }
+
+  getInboundLog(): InboundMidiEvent[] {
+    return this.inboundLog;
+  }
+
+  clearInboundLog(): void {
+    this.inboundLog = EMPTY_INBOUND;
+    this.emit();
   }
 
   subscribe(listener: () => void): () => void {
@@ -59,6 +77,7 @@ export class DeviceSession {
 
   async connect(endpoint: MidiEndpoint, model: DeviceModel): Promise<void> {
     await this.transport.open(endpoint.id);
+    this.inboundLog = EMPTY_INBOUND;
     this.snapshot = { status: "connected", endpoint, model, patch: 0 };
     this.emit();
   }
@@ -66,6 +85,7 @@ export class DeviceSession {
   async disconnect(): Promise<void> {
     await this.transport.close();
     this.snapshot = { status: "disconnected" };
+    this.inboundLog = EMPTY_INBOUND;
     this.emit();
   }
 
@@ -84,6 +104,22 @@ export class DeviceSession {
       throw new Error("No pedal is connected.");
     }
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
+  }
+
+  private handleInbound(bytes: Uint8Array): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const described = describeMidi(bytes);
+    this.inboundSeq += 1;
+    const next: InboundMidiEvent = {
+      id: this.inboundSeq,
+      at: Date.now(),
+      hex: described.hex,
+      summary: described.summary,
+    };
+    this.inboundLog = [...this.inboundLog.slice(1 - INBOUND_LIMIT), next];
+    this.emit();
   }
 
   private emit(): void {

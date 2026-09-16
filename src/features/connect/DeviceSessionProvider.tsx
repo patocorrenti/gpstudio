@@ -35,3 +35,12 @@ export function useSessionSnapshot() {
     () => session.getSnapshot(),
   );
 }
+
+export function useInboundLog() {
+  const session = useDeviceSession();
+  return useSyncExternalStore(
+    (listener) => session.subscribe(listener),
+    () => session.getInboundLog(),
+    () => session.getInboundLog(),
+  );
+}

@@ -143,11 +143,18 @@ export class WebMidiTransport implements MidiTransport {
     }
     try {
       this.access = (await navigator.requestMIDIAccess({
-        sysex: false,
+        sysex: true,
       })) as unknown as MidiAccessLike;
       return this.access;
-    } catch (error) {
-      throw webMidiError(error);
+    } catch (sysexError) {
+      try {
+        this.access = (await navigator.requestMIDIAccess({
+          sysex: false,
+        })) as unknown as MidiAccessLike;
+        return this.access;
+      } catch {
+        throw webMidiError(sysexError);
+      }
     }
   }
 }

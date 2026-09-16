@@ -12,6 +12,7 @@ import {
   useDeviceSession,
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
+import { RequirePedal } from "@/features/connect/RequirePedal";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -67,23 +68,23 @@ function PatchBar({ patch }: { patch: number }) {
   );
 }
 
-export function ControllerPage() {
+function ConnectedController() {
   const snapshot = useSessionSnapshot();
-
   if (snapshot.status !== "connected") {
-    return (
-      <section
-        role="status"
-        className="flex min-h-[60vh] flex-col items-center justify-center"
-      >
-        <p className="text-muted-foreground">No pedals connected</p>
-      </section>
-    );
+    return null;
   }
 
   return (
-    <section className="flex min-h-[40vh] flex-col items-center justify-center">
+    <section className="flex flex-1 flex-col items-center justify-center">
       <PatchBar patch={snapshot.patch} />
     </section>
+  );
+}
+
+export function ControllerPage() {
+  return (
+    <RequirePedal>
+      <ConnectedController />
+    </RequirePedal>
   );
 }
