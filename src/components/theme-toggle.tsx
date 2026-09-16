@@ -26,7 +26,6 @@ export function ThemeToggle() {
       ) : (
         <Moon className="size-4" />
       )}
-      {mounted ? (isDark ? "Light" : "Dark") : "Theme"}
     </Button>
   );
 }
