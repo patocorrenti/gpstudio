@@ -1,9 +1,12 @@
 import { gp5Cc } from "@/device/cc";
+import type { LinkMode } from "@/device/link";
 import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
+export type { LinkMode, LinkCapabilities } from "@/device/link";
+export { capabilitiesForLink } from "@/device/link";
 export type { InboundMidiEvent } from "@/device/midi-log";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
@@ -18,6 +21,7 @@ export type SessionSnapshot =
       endpoint: MidiEndpoint;
       model: DeviceModel;
       patch: number;
+      linkMode: LinkMode;
     };
 
 function clampPatch(value: number): number {
@@ -78,7 +82,13 @@ export class DeviceSession {
   async connect(endpoint: MidiEndpoint, model: DeviceModel): Promise<void> {
     await this.transport.open(endpoint.id);
     this.inboundLog = EMPTY_INBOUND;
-    this.snapshot = { status: "connected", endpoint, model, patch: 0 };
+    this.snapshot = {
+      status: "connected",
+      endpoint,
+      model,
+      patch: 0,
+      linkMode: "usb",
+    };
     this.emit();
   }
 

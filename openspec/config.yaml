@@ -12,11 +12,21 @@ context: |
   - Theme: dark default, light optional (shadcn tokens / `dark` class).
     Not a separate change; part of bootstrap-app.
   - Native shell: Tauri 2 (Windows installer now; iOS/Android later)
-  - MIDI / link: MidiTransport is a byte pipe + endpoint discovery, not MIDIPort types
-    - Phase 1 USB-MIDI backends of that same contract:
+  - MIDI / link: USB and Bluetooth are asymmetric, not interchangeable.
+    USB is one-way and super fast (command out; opportunistic inbound such as
+    patch-load dumps may be logged/applied later without becoming duplex).
+    Bluetooth is two-way and slower. Pedal Bluetooth is Valeton Suite GATT,
+    not class-compliant BLE-MIDI, and is a later backend — not another
+    MidiTransport kind of the USB byte pipe.
+    - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
+    - Phase 1 USB-MIDI backends of that USB contract:
       - Browser: Web MIDI (navigator.requestMIDIAccess)
       - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
-    - An endpoint has id, label, kind (`usb-midi` now; `ble` later), optional suggestedModel
+    - A USB endpoint has id, label, kind usb-midi, optional suggestedModel
+    - Connect opens with USB | Bluetooth tabs; the user chooses the method first.
+      DeviceSession records linkMode (usb now; bluetooth when that backend exists).
+      One session for Controller/Editor/Library; features that need pedal→app
+      live state read capabilities (liveFromPedal false on USB) instead of forking UI.
   - Device state: shared TypeScript layer, independent of transport
   - No HTTP backend. The app talks directly to the pedal.
   - Electron is rejected (heavier, worse mobile path).
@@ -25,12 +35,13 @@ context: |
   - UI never calls raw MIDI. DeviceSession owns the device model (GP-5 vs GP-50),
     translates actions to CC/SysEx, and the transport only sends/receives bytes.
   - Keep three axes separate: model (GP-5 vs GP-50), protocol (CC now, SysEx later),
-    link (USB-MIDI now; BLE later as another MidiTransport backend, not a DeviceSession fork).
+    link (USB vs Bluetooth; different capabilities, one DeviceSession).
   - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
-    Do not leak MIDIPort or Web MIDI types above the transport. Do not implement BLE
-    or a throwing stub. Phase 1 endpoints are all kind usb-midi.
-  - Pedal Bluetooth is Valeton Suite GATT, not class-compliant BLE-MIDI. If BLE later
-    cannot speak CC, the encoder (CC vs SysEx) is the seam — same hook the USB editor needs.
+    Do not leak MIDIPort or Web MIDI types above the transport. Do not implement a
+    GATT/BLE transport or a throwing stub. Phase 1 MIDI endpoints are all kind usb-midi.
+    The Bluetooth Connect tab is UI-only until a dedicated backend change.
+  - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
+    same hook the USB editor needs.
   - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
   - Planned layout:
       src/app/                 React shell: layout, routing, theme (dark default)
@@ -52,9 +63,11 @@ context: |
   - Shell chrome always visible: Patone name, connection-status control on the left,
     Controller / Editor / Library nav and theme toggle on the right.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
-  - Disconnected control label: Connect. Activating it opens a modal for MIDI
-    permission, USB endpoints, connect, and suggested/confirm model.
-    Connected label is defined in device-connection.
+  - Disconnected control label: Connect. Activating it opens a modal with USB
+    and Bluetooth tabs (default USB). USB: MIDI permission, endpoints, connect,
+    suggested/confirm model, copy as one-way and super fast. Bluetooth: two-way
+    and slower; not available yet (no scan/connect). Connected label and link
+    mode are defined in device-connection.
   - Controller: patch 00–99, volume, module toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
@@ -64,8 +77,8 @@ context: |
   - Mobile Tauri app
   - Preset read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Bluetooth (Valeton Suite GATT, not BLE-MIDI). USB-MIDI first; the endpoint
-    contract is the hook, with no BLE code in phase 1
+  - Bluetooth/GATT backend (Valeton Suite, not BLE-MIDI). Connect already has
+    the tab; no scan, pair, or BLE transport until a dedicated change
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller.
   Do not specify editor or library until their own changes.
@@ -95,7 +108,8 @@ rules:
     - Keep proposals focused on one planned change from docs/architecture.md
     - Always include a Non-goals section
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
-    - Do not propose SysEx, preset library, IRs, Bluetooth, or mobile packaging in phase 1 changes
+    - Do not propose SysEx, preset library, IRs, a Bluetooth/GATT backend, or mobile packaging in phase 1 changes
+    - Connect already offers USB vs Bluetooth tabs; do not revert to USB-only copy or treat the links as interchangeable
   specs:
     - Use WHEN/THEN scenarios (Given/When/Then is fine)
     - Phase 1 capabilities live under midi-transport, device-connection, and live-controller
@@ -104,7 +118,8 @@ rules:
   design:
     - Isolate Web MIDI and Tauri/midir behind MidiTransport (endpoints + bytes, kind usb-midi)
     - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
-    - Do not implement Bluetooth or a BLE stub in phase 1; keep the endpoint kind field so BLE can be a later backend
+    - Do not implement a Bluetooth/GATT transport or a throwing BLE stub; Connect may show Bluetooth as not available yet
+    - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors
     - Match the agreed repo layout in docs/architecture.md

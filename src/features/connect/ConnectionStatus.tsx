@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import gp5Thumb from "@/assets/img/gp5-thumb.png";
 import gp50Thumb from "@/assets/img/gp50-thumb.png";
+import type { LinkMode } from "@/device/link";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useDeviceSession,
   useSessionSnapshot,
@@ -28,6 +30,10 @@ function connectedDetail(label: string, model: DeviceModel): string {
     return modelName;
   }
   return `${label} · ${modelName}`;
+}
+
+function linkModeLabel(linkMode: LinkMode): string {
+  return linkMode === "bluetooth" ? "Bluetooth link" : "USB link";
 }
 
 function pedalThumbSrc(model: DeviceModel | undefined): string | undefined {
@@ -58,6 +64,7 @@ export function ConnectionStatus() {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
   const [open, setOpen] = useState(false);
+  const [linkTab, setLinkTab] = useState<LinkMode>("usb");
   const [endpoints, setEndpoints] = useState<MidiEndpoint[]>([]);
   const [pending, setPending] = useState<MidiEndpoint | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +89,7 @@ export function ConnectionStatus() {
   }
 
   useEffect(() => {
-    if (!open || connected) {
+    if (!open || connected || linkTab !== "usb") {
       return;
     }
     let cancelled = false;
@@ -113,7 +120,7 @@ export function ConnectionStatus() {
     return () => {
       cancelled = true;
     };
-  }, [open, connected, session]);
+  }, [open, connected, linkTab, session]);
 
   async function connectWith(endpoint: MidiEndpoint, model: DeviceModel) {
     setBusy(true);
@@ -143,6 +150,7 @@ export function ConnectionStatus() {
     try {
       await session.disconnect();
       setPending(null);
+      setLinkTab("usb");
       await scan();
     } catch (cause) {
       setError(
@@ -180,19 +188,22 @@ export function ConnectionStatus() {
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next) {
+          if (next) {
+            setLinkTab("usb");
+          } else {
             setPending(null);
             setError(null);
           }
         }}
       >
         <DialogContent className="sm:max-w-md">
-          {connected ? (
+          {snapshot.status === "connected" ? (
             <>
               <DialogHeader>
                 <DialogTitle>Connected</DialogTitle>
                 <DialogDescription>
-                  {connectedDetail(snapshot.endpoint.label, snapshot.model)}
+                  {connectedDetail(snapshot.endpoint.label, snapshot.model)} ·{" "}
+                  {linkModeLabel(snapshot.linkMode)}
                 </DialogDescription>
               </DialogHeader>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -254,64 +265,97 @@ export function ConnectionStatus() {
             <>
               <DialogHeader>
                 <DialogTitle>Connect</DialogTitle>
-                <DialogDescription>
-                  Connect the pedal to your computer via USB.
-                  <br />
-                  Bluetooth is not supported yet.
-                </DialogDescription>
               </DialogHeader>
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
-              {busy && endpoints.length === 0 && !error ? (
-                <p className="text-sm text-muted-foreground">Looking for USB devices…</p>
-              ) : null}
-              {!busy && endpoints.length === 0 && !error ? (
-                <div
-                  role="status"
-                  className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
-                >
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  <p>No USB devices found. Connect the pedal and try again.</p>
-                </div>
-              ) : null}
-              {endpoints.length > 0 ? (
-                <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-                  {endpoints.map((endpoint) => (
-                    <li key={endpoint.id}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-auto w-full justify-start gap-3 py-2 pl-2"
-                        disabled={busy}
-                        onClick={() => pickDevice(endpoint)}
-                      >
-                        <PedalThumb model={endpoint.suggestedModel} />
-                        <span className="flex flex-col items-start text-left">
-                          <span>{endpoint.label}</span>
-                          {endpoint.suggestedModel ? (
-                            <span className="text-xs text-muted-foreground">
-                              {displayModelName(endpoint.suggestedModel)}
+              <Tabs
+                value={linkTab}
+                onValueChange={(value) => {
+                  if (value === "usb" || value === "bluetooth") {
+                    setLinkTab(value);
+                  }
+                }}
+                className="gap-4"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="usb">USB</TabsTrigger>
+                  <TabsTrigger value="bluetooth">Bluetooth</TabsTrigger>
+                </TabsList>
+                <TabsContent value="usb" className="flex flex-col gap-4">
+                  <DialogDescription>
+                    USB is a one-way connection and super fast.
+                  </DialogDescription>
+                  {error ? (
+                    <p className="text-sm text-destructive">{error}</p>
+                  ) : null}
+                  {busy && endpoints.length === 0 && !error ? (
+                    <p className="text-sm text-muted-foreground">
+                      Looking for USB devices…
+                    </p>
+                  ) : null}
+                  {!busy && endpoints.length === 0 && !error ? (
+                    <div
+                      role="status"
+                      className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+                    >
+                      <TriangleAlert
+                        className="mt-0.5 size-4 shrink-0"
+                        aria-hidden
+                      />
+                      <p>
+                        No USB devices found. Connect the pedal and try again.
+                      </p>
+                    </div>
+                  ) : null}
+                  {endpoints.length > 0 ? (
+                    <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+                      {endpoints.map((endpoint) => (
+                        <li key={endpoint.id}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-auto w-full justify-start gap-3 py-2 pl-2"
+                            disabled={busy}
+                            onClick={() => pickDevice(endpoint)}
+                          >
+                            <PedalThumb model={endpoint.suggestedModel} />
+                            <span className="flex flex-col items-start text-left">
+                              <span>{endpoint.label}</span>
+                              {endpoint.suggestedModel ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {displayModelName(endpoint.suggestedModel)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Model unknown
+                                </span>
+                              )}
                             </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Model unknown
-                            </span>
-                          )}
-                        </span>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </TabsContent>
+                <TabsContent value="bluetooth" className="flex flex-col gap-2">
+                  <DialogDescription>
+                    Bluetooth is a two-way connection and slower.
+                  </DialogDescription>
+                  <p className="text-sm text-muted-foreground">
+                    Bluetooth is not available yet.
+                  </p>
+                </TabsContent>
+              </Tabs>
+              {linkTab === "usb" ? (
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void scan()}
+                  >
+                    Refresh
+                  </Button>
+                </DialogFooter>
               ) : null}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void scan()}
-                >
-                  Refresh
-                </Button>
-              </DialogFooter>
             </>
           )}
         </DialogContent>
