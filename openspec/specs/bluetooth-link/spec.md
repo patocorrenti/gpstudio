@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets the app find nearby Valeton GP-5 and GP-50 pedals over Bluetooth and open one GATT session, without using the USB-MIDI pipe or sending a control protocol.
+Lets the app find nearby Valeton GP-5 and GP-50 pedals over Bluetooth, open one GATT session, and send control bytes on that session, without using the USB-MIDI pipe.
 
 ## Requirements
 

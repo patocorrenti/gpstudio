@@ -35,7 +35,7 @@ function connectedDetail(label: string, model: DeviceModel): string {
 }
 
 function linkModeLabel(linkMode: LinkMode): string {
-  return linkMode === "bluetooth" ? "Bluetooth link" : "USB link";
+  return linkMode === "bluetooth" ? "Bluetooth" : "USB";
 }
 
 function pedalThumbSrc(model: DeviceModel | undefined): string | undefined {
@@ -223,8 +223,8 @@ export function ConnectionStatus() {
               <DialogHeader>
                 <DialogTitle>Connected</DialogTitle>
                 <DialogDescription>
-                  {connectedDetail(snapshot.endpoint.label, snapshot.model)} ·{" "}
-                  {linkModeLabel(snapshot.linkMode)}
+                  {linkModeLabel(snapshot.linkMode)} ·{" "}
+                  {connectedDetail(snapshot.endpoint.label, snapshot.model)}
                 </DialogDescription>
               </DialogHeader>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
