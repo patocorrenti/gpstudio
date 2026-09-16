@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
+import gp5Thumb from "@/assets/img/gp5-thumb.png";
+import gp50Thumb from "@/assets/img/gp50-thumb.png";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +28,30 @@ function connectedDetail(label: string, model: DeviceModel): string {
     return modelName;
   }
   return `${label} · ${modelName}`;
+}
+
+function pedalThumbSrc(model: DeviceModel | undefined): string | undefined {
+  if (model === "gp5") {
+    return gp5Thumb;
+  }
+  if (model === "gp50") {
+    return gp50Thumb;
+  }
+  return undefined;
+}
+
+function PedalThumb({ model }: { model?: DeviceModel }) {
+  const src = pedalThumbSrc(model);
+  return (
+    <span
+      aria-hidden
+      className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted ring-foreground/10"
+    >
+      {src ? (
+        <img src={src} alt="" className="size-full object-contain p-1" />
+      ) : null}
+    </span>
+  );
 }
 
 export function ConnectionStatus() {
@@ -191,23 +217,25 @@ export function ConnectionStatus() {
                 </DialogDescription>
               </DialogHeader>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="h-auto flex-col gap-2 py-3"
                   disabled={busy}
                   onClick={() => void connectWith(pending, "gp5")}
                 >
+                  <PedalThumb model="gp5" />
                   GP-5
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex-1"
+                  className="h-auto flex-col gap-2 py-3"
                   disabled={busy}
                   onClick={() => void connectWith(pending, "gp50")}
                 >
+                  <PedalThumb model="gp50" />
                   GP-50
                 </Button>
               </div>
@@ -252,10 +280,11 @@ export function ConnectionStatus() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-auto w-full justify-start py-2"
+                        className="h-auto w-full justify-start gap-3 py-2 pl-2"
                         disabled={busy}
                         onClick={() => pickDevice(endpoint)}
                       >
+                        <PedalThumb model={endpoint.suggestedModel} />
                         <span className="flex flex-col items-start text-left">
                           <span>{endpoint.label}</span>
                           {endpoint.suggestedModel ? (
