@@ -15,13 +15,11 @@ export function AppShell() {
           <p className="text-lg font-semibold tracking-tight">Patone</p>
           <ConnectionStatus />
         </div>
-        <nav className="flex gap-3">
-          <NavLink to="/" end className={navClass}>
-            Controller
-          </NavLink>
-        </nav>
         <div className="ml-auto flex items-center gap-3">
           <nav>
+            <NavLink to="/" end className={navClass}>
+              Controller
+            </NavLink>
             <NavLink to="/log" className={navClass}>
               Log
             </NavLink>
