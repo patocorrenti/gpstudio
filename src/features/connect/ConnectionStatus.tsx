@@ -336,8 +336,8 @@ export function ConnectionStatus() {
                   <TabsTrigger value="bluetooth">Bluetooth</TabsTrigger>
                 </TabsList>
                 <TabsContent value="usb" className="flex flex-col gap-4">
-                  <DialogDescription>
-                    USB is a one-way connection and super fast.
+                  <DialogDescription className="text-center">
+                    One-way connection - super fast.
                   </DialogDescription>
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
@@ -392,8 +392,8 @@ export function ConnectionStatus() {
                   ) : null}
                 </TabsContent>
                 <TabsContent value="bluetooth" className="flex flex-col gap-4">
-                  <DialogDescription>
-                    Bluetooth is a two-way connection and slower.
+                  <DialogDescription className="text-center">
+                    Two-way connection - slower.
                   </DialogDescription>
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
@@ -413,8 +413,8 @@ export function ConnectionStatus() {
                         aria-hidden
                       />
                       <p>
-                        No Bluetooth pedals found. Put the pedal in pairing mode
-                        and try again.
+                        No Bluetooth pedals found.<br />
+                        Put the pedal in pairing mode and refresh.
                       </p>
                     </div>
                   ) : null}
