@@ -113,6 +113,7 @@ Trabajo spec-driven desde el día 1. No dump de código sin change.
 2. Instalar CLI (`@fission-ai/openspec`) y `openspec init` con herramienta **Cursor**
 3. Completar `openspec/config.yaml` con contexto: Tauri 2, React/TS, MIDI dual, GP-5/GP-50, fases
 4. Cada feature = un change: `/opsx:propose` → review → `/opsx:apply` → `/opsx:archive`
+5. El agente no prueba en el navegador a menos que el usuario lo pida explícitamente. Typecheck/lint sí; la UI la prueba el usuario.
 
 Cambios previstos, en orden:
 

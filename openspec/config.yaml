@@ -74,6 +74,9 @@ context: |
   - Spec-driven from day 1: no feature dump without an OpenSpec change
     (/opsx-propose → review → /opsx-apply → /opsx-archive).
   - Code comments and UI/code strings are in English. Chat with the user is in Spanish.
+  - Do not run in-browser verification (browser tools, headless Chrome,
+    screenshots, click-throughs) unless the user explicitly asks for it.
+    Typecheck / lint is fine. The user tests the UI themselves.
 
 rules:
   proposal:
@@ -94,13 +97,17 @@ rules:
   tasks:
     - Break work into small, independently verifiable tasks
     - Call out web vs desktop verification where MIDI backends differ
+    - Do not add in-browser verification as a required task unless the user
+      explicitly asked for browser testing
 
 operations:
   apply:
     guidance:
       - Implement only the current change; leave later-phase features as stubs if the layout requires them
       - Do not introduce HTTP backends, Electron, or a monorepo
-      - Verify UI changes in the browser or the closest substitute (dev server / tauri dev)
+      - Do not verify UI in a browser (tools, headless Chrome, screenshots,
+        or click-throughs) unless the user explicitly asks. Typecheck / lint
+        is enough; the user tests the UI themselves.
   archive:
     guidance:
       - Sync only the phase-1 spec domains that this change actually touched
