@@ -136,6 +136,13 @@ export class WebBluetoothLink implements BluetoothLink {
     this.openDevice = device;
   }
 
+  async send(_bytes: Uint8Array): Promise<void> {
+    if (!this.openDevice?.gatt?.connected) {
+      throw new Error("No Bluetooth pedal is connected.");
+    }
+    throw new Error("Could not send over Bluetooth.");
+  }
+
   async close(): Promise<void> {
     const device = this.openDevice;
     this.openDevice = null;

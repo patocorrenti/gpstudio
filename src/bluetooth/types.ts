@@ -14,5 +14,6 @@ export type BluetoothDiscoverOptions = {
 export interface BluetoothLink {
   discover(options?: BluetoothDiscoverOptions): Promise<BluetoothEndpoint[]>;
   open(id: string): Promise<void>;
+  send(bytes: Uint8Array): Promise<void>;
   close(): Promise<void>;
 }

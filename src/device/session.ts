@@ -4,7 +4,7 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
-import { gp5Cc } from "@/device/cc";
+import { encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import { capabilitiesForLink, type LinkMode } from "@/device/link";
 import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
@@ -41,10 +41,6 @@ function clampPatch(value: number): number {
 
 function wrapPatch(value: number): number {
   return ((value % PATCH_COUNT) + PATCH_COUNT) % PATCH_COUNT;
-}
-
-function patchControlChange(patch: number): Uint8Array {
-  return new Uint8Array([0xb0, gp5Cc.patch, patch]);
 }
 
 export function formatPatch(patch: number): string {
@@ -135,12 +131,17 @@ export class DeviceSession {
       throw new Error("No pedal is connected.");
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
-      throw new Error("Patch control is not available over Bluetooth yet.");
+      throw new Error("Patch control is not available on this link.");
     }
     const next = clampPatch(patch);
     this.snapshot = { ...this.snapshot, patch: next };
     this.emit();
-    await this.transport.send(patchControlChange(next));
+    const bytes = encodePatch(this.snapshot.linkMode, next);
+    if (this.snapshot.linkMode === "bluetooth") {
+      await this.bluetooth.send(bytes);
+    } else {
+      await this.transport.send(bytes);
+    }
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {

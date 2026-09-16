@@ -1,4 +1,4 @@
-use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter};
+use btleplug::api::{Central, CharPropFlags, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use serde::Serialize;
 use std::time::Duration;
@@ -40,6 +40,46 @@ fn suggest_model(label: &str) -> Option<&'static str> {
 
 fn looks_like_pedal(label: &str) -> bool {
     suggest_model(label).is_some() || compact_name(label).contains("valeton")
+}
+
+fn characteristic_props(flags: CharPropFlags) -> String {
+    let mut names = Vec::new();
+    if flags.contains(CharPropFlags::READ) {
+        names.push("read");
+    }
+    if flags.contains(CharPropFlags::WRITE) {
+        names.push("write");
+    }
+    if flags.contains(CharPropFlags::WRITE_WITHOUT_RESPONSE) {
+        names.push("write-without-response");
+    }
+    if flags.contains(CharPropFlags::NOTIFY) {
+        names.push("notify");
+    }
+    if flags.contains(CharPropFlags::INDICATE) {
+        names.push("indicate");
+    }
+    if names.is_empty() {
+        return "none".to_string();
+    }
+    names.join(", ")
+}
+
+async fn log_gatt_map(peripheral: &Peripheral) {
+    if let Err(err) = peripheral.discover_services().await {
+        log::warn!("GATT discover_services failed: {err}");
+        return;
+    }
+    for service in peripheral.services() {
+        log::info!("GATT service {}", service.uuid);
+        for characteristic in service.characteristics {
+            log::info!(
+                "GATT characteristic {} [{}]",
+                characteristic.uuid,
+                characteristic_props(characteristic.properties)
+            );
+        }
+    }
 }
 
 async fn first_adapter() -> Result<Adapter, String> {
@@ -131,6 +171,7 @@ pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<(
         .connect()
         .await
         .map_err(|_| "Could not open the Bluetooth connection.".to_string())?;
+    log_gatt_map(&peripheral).await;
     *connected = Some(peripheral);
     Ok(())
 }

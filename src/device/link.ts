@@ -8,6 +8,6 @@ export type LinkCapabilities = {
 export function capabilitiesForLink(linkMode: LinkMode): LinkCapabilities {
   return {
     liveFromPedal: linkMode === "bluetooth",
-    commandToPedal: linkMode === "usb",
+    commandToPedal: true,
   };
 }

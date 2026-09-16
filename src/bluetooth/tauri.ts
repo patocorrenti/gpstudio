@@ -14,6 +14,8 @@ type EndpointDto = {
 };
 
 export class TauriBluetoothLink implements BluetoothLink {
+  private sessionOpen = false;
+
   async discover(
     _options: BluetoothDiscoverOptions = {},
   ): Promise<BluetoothEndpoint[]> {
@@ -39,9 +41,18 @@ export class TauriBluetoothLink implements BluetoothLink {
 
   async open(id: string): Promise<void> {
     await invoke("ble_open", { id });
+    this.sessionOpen = true;
+  }
+
+  async send(_bytes: Uint8Array): Promise<void> {
+    if (!this.sessionOpen) {
+      throw new Error("No Bluetooth pedal is connected.");
+    }
+    throw new Error("Could not send over Bluetooth.");
   }
 
   async close(): Promise<void> {
+    this.sessionOpen = false;
     await invoke("ble_close");
   }
 }

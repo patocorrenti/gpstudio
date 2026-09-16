@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { capabilitiesForLink } from "@/device/link";
 import { formatPatch, PATCH_COUNT } from "@/device/session";
 import {
   useDeviceSession,
@@ -73,16 +72,6 @@ function ConnectedController() {
   const snapshot = useSessionSnapshot();
   if (snapshot.status !== "connected") {
     return null;
-  }
-
-  if (!capabilitiesForLink(snapshot.linkMode).commandToPedal) {
-    return (
-      <section className="flex flex-1 flex-col items-center justify-center">
-        <p className="text-muted-foreground">
-          Patch control is not available over Bluetooth yet.
-        </p>
-      </section>
-    );
   }
 
   return (
