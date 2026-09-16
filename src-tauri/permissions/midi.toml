@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-midi"
+description = "Allows listing, opening, sending, and closing USB MIDI ports"
+commands.allow = ["midi_list_ports", "midi_open", "midi_send", "midi_close"]
