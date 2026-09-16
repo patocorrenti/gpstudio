@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides the runnable web and desktop application shell for Valeton: layout, navigation placeholders, and dark-default appearance so later MIDI and controller work can land in a real app.
+Provides the runnable web and desktop application shell for Valeton: layout, a global connection-status control, section navigation, and dark-default appearance so later MIDI and controller work can land in a real app.
 
 ## Requirements
 
@@ -42,18 +42,30 @@ On first launch with no stored preference, the shell SHALL present a dark color 
 
 ### Requirement: Planned feature areas exist as placeholders
 
-The shell SHALL expose placeholder areas for Connect, Controller, Editor, and Library. Those placeholders MUST be visible and labeled in English. They MUST NOT talk to a device, send MIDI, or implement preset/IR features.
+The shell SHALL expose a global connection-status control and placeholder areas for Controller, Editor, and Library. Those placeholders MUST be visible and labeled in English. Connect MUST NOT be a navigation destination. The placeholders MUST NOT talk to a device, send MIDI, or implement preset/IR features.
 
 #### Scenario: Shell identifies the product
 - **WHEN** the user opens the app
-- **THEN** the shell shows the product name Valeton and a way to change appearance
+- **THEN** the shell shows the product name Valeton, a connection-status control, section navigation, and a way to change appearance
+- **AND** Controller is the active section
+
+#### Scenario: Connection status is always visible
+- **WHEN** the user is on Controller, Editor, or Library
+- **THEN** the connection-status control remains visible in the shell
+- **AND** it reads Connect because no pedal is connected
+
+#### Scenario: Connection opens a modal, not a page
+- **WHEN** the user activates the connection-status control
+- **THEN** a modal opens for MIDI device connection
+- **AND** the current section does not change
+- **AND** no device or MIDI action occurs
 
 #### Scenario: Later features are stubbed
 - **WHEN** the user opens the Editor or Library placeholder
 - **THEN** the UI states that the feature is not available yet
 - **AND** no device or MIDI action occurs
 
-#### Scenario: Phase 1 screens are reserved
-- **WHEN** the user opens the Connect or Controller placeholder
-- **THEN** the UI shows a reserved screen for that area
-- **AND** no device connection or live controls are present
+#### Scenario: Controller home is reserved
+- **WHEN** the user opens the app or the Controller section
+- **THEN** the UI shows a reserved screen for Controller
+- **AND** no live controls are present

@@ -22,7 +22,8 @@ Electron queda descartado: más pesado y peor camino a mobile. El costo de Tauri
 ```mermaid
 flowchart TB
   subgraph ui [React UI]
-    Connect[ConnectScreen]
+    Shell[AppShell]
+    ConnectStatus[ConnectionStatus]
     Controller[LiveController]
     Editor[PresetEditor later]
     Library[PresetLibrary later]
@@ -44,7 +45,11 @@ flowchart TB
     Midir[midir WinMM]
   end
 
-  Connect --> Session
+  Shell --> ConnectStatus
+  Shell --> Controller
+  Shell --> Editor
+  Shell --> Library
+  ConnectStatus --> Session
   Controller --> Session
   Editor --> Session
   Library --> Session
@@ -58,6 +63,8 @@ flowchart TB
 ```
 
 La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), traduce acciones a CC/SysEx, y el transporte solo envía/recibe bytes.
+
+Connect no es una pantalla: es estado de sesión global. El chrome lo muestra siempre (sin pedal: Connect) y el flujo de conexión ocurre en un modal. Controller es la home.
 
 ## Estructura de repo
 
@@ -73,8 +80,8 @@ valeton/
   src/
     app/                 # shell React: layout, routing, theme (dark default)
     features/
-      connect/
-      controller/        # fase 1
+      connect/           # estado global + modal (no es una página)
+      controller/        # home / fase 1
       editor/            # fase 2 (stub)
       library/           # fase 3 (stub)
     device/
@@ -111,7 +118,7 @@ Cambios previstos, en orden:
 
 1. **`bootstrap-app`** — scaffold Tauri 2 + Vite/React/TS/Tailwind/shadcn, tema dark default, scripts `dev` / `tauri dev` / `build`
 2. **`midi-transport`** — interfaz + Web MIDI + comandos Rust `midi_list_ports` / `open` / `send` + eventos inbound
-3. **`device-connection`** — detectar GP-5/GP-50, conectar, estado de sesión
+3. **`device-connection`** — detectar GP-5/GP-50, conectar, estado de sesión (control global + modal, no una ruta)
 4. **`live-controller`** — patch, volumen, on/off de módulos, tuner (CC oficial)
 5. Más adelante: `preset-editor` (SysEx), `preset-library`, IRs/NAM
 
@@ -121,7 +128,9 @@ El SysEx de editor/IRs está reverse-engineered en proyectos ajenos (p.ej. edito
 
 ## Fase 1 — lo que se ve
 
-Pantalla Connect: pedir permiso MIDI, listar puertos, conectar, mostrar modelo.
+Chrome siempre visible: nombre Valeton, control de conexión a la izquierda, secciones Controller / Editor / Library y tema a la derecha. Controller es la home (`/`). Connect no es una sección: es estado global. Sin pedal el control dice Connect y abre un modal.
+
+Modal de conexión: pedir permiso MIDI, listar puertos, conectar, mostrar modelo. Qué muestra el control cuando hay pedal se define en `device-connection`.
 
 Pantalla Controller: selector de patch 00–99, volumen, toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner. GP-50 además: master volume y modo Patch/Stomp.
 
@@ -139,5 +148,5 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Init git + OpenSpec (Cursor) y completar `openspec/config.yaml` con el contexto del stack
 - [x] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind + shadcn, dark default
 - [ ] Change `midi-transport`: interfaz `MidiTransport`, Web MIDI y backend Tauri/midir
-- [ ] Change `device-connection`: perfiles GP-5/GP-50, detección y sesión
+- [ ] Change `device-connection`: perfiles GP-5/GP-50, detección y sesión (control global + modal)
 - [ ] Change `live-controller`: UI de patch/módulos/volumen via MIDI CC oficial

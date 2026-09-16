@@ -1,9 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 
 const links = [
-  { to: "/", label: "Connect", end: true },
-  { to: "/controller", label: "Controller" },
+  { to: "/", label: "Controller", end: true },
   { to: "/editor", label: "Editor" },
   { to: "/library", label: "Library" },
 ] as const;
@@ -12,8 +12,11 @@ export function AppShell() {
   return (
     <div className="flex min-h-svh flex-col bg-background text-foreground">
       <header className="flex items-center justify-between gap-4 border-b px-6 py-3">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
           <p className="text-lg font-semibold tracking-tight">Valeton</p>
+          <ConnectionStatus />
+        </div>
+        <div className="flex items-center gap-3">
           <nav className="flex gap-3 text-sm">
             {links.map((link) => (
               <NavLink
@@ -30,8 +33,8 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
+          <ThemeToggle />
         </div>
-        <ThemeToggle />
       </header>
       <main className="flex-1 p-6">
         <Outlet />
