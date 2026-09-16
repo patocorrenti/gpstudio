@@ -137,7 +137,7 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 ## Roadmap
 
 - [x] Init git + OpenSpec (Cursor) y completar `openspec/config.yaml` con el contexto del stack
-- [ ] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind + shadcn, dark default
+- [x] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind + shadcn, dark default
 - [ ] Change `midi-transport`: interfaz `MidiTransport`, Web MIDI y backend Tauri/midir
 - [ ] Change `device-connection`: perfiles GP-5/GP-50, detección y sesión
 - [ ] Change `live-controller`: UI de patch/módulos/volumen via MIDI CC oficial
