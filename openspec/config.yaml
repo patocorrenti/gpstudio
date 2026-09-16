@@ -12,9 +12,11 @@ context: |
   - Theme: dark default, light optional (shadcn tokens / `dark` class).
     Not a separate change; part of bootstrap-app.
   - Native shell: Tauri 2 (Windows installer now; iOS/Android later)
-  - MIDI: MidiTransport interface with two backends
-    - Browser: Web MIDI (navigator.requestMIDIAccess)
-    - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
+  - MIDI / link: MidiTransport is a byte pipe + endpoint discovery, not MIDIPort types
+    - Phase 1 USB-MIDI backends of that same contract:
+      - Browser: Web MIDI (navigator.requestMIDIAccess)
+      - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
+    - An endpoint has id, label, kind (`usb-midi` now; `ble` later), optional suggestedModel
   - Device state: shared TypeScript layer, independent of transport
   - No HTTP backend. The app talks directly to the pedal.
   - Electron is rejected (heavier, worse mobile path).
@@ -22,6 +24,13 @@ context: |
   Architecture:
   - UI never calls raw MIDI. DeviceSession owns the device model (GP-5 vs GP-50),
     translates actions to CC/SysEx, and the transport only sends/receives bytes.
+  - Keep three axes separate: model (GP-5 vs GP-50), protocol (CC now, SysEx later),
+    link (USB-MIDI now; BLE later as another MidiTransport backend, not a DeviceSession fork).
+  - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
+    Do not leak MIDIPort or Web MIDI types above the transport. Do not implement BLE
+    or a throwing stub. Phase 1 endpoints are all kind usb-midi.
+  - Pedal Bluetooth is Valeton Suite GATT, not class-compliant BLE-MIDI. If BLE later
+    cannot speak CC, the encoder (CC vs SysEx) is the seam — same hook the USB editor needs.
   - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
   - Planned layout:
       src/app/                 React shell: layout, routing, theme (dark default)
@@ -30,21 +39,22 @@ context: |
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
       src/device/              models, profiles, official CC maps, session
-      src/midi/                MidiTransport, detect (web vs tauri), web.ts, tauri.ts
+      src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
   - GP-50: the above + master/EXP/BPM/Patch|Stomp mode (CC 1, 11, 13, 17, 19, 21, 28)
-  - Detect by USB MIDI port name (Valeton usually appears as GP-5 / GP-50).
-    If ambiguous, the user picks the model.
+  - Endpoint suggests model from the USB MIDI name (Valeton usually appears as GP-5 / GP-50).
+    If ambiguous or the name does not match, the user confirms or corrects. Port name is not hardware identity.
 
   Phase 1 visible UI:
   - Shell chrome always visible: Patone name, connection-status control on the left,
     Controller / Editor / Library nav and theme toggle on the right.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
   - Disconnected control label: Connect. Activating it opens a modal for MIDI
-    permission, ports, connect, and model. Connected label is defined in device-connection.
+    permission, USB endpoints, connect, and suggested/confirm model.
+    Connected label is defined in device-connection.
   - Controller: patch 00–99, volume, module toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
@@ -54,14 +64,16 @@ context: |
   - Mobile Tauri app
   - Preset read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Bluetooth (some GP-5 units; USB-MIDI first)
+  - Bluetooth (Valeton Suite GATT, not BLE-MIDI). USB-MIDI first; the endpoint
+    contract is the hook, with no BLE code in phase 1
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller.
   Do not specify editor or library until their own changes.
 
   Planned changes, in order:
   1. bootstrap-app — scaffold Tauri 2 + Vite/React/TS/Tailwind/shadcn, dark default, scripts dev / tauri dev / build
-  2. midi-transport — MidiTransport + Web MIDI + Rust commands midi_list_ports / open / send + inbound events
+  2. midi-transport — MidiTransport (endpoints + bytes, kind usb-midi) + Web MIDI
+     + Rust commands midi_list_ports / open / send + inbound events. No BLE.
   3. device-connection — detect GP-5/GP-50, connect, session state
      (global shell control + modal, not a route)
   4. live-controller — patch, volume, module on/off, tuner via official CC
@@ -90,7 +102,9 @@ rules:
     - Specs describe observable behavior, not transport-internal byte packing unless that is the capability
     - UI requirements must go through DeviceSession, never raw MIDI from React
   design:
-    - Isolate Web MIDI and Tauri/midir behind MidiTransport
+    - Isolate Web MIDI and Tauri/midir behind MidiTransport (endpoints + bytes, kind usb-midi)
+    - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
+    - Do not implement Bluetooth or a BLE stub in phase 1; keep the endpoint kind field so BLE can be a later backend
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors
     - Match the agreed repo layout in docs/architecture.md
