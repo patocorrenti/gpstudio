@@ -1,0 +1,102 @@
+schema: spec-driven
+
+# Project context shown to AI when creating OpenSpec artifacts.
+# Source of truth for the agreed plan: docs/architecture.md
+context: |
+  Product: Valeton — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
+  The app talks USB-MIDI to the pedal. Phase 1 uses official MIDI CC only.
+  SysEx preset editor, library, and IRs/NAM come in later phases.
+
+  Tech stack:
+  - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
+  - Theme: dark default, light optional (shadcn tokens / `dark` class).
+    Not a separate change; part of bootstrap-app.
+  - Native shell: Tauri 2 (Windows installer now; iOS/Android later)
+  - MIDI: MidiTransport interface with two backends
+    - Browser: Web MIDI (navigator.requestMIDIAccess)
+    - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
+  - Device state: shared TypeScript layer, independent of transport
+  - No HTTP backend. The app talks directly to the pedal.
+  - Electron is rejected (heavier, worse mobile path).
+
+  Architecture:
+  - UI never calls raw MIDI. DeviceSession owns the device model (GP-5 vs GP-50),
+    translates actions to CC/SysEx, and the transport only sends/receives bytes.
+  - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
+  - Planned layout:
+      src/app/                 React shell: layout, routing, theme (dark default)
+      src/features/connect     Connect screen
+      src/features/controller  Phase 1 live controller
+      src/features/editor      Phase 2 stub until its change
+      src/features/library     Phase 3 stub until its change
+      src/device/              models, profiles, official CC maps, session
+      src/midi/                MidiTransport, detect (web vs tauri), web.ts, tauri.ts
+      src-tauri/               Tauri 2 + midir
+
+  Device profiles (phase 1, official MIDI CC):
+  - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
+  - GP-50: the above + master/EXP/BPM/Patch|Stomp mode (CC 1, 11, 13, 17, 19, 21, 28)
+  - Detect by USB MIDI port name (Valeton usually appears as GP-5 / GP-50).
+    If ambiguous, the user picks the model.
+
+  Phase 1 visible UI:
+  - Connect: request MIDI permission, list ports, connect, show model
+  - Controller: patch 00–99, volume, module toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner
+  - GP-50 also: master volume and Patch/Stomp mode
+  - Windows packaging: tauri build → NSIS/MSI
+  - Web: Vite in Chrome/Edge (localhost or HTTPS)
+
+  Out of scope until a dedicated change:
+  - Mobile Tauri app
+  - Preset read/write, rename, reorder
+  - IR / SnapTone / NAM upload
+  - Bluetooth (some GP-5 units; USB-MIDI first)
+
+  Spec domains for phase 1: midi-transport, device-connection, live-controller.
+  Do not specify editor or library until their own changes.
+
+  Planned changes, in order:
+  1. bootstrap-app — scaffold Tauri 2 + Vite/React/TS/Tailwind/shadcn, dark default, scripts dev / tauri dev / build
+  2. midi-transport — MidiTransport + Web MIDI + Rust commands midi_list_ports / open / send + inbound events
+  3. device-connection — detect GP-5/GP-50, connect, session state
+  4. live-controller — patch, volume, module on/off, tuner via official CC
+  5. Later: preset-editor (SysEx), preset-library, IRs/NAM
+
+  Hard constraints:
+  - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
+  - Phase 1 uses only MIDI CC published in the official manuals.
+  - Phase 2 SysEx is documented in its own design.md when that change starts.
+  - Spec-driven from day 1: no feature dump without an OpenSpec change
+    (/opsx-propose → review → /opsx-apply → /opsx-archive).
+  - Code comments and UI/code strings are in English. Chat with the user is in Spanish.
+
+rules:
+  proposal:
+    - Keep proposals focused on one planned change from docs/architecture.md
+    - Always include a Non-goals section
+    - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
+    - Do not propose SysEx, preset library, IRs, Bluetooth, or mobile packaging in phase 1 changes
+  specs:
+    - Use WHEN/THEN scenarios (Given/When/Then is fine)
+    - Phase 1 capabilities live under midi-transport, device-connection, and live-controller
+    - Specs describe observable behavior, not transport-internal byte packing unless that is the capability
+    - UI requirements must go through DeviceSession, never raw MIDI from React
+  design:
+    - Isolate Web MIDI and Tauri/midir behind MidiTransport
+    - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
+    - Do not copy reverse-engineered SysEx from third-party editors
+    - Match the agreed repo layout in docs/architecture.md
+  tasks:
+    - Break work into small, independently verifiable tasks
+    - Call out web vs desktop verification where MIDI backends differ
+
+operations:
+  apply:
+    guidance:
+      - Implement only the current change; leave later-phase features as stubs if the layout requires them
+      - Do not introduce HTTP backends, Electron, or a monorepo
+      - Verify UI changes in the browser or the closest substitute (dev server / tauri dev)
+  archive:
+    guidance:
+      - Sync only the phase-1 spec domains that this change actually touched
+      - Keep the completion summary concise and note any leftover stubs

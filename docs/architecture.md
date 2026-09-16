@@ -6,7 +6,8 @@ El producto habla USB-MIDI con GP-5 y GP-50: fase 1 usa el MIDI CC oficial; edit
 
 ## Stack
 
-- **UI:** Vite + React + TypeScript + Tailwind
+- **UI:** Vite + React + TypeScript + Tailwind + shadcn (desde el scaffold)
+- **Tema:** dark por default, light opcional (tokens / clase `dark` de shadcn). No es un change aparte: entra en `bootstrap-app`.
 - **Shell nativo:** Tauri 2 (instalador Windows ahora; iOS/Android más adelante)
 - **MIDI:** interfaz `MidiTransport` con dos backends
   - Browser: Web MIDI (`navigator.requestMIDIAccess`)
@@ -70,7 +71,7 @@ valeton/
     changes/
   .cursor/               # skills y commands OPSX (openspec init --tools cursor)
   src/
-    app/                 # shell React: layout, routing
+    app/                 # shell React: layout, routing, theme (dark default)
     features/
       connect/
       controller/        # fase 1
@@ -108,7 +109,7 @@ Trabajo spec-driven desde el día 1. No dump de código sin change.
 
 Cambios previstos, en orden:
 
-1. **`bootstrap-app`** — scaffold Tauri 2 + Vite/React/TS/Tailwind, scripts `dev` / `tauri dev` / `build`
+1. **`bootstrap-app`** — scaffold Tauri 2 + Vite/React/TS/Tailwind/shadcn, tema dark default, scripts `dev` / `tauri dev` / `build`
 2. **`midi-transport`** — interfaz + Web MIDI + comandos Rust `midi_list_ports` / `open` / `send` + eventos inbound
 3. **`device-connection`** — detectar GP-5/GP-50, conectar, estado de sesión
 4. **`live-controller`** — patch, volumen, on/off de módulos, tuner (CC oficial)
@@ -132,12 +133,11 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - Lectura/escritura de presets, rename, reorder
 - Upload de IR / SnapTone / NAM
 - Bluetooth (algunos GP-5 lo usan; USB-MIDI primero)
-- UI tipo design system pesado (shadcn se puede sumar después si hace falta)
 
 ## Roadmap
 
 - [x] Init git + OpenSpec (Cursor) y completar `openspec/config.yaml` con el contexto del stack
-- [ ] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind
+- [ ] Change OpenSpec `bootstrap-app`: Tauri 2 + Vite + React + TS + Tailwind + shadcn, dark default
 - [ ] Change `midi-transport`: interfaz `MidiTransport`, Web MIDI y backend Tauri/midir
 - [ ] Change `device-connection`: perfiles GP-5/GP-50, detección y sesión
 - [ ] Change `live-controller`: UI de patch/módulos/volumen via MIDI CC oficial
