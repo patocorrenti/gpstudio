@@ -18,7 +18,10 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // Bind all interfaces so the web UI is reachable on LAN, not only localhost.
+    // TAURI_DEV_HOST still wins when Tauri (e.g. mobile) needs a specific address.
+    host: host || true,
+    allowedHosts: true,
     hmr: host
       ? {
           protocol: "ws",
@@ -29,5 +32,11 @@ export default defineConfig({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
+  },
+  preview: {
+    port: 1420,
+    strictPort: true,
+    host: true,
+    allowedHosts: true,
   },
 });

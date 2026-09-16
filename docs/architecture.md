@@ -1,6 +1,6 @@
-# Valeton: web + Windows (Tauri) + OpenSpec
+# Patone: web + Windows (Tauri) + OpenSpec
 
-Plan acordado para el editor/controlador de pedales Valeton GP-5 y GP-50.
+Plan acordado para Patone, editor/controlador de pedales Valeton GP-5 y GP-50.
 
 El producto habla USB-MIDI con GP-5 y GP-50: fase 1 usa el MIDI CC oficial; editor SysEx y librería/IRs vienen después.
 
@@ -71,7 +71,7 @@ Connect no es una pantalla: es estado de sesión global. El chrome lo muestra si
 Un solo app (no monorepo). OpenSpec vive en la raíz, al lado del código.
 
 ```text
-valeton/
+patone/
   openspec/
     config.yaml
     specs/
@@ -129,7 +129,7 @@ El SysEx de editor/IRs está reverse-engineered en proyectos ajenos (p.ej. edito
 
 ## Fase 1 — lo que se ve
 
-Chrome siempre visible: nombre Valeton, control de conexión a la izquierda, secciones Controller / Editor / Library y tema a la derecha. Controller es la home (`/`). Connect no es una sección: es estado global. Sin pedal el control dice Connect y abre un modal.
+Chrome siempre visible: nombre Patone, control de conexión a la izquierda, secciones Controller / Editor / Library y tema a la derecha. Controller es la home (`/`). Connect no es una sección: es estado global. Sin pedal el control dice Connect y abre un modal.
 
 Modal de conexión: pedir permiso MIDI, listar puertos, conectar, mostrar modelo. Qué muestra el control cuando hay pedal se define en `device-connection`.
 

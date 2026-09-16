@@ -45,7 +45,7 @@ Greenfield: the repo has OpenSpec, `docs/architecture.md`, and Cursor commands, 
 
 ### 4. Dark default, no OS theme, persist in localStorage
 
-**Choice:** `next-themes` (works with Vite) with `defaultTheme="dark"`, `enableSystem={false}`, `storageKey="valeton-theme"`, attribute `class`. A small inline script in `index.html` sets `class="dark"` on `<html>` before paint when no stored value exists, or restores `light`/`dark` from storage, to avoid a light flash.
+**Choice:** `next-themes` (works with Vite) with `defaultTheme="dark"`, `enableSystem={false}`, `storageKey="patone-theme"`, attribute `class`. A small inline script in `index.html` sets `class="dark"` on `<html>` before paint when no stored value exists, or restores `light`/`dark` from storage, to avoid a light flash.
 
 **Why:** Spec requires dark first paint and restored preference. Following `prefers-color-scheme` would show light on a light OS and violate the default.
 
@@ -69,7 +69,7 @@ Greenfield: the repo has OpenSpec, `docs/architecture.md`, and Cursor commands, 
 
 ### 7. Window and bundle
 
-**Choice:** Window title `Valeton`, identifier `com.valeton.app`, default size ~1280×800. Bundle config includes Windows `nsis` (and `msi` if kept as a second target). On this Linux host, verify `npm run dev` / `npm run build` and `tauri dev` (Linux webview). Treat NSIS as configuration ready for a Windows build, not an artifact this machine must emit.
+**Choice:** Window title `Patone`, identifier `com.patone.app`, default size ~1280×800. Bundle config includes Windows `nsis` (and `msi` if kept as a second target). On this Linux host, verify `npm run dev` / `npm run build` and `tauri dev` (Linux webview). Treat NSIS as configuration ready for a Windows build, not an artifact this machine must emit.
 
 **Why:** Architecture’s shipping package is Windows; the spec’s “produces a Windows installer” is met by a project that is configured to emit NSIS/MSI. Forcing cross-compile on Linux is out of proportion for bootstrap.
 

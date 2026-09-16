@@ -3,7 +3,7 @@ schema: spec-driven
 # Project context shown to AI when creating OpenSpec artifacts.
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
-  Product: Valeton — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
+  Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   The app talks USB-MIDI to the pedal. Phase 1 uses official MIDI CC only.
   SysEx preset editor, library, and IRs/NAM come in later phases.
 
@@ -40,7 +40,7 @@ context: |
     If ambiguous, the user picks the model.
 
   Phase 1 visible UI:
-  - Shell chrome always visible: Valeton name, connection-status control on the left,
+  - Shell chrome always visible: Patone name, connection-status control on the left,
     Controller / Editor / Library nav and theme toggle on the right.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
   - Disconnected control label: Connect. Activating it opens a modal for MIDI

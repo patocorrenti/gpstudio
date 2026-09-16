@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Valeton",
+  "productName": "Patone",
   "version": "0.1.0",
-  "identifier": "com.valeton.app",
+  "identifier": "com.patone.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Valeton",
+        "title": "Patone",
         "width": 1280,
         "height": 800,
         "resizable": true,

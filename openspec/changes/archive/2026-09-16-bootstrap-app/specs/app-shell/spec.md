@@ -1,6 +1,6 @@
 ## Purpose
 
-Provides the runnable web and desktop application shell for Valeton: layout, navigation placeholders, and dark-default appearance so later MIDI and controller work can land in a real app.
+Provides the runnable web and desktop application shell for Patone: layout, navigation placeholders, and dark-default appearance so later MIDI and controller work can land in a real app.
 
 ## ADDED Requirements
 
@@ -14,7 +14,7 @@ The system SHALL serve the UI as a local web app and as a native desktop window.
 
 #### Scenario: Desktop development launch
 - **WHEN** the operator starts the desktop development command
-- **THEN** a native window opens titled Valeton and hosts the same UI
+- **THEN** a native window opens titled Patone and hosts the same UI
 
 #### Scenario: Production build artifacts
 - **WHEN** the operator runs the documented build commands
@@ -44,7 +44,7 @@ The shell SHALL expose placeholder areas for Connect, Controller, Editor, and Li
 
 #### Scenario: Shell identifies the product
 - **WHEN** the user opens the app
-- **THEN** the shell shows the product name Valeton and a way to change appearance
+- **THEN** the shell shows the product name Patone and a way to change appearance
 
 #### Scenario: Later features are stubbed
 - **WHEN** the user opens the Editor or Library placeholder

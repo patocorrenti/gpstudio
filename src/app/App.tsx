@@ -11,7 +11,7 @@ export function App() {
       attribute="class"
       defaultTheme="dark"
       enableSystem={false}
-      storageKey="valeton-theme"
+      storageKey="patone-theme"
     >
       <HashRouter>
         <Routes>

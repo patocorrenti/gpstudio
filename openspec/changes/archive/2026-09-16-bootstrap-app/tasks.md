@@ -5,7 +5,7 @@
 
 ## 2. Tauri 2 shell
 
-- [x] 2.1 Add `src-tauri/` as Tauri 2 with window title `Valeton`, identifier `com.valeton.app`, size ~1280×800, and Windows bundle targets `nsis` (and `msi` if included); verify those values in `tauri.conf.json` and that no MIDI/midir crates or invoke commands exist
+- [x] 2.1 Add `src-tauri/` as Tauri 2 with window title `Patone`, identifier `com.patone.app`, size ~1280×800, and Windows bundle targets `nsis` (and `msi` if included); verify those values in `tauri.conf.json` and that no MIDI/midir crates or invoke commands exist
 - [x] 2.2 Add scripts `dev` (Vite), `build` (`tsc -b && vite build`), and `tauri` (CLI wrapping `tauri dev` / `tauri build`); verify they are listed in `package.json`
 
 ## 3. App layout and placeholders
@@ -20,11 +20,11 @@
 
 ## 5. Dark-default theme
 
-- [x] 5.1 Add `next-themes` with `defaultTheme="dark"`, `enableSystem={false}`, `storageKey="valeton-theme"`, and an `index.html` script that sets `html.dark` before paint when storage is empty; verify a first load with cleared storage is dark with no light flash
-- [x] 5.2 Add an appearance control that switches light/dark without reload; verify `localStorage["valeton-theme"]` updates and a reload restores the chosen scheme
+- [x] 5.1 Add `next-themes` with `defaultTheme="dark"`, `enableSystem={false}`, `storageKey="patone-theme"`, and an `index.html` script that sets `html.dark` before paint when storage is empty; verify a first load with cleared storage is dark with no light flash
+- [x] 5.2 Add an appearance control that switches light/dark without reload; verify `localStorage["patone-theme"]` updates and a reload restores the chosen scheme
 
 ## 6. Launch verification
 
-- [x] 6.1 **Web:** run `npm run dev` and confirm localhost shows Valeton, nav, placeholders, and the theme control
+- [x] 6.1 **Web:** run `npm run dev` and confirm localhost shows Patone, nav, placeholders, and the theme control
 - [x] 6.2 **Web:** run `npm run build` and confirm a web bundle is emitted under `dist/`
-- [x] 6.3 **Desktop:** run `npm run tauri dev` (install Linux WebKit/Rust deps if needed) and confirm a native window titled Valeton hosts the same UI; do not require an NSIS file on this Linux host
+- [x] 6.3 **Desktop:** run `npm run tauri dev` (install Linux WebKit/Rust deps if needed) and confirm a native window titled Patone hosts the same UI; do not require an NSIS file on this Linux host
