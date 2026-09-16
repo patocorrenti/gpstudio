@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import gp5Thumb from "@/assets/img/gp5-thumb.png";
 import gp50Thumb from "@/assets/img/gp50-thumb.png";
+import type { LinkEndpoint } from "@/device/endpoint";
 import type { LinkMode } from "@/device/link";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   useDeviceSession,
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
+import type { BluetoothEndpoint } from "@/bluetooth/types";
 import type { MidiEndpoint } from "@/midi/types";
 
 function compactName(value: string): string {
@@ -65,23 +67,42 @@ export function ConnectionStatus() {
   const snapshot = useSessionSnapshot();
   const [open, setOpen] = useState(false);
   const [linkTab, setLinkTab] = useState<LinkMode>("usb");
-  const [endpoints, setEndpoints] = useState<MidiEndpoint[]>([]);
-  const [pending, setPending] = useState<MidiEndpoint | null>(null);
+  const [usbEndpoints, setUsbEndpoints] = useState<MidiEndpoint[]>([]);
+  const [bleEndpoints, setBleEndpoints] = useState<BluetoothEndpoint[]>([]);
+  const [pending, setPending] = useState<LinkEndpoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const connected = snapshot.status === "connected";
   const askingModel = pending !== null && !connected;
 
-  async function scan() {
+  async function scanUsb() {
     setBusy(true);
     setError(null);
     try {
       const list = await session.discover();
-      setEndpoints(list);
+      setUsbEndpoints(list);
     } catch (cause) {
-      setEndpoints([]);
+      setUsbEndpoints([]);
       setError(
         cause instanceof Error ? cause.message : "Could not list USB devices.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function scanBluetooth(interactive: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const list = await session.discoverBluetooth({ interactive });
+      setBleEndpoints(list);
+    } catch (cause) {
+      setBleEndpoints([]);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not list Bluetooth pedals.",
       );
     } finally {
       setBusy(false);
@@ -99,12 +120,12 @@ export function ConnectionStatus() {
       .discover()
       .then((list) => {
         if (!cancelled) {
-          setEndpoints(list);
+          setUsbEndpoints(list);
         }
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setEndpoints([]);
+          setUsbEndpoints([]);
           setError(
             cause instanceof Error
               ? cause.message
@@ -122,7 +143,41 @@ export function ConnectionStatus() {
     };
   }, [open, connected, linkTab, session]);
 
-  async function connectWith(endpoint: MidiEndpoint, model: DeviceModel) {
+  useEffect(() => {
+    if (!open || connected || linkTab !== "bluetooth") {
+      return;
+    }
+    let cancelled = false;
+    setBusy(true);
+    setError(null);
+    void session
+      .discoverBluetooth({ interactive: false })
+      .then((list) => {
+        if (!cancelled) {
+          setBleEndpoints(list);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setBleEndpoints([]);
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not list Bluetooth pedals.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, connected, linkTab, session]);
+
+  async function connectWith(endpoint: LinkEndpoint, model: DeviceModel) {
     setBusy(true);
     setError(null);
     try {
@@ -136,7 +191,7 @@ export function ConnectionStatus() {
     }
   }
 
-  function pickDevice(endpoint: MidiEndpoint) {
+  function pickDevice(endpoint: LinkEndpoint) {
     if (endpoint.suggestedModel) {
       void connectWith(endpoint, endpoint.suggestedModel);
       return;
@@ -151,7 +206,7 @@ export function ConnectionStatus() {
       await session.disconnect();
       setPending(null);
       setLinkTab("usb");
-      await scan();
+      await scanUsb();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not disconnect.",
@@ -270,6 +325,7 @@ export function ConnectionStatus() {
                 value={linkTab}
                 onValueChange={(value) => {
                   if (value === "usb" || value === "bluetooth") {
+                    setError(null);
                     setLinkTab(value);
                   }
                 }}
@@ -286,12 +342,12 @@ export function ConnectionStatus() {
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
                   ) : null}
-                  {busy && endpoints.length === 0 && !error ? (
+                  {busy && usbEndpoints.length === 0 && !error ? (
                     <p className="text-sm text-muted-foreground">
                       Looking for USB devices…
                     </p>
                   ) : null}
-                  {!busy && endpoints.length === 0 && !error ? (
+                  {!busy && usbEndpoints.length === 0 && !error ? (
                     <div
                       role="status"
                       className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
@@ -305,9 +361,9 @@ export function ConnectionStatus() {
                       </p>
                     </div>
                   ) : null}
-                  {endpoints.length > 0 ? (
+                  {usbEndpoints.length > 0 ? (
                     <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-                      {endpoints.map((endpoint) => (
+                      {usbEndpoints.map((endpoint) => (
                         <li key={endpoint.id}>
                           <Button
                             type="button"
@@ -335,22 +391,75 @@ export function ConnectionStatus() {
                     </ul>
                   ) : null}
                 </TabsContent>
-                <TabsContent value="bluetooth" className="flex flex-col gap-2">
+                <TabsContent value="bluetooth" className="flex flex-col gap-4">
                   <DialogDescription>
                     Bluetooth is a two-way connection and slower.
                   </DialogDescription>
-                  <p className="text-sm text-muted-foreground">
-                    Bluetooth is not available yet.
-                  </p>
+                  {error ? (
+                    <p className="text-sm text-destructive">{error}</p>
+                  ) : null}
+                  {busy && bleEndpoints.length === 0 && !error ? (
+                    <p className="text-sm text-muted-foreground">
+                      Looking for Bluetooth pedals…
+                    </p>
+                  ) : null}
+                  {!busy && bleEndpoints.length === 0 && !error ? (
+                    <div
+                      role="status"
+                      className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+                    >
+                      <TriangleAlert
+                        className="mt-0.5 size-4 shrink-0"
+                        aria-hidden
+                      />
+                      <p>
+                        No Bluetooth pedals found. Put the pedal in pairing mode
+                        and try again.
+                      </p>
+                    </div>
+                  ) : null}
+                  {bleEndpoints.length > 0 ? (
+                    <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+                      {bleEndpoints.map((endpoint) => (
+                        <li key={endpoint.id}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-auto w-full justify-start gap-3 py-2 pl-2"
+                            disabled={busy}
+                            onClick={() => pickDevice(endpoint)}
+                          >
+                            <PedalThumb model={endpoint.suggestedModel} />
+                            <span className="flex flex-col items-start text-left">
+                              <span>{endpoint.label}</span>
+                              {endpoint.suggestedModel ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {displayModelName(endpoint.suggestedModel)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Model unknown
+                                </span>
+                              )}
+                            </span>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </TabsContent>
               </Tabs>
-              {linkTab === "usb" ? (
+              {linkTab === "usb" || linkTab === "bluetooth" ? (
                 <DialogFooter>
                   <Button
                     type="button"
                     variant="outline"
                     disabled={busy}
-                    onClick={() => void scan()}
+                    onClick={() =>
+                      void (linkTab === "usb"
+                        ? scanUsb()
+                        : scanBluetooth(true))
+                    }
                   >
                     Refresh
                   </Button>

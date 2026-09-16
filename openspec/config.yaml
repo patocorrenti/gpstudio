@@ -16,17 +16,22 @@ context: |
     USB is one-way and super fast (command out; opportunistic inbound such as
     patch-load dumps may be logged/applied later without becoming duplex).
     Bluetooth is two-way and slower. Pedal Bluetooth is Valeton Suite GATT,
-    not class-compliant BLE-MIDI, and is a later backend — not another
+    not class-compliant BLE-MIDI, and is a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:
       - Browser: Web MIDI (navigator.requestMIDIAccess)
       - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
     - A USB endpoint has id, label, kind usb-midi, optional suggestedModel
+    - Bluetooth uses BluetoothLink (discover / open / close, no send until an encoder change)
+      - Browser: Web Bluetooth
+      - Desktop: Rust btleplug via Tauri commands (WebView2 does not expose Web Bluetooth)
+      - A Bluetooth endpoint has id, label, kind bluetooth, optional suggestedModel
     - Connect opens with USB | Bluetooth tabs; the user chooses the method first.
-      DeviceSession records linkMode (usb now; bluetooth when that backend exists).
+      DeviceSession records linkMode (usb | bluetooth).
       One session for Controller/Editor/Library; features that need pedal→app
-      live state read capabilities (liveFromPedal false on USB) instead of forking UI.
+      live state or command-out read capabilities (liveFromPedal, commandToPedal)
+      instead of forking UI. Bluetooth commandToPedal is false until the encoder change.
   - Device state: shared TypeScript layer, independent of transport
   - No HTTP backend. The app talks directly to the pedal.
   - Electron is rejected (heavier, worse mobile path).
@@ -37,9 +42,10 @@ context: |
   - Keep three axes separate: model (GP-5 vs GP-50), protocol (CC now, SysEx later),
     link (USB vs Bluetooth; different capabilities, one DeviceSession).
   - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
-    Do not leak MIDIPort or Web MIDI types above the transport. Do not implement a
-    GATT/BLE transport or a throwing stub. Phase 1 MIDI endpoints are all kind usb-midi.
-    The Bluetooth Connect tab is UI-only until a dedicated backend change.
+    Do not leak MIDIPort or Web MIDI types above the transport. Phase 1 MIDI endpoints
+    are all kind usb-midi. Bluetooth is BluetoothLink (discover/open/close), not a
+    throwing MidiTransport stub. Do not copy reverse-engineered SysEx. Control encoding
+    over GATT is a later change.
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
   - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
@@ -51,7 +57,8 @@ context: |
       src/features/library     Phase 3 stub until its change
       src/device/              models, profiles, official CC maps, session
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
-      src-tauri/               Tauri 2 + midir
+      src/bluetooth/           BluetoothLink (discover/open/close), detect (web vs tauri), web.ts, tauri.ts
+      src-tauri/               Tauri 2 + midir + btleplug
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
@@ -66,7 +73,7 @@ context: |
   - Disconnected control label: Connect. Activating it opens a modal with USB
     and Bluetooth tabs (default USB). USB: MIDI permission, endpoints, connect,
     suggested/confirm model, copy as one-way and super fast. Bluetooth: two-way
-    and slower; not available yet (no scan/connect). Connected label and link
+    and slower; scan/connect GATT (no control encoder yet). Connected label and link
     mode are defined in device-connection.
   - Controller: patch 00–99, volume, module toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner
   - GP-50 also: master volume and Patch/Stomp mode
@@ -77,8 +84,8 @@ context: |
   - Mobile Tauri app
   - Preset read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Bluetooth/GATT backend (Valeton Suite, not BLE-MIDI). Connect already has
-    the tab; no scan, pair, or BLE transport until a dedicated change
+  - Bluetooth control encoder (SysEx/CC over Valeton Suite GATT). Scan/connect exists.
+    Do not copy reverse-engineered SysEx from third-party editors
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller.
   Do not specify editor or library until their own changes.
@@ -108,8 +115,8 @@ rules:
     - Keep proposals focused on one planned change from docs/architecture.md
     - Always include a Non-goals section
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
-    - Do not propose SysEx, preset library, IRs, a Bluetooth/GATT backend, or mobile packaging in phase 1 changes
-    - Connect already offers USB vs Bluetooth tabs; do not revert to USB-only copy or treat the links as interchangeable
+    - Do not propose SysEx copies, preset library, IRs, a Bluetooth control encoder, or mobile packaging in phase 1 changes
+    - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
   specs:
     - Use WHEN/THEN scenarios (Given/When/Then is fine)
     - Phase 1 capabilities live under midi-transport, device-connection, and live-controller
@@ -118,7 +125,8 @@ rules:
   design:
     - Isolate Web MIDI and Tauri/midir behind MidiTransport (endpoints + bytes, kind usb-midi)
     - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
-    - Do not implement a Bluetooth/GATT transport or a throwing BLE stub; Connect may show Bluetooth as not available yet
+    - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
+    - BluetoothLink is GATT discover/open/close only; do not add a throwing send() stub or copy third-party SysEx
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors

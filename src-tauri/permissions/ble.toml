@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-ble"
+description = "Allows scanning, opening, and closing Bluetooth GATT connections"
+commands.allow = ["ble_scan", "ble_open", "ble_close"]
