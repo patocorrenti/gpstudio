@@ -1,3 +1,5 @@
+import { EFFECT_IDS, type EffectId } from "@/device/chain";
+
 /**
  * Official MIDI CC maps from the Valeton GP-5 and GP-50 manuals.
  */
@@ -32,3 +34,38 @@ export const gp50Cc = {
   bpm: 21,
   patchStompMode: 28,
 } as const;
+
+/** Official module switches: NR…RVB are CC 48–57. */
+export const MODULE_CC: Record<EffectId, number> = {
+  nr: gp5Cc.nr,
+  pre: gp5Cc.pre,
+  dst: gp5Cc.dst,
+  ns: gp5Cc.ns,
+  amp: gp5Cc.amp,
+  cab: gp5Cc.cab,
+  eq: gp5Cc.eq,
+  mod: gp5Cc.mod,
+  dly: gp5Cc.dly,
+  rvb: gp5Cc.rvb,
+};
+
+const MODULE_BY_CC = new Map<number, EffectId>(
+  EFFECT_IDS.map((id) => [MODULE_CC[id], id]),
+);
+
+/** Valeton MIDI list: 0–63 off, 64–127 on. Writes use 0 / 127. */
+export const MODULE_CC_OFF = 0;
+export const MODULE_CC_ON = 127;
+export const MODULE_CC_ON_MIN = 64;
+
+export function effectIdForModuleCc(controller: number): EffectId | null {
+  return MODULE_BY_CC.get(controller) ?? null;
+}
+
+export function encodeModuleCcValue(enabled: boolean): number {
+  return enabled ? MODULE_CC_ON : MODULE_CC_OFF;
+}
+
+export function moduleEnabledFromCc(value: number): boolean {
+  return value >= MODULE_CC_ON_MIN;
+}

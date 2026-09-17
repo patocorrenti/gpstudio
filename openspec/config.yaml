@@ -4,7 +4,7 @@ schema: spec-driven
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
   Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
-  Patch recall uses official MIDI CC. A Patone-owned SysEx subset
+  Patch recall and module on/off (CC 48–57) use official MIDI CC. A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off)
   is requested after connect and when the patch changes.
   Full SysEx preset editor (parameters), library, and IRs/NAM come in later phases.
@@ -18,8 +18,8 @@ context: |
     USB is one-way and super fast (command out; requested identity/chain dumps and
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
-    GATT service (Patone capture); BluetoothLink.send writes encoder bytes
-    (CC 0, identity, or chain SysEx wrapped as BLE-MIDI). Still a separate backend — not another
+    GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
+    (CC 0, module CC 48–57, identity, or chain SysEx wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:
@@ -53,8 +53,9 @@ context: |
     Bluetooth inbound Log is in scope (same Log page, capture only while visible).
     Applying inbound patch identity (index + names) and current-patch chain
     (order + on/off) to the snapshot is in scope.
-    Applying inbound volume/modules (liveFromPedal knobs) while the patch stays
-    the same is not.
+    Applying inbound module CC 48–57 to the snapshot is in scope on Bluetooth
+    (liveFromPedal). USB must not apply those CCs. Applying inbound volume,
+    tuner, or other live knobs while the patch stays the same is not.
     Protocol references: docs/protocol-references.md (behavioral only; no source drop).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
@@ -86,9 +87,9 @@ context: |
     and slower; scan/connect GATT; patch previous/select/next over the encoder.
     Connected label and link
     mode are defined in device-connection.
-  - Controller: patch 00–99 (names when synced), display-only audio chain
-    (10 slots GP-5 / 11 GP-50 with EXP; order + on/off). Volume, editable
-    module toggles, tuner later.
+  - Controller: patch 00–99 (names when synced), audio chain
+    (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
+    CC 48–57; EXP display-only). Volume, tuner, drag-and-drop later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
@@ -97,10 +98,11 @@ context: |
   - Mobile Tauri app
   - Full preset parameter read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Applying liveFromPedal inbound volume/modules to the snapshot
-    while the patch stays the same
-  - UI module on/off and drag-and-drop reorder
+  - Applying liveFromPedal inbound volume/tuner/other knobs to the snapshot
+    while the patch stays the same (module CC 48–57 on Bluetooth is in scope)
+  - Drag-and-drop reorder
   - Volume, tuner over Bluetooth
+  - Applying USB inbound module CC (USB is not duplex for those controls)
   Do not copy reverse-engineered SysEx from third-party editors.
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller, bluetooth-link, inbound-log.
@@ -170,8 +172,10 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off) is in scope; do not apply liveFromPedal
-      knob/module inbound to the snapshot while the patch stays the same
+      current-patch chain (order + on/off) is in scope; Bluetooth inbound
+      module CC 48–57 is in scope; USB must not apply those CCs; do not apply
+      liveFromPedal volume/tuner/other knobs to the snapshot while the patch
+      stays the same
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors

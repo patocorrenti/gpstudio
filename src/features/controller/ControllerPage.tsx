@@ -13,6 +13,7 @@ import {
   formatPatchOption,
   PATCH_COUNT,
   type AudioChain,
+  type AudioChainSlot,
 } from "@/device/session";
 import {
   useDeviceSession,
@@ -84,7 +85,57 @@ function PatchBar({
   );
 }
 
-function AudioChainRow({ chain }: { chain: AudioChain }) {
+function slotClassName(enabled: boolean): string {
+  return cn(
+    "min-w-14 rounded-lg border px-3 py-2 text-center text-sm font-semibold tracking-wide",
+    enabled
+      ? "border-foreground/20 bg-muted text-foreground"
+      : "border-border text-muted-foreground opacity-50",
+  );
+}
+
+function AudioChainSlotView({
+  slot,
+  disabled,
+}: {
+  slot: AudioChainSlot;
+  disabled: boolean;
+}) {
+  const session = useDeviceSession();
+  const label = chainSlotLabel(slot.id);
+  const state = slot.enabled ? "on" : "off";
+
+  if (slot.id === "exp") {
+    return (
+      <div aria-label={`${label} ${state}`} className={slotClassName(slot.enabled)}>
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={`${label} ${state}`}
+      aria-pressed={slot.enabled}
+      className={slotClassName(slot.enabled)}
+      disabled={disabled}
+      onClick={() => {
+        void session.toggleChainSlot(slot.id);
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AudioChainRow({
+  chain,
+  disabled,
+}: {
+  chain: AudioChain;
+  disabled: boolean;
+}) {
   return (
     <ol
       aria-label="Audio chain"
@@ -92,17 +143,7 @@ function AudioChainRow({ chain }: { chain: AudioChain }) {
     >
       {chain.map((slot, index) => (
         <li key={`${slot.id}-${index}`}>
-          <div
-            aria-label={`${chainSlotLabel(slot.id)} ${slot.enabled ? "on" : "off"}`}
-            className={cn(
-              "min-w-14 rounded-lg border px-3 py-2 text-center text-sm font-semibold tracking-wide",
-              slot.enabled
-                ? "border-foreground/20 bg-muted text-foreground"
-                : "border-border text-muted-foreground opacity-50",
-            )}
-          >
-            {chainSlotLabel(slot.id)}
-          </div>
+          <AudioChainSlotView slot={slot} disabled={disabled} />
         </li>
       ))}
     </ol>
@@ -122,7 +163,7 @@ function PatchBody({
         className={cn("flex w-full justify-center", busy && "invisible")}
         aria-hidden={busy}
       >
-        <AudioChainRow chain={chain} />
+        <AudioChainRow chain={chain} disabled={busy} />
       </div>
       {busy ? (
         <div

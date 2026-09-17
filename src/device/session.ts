@@ -4,12 +4,14 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
+import { effectIdForModuleCc, moduleEnabledFromCc } from "@/device/cc";
 import {
   defaultChain,
   type AudioChain,
+  type ChainSlotId,
 } from "@/device/chain";
 import { ChainDecoder } from "@/device/chain-codec";
-import { encodeChainRequest, encodeIdentity, encodePatch } from "@/device/encode";
+import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
   emptyPatchNames,
@@ -238,6 +240,32 @@ export class DeviceSession {
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
   }
 
+  async toggleChainSlot(id: ChainSlotId): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (id === "exp") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === id);
+    if (index < 0) {
+      return;
+    }
+    const enabled = !this.snapshot.chain[index].enabled;
+    const chain = this.snapshot.chain.map((slot, slotIndex) =>
+      slotIndex === index ? { ...slot, enabled } : slot,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+    await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
+  }
+
   private async runIdentitySync(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
@@ -340,6 +368,9 @@ export class DeviceSession {
       if (this.snapshot.status === "connected") {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
+      if (this.snapshot.status === "connected") {
+        this.applyModuleCc(message);
+      }
       if (!this.inboundCapture) {
         continue;
       }
@@ -402,6 +433,32 @@ export class DeviceSession {
     this.snapshot = { ...this.snapshot, chain, chainSync: "idle" };
     this.emitSnapshot();
     this.releaseWaiters(this.chainWaiters);
+  }
+
+  private applyModuleCc(message: Uint8Array): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return;
+    }
+    if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
+      return;
+    }
+    const id = effectIdForModuleCc(message[1]);
+    if (!id) {
+      return;
+    }
+    const enabled = moduleEnabledFromCc(message[2]);
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === id);
+    if (index < 0 || this.snapshot.chain[index].enabled === enabled) {
+      return;
+    }
+    const chain = this.snapshot.chain.map((slot, slotIndex) =>
+      slotIndex === index ? { ...slot, enabled } : slot,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
   }
 
   private beginChainRefresh(): void {
