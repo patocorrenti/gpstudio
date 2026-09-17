@@ -7,7 +7,7 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 **Goals:**
 
 - Toggle the ten effect modules from Controller through the session (official CC 48–57, on-change).
-- Bluetooth applies inbound module CC 48–57 to the snapshot (`liveFromPedal`).
+- Bluetooth applies inbound live-module SysEx to the snapshot (`liveFromPedal`).
 - USB sends the same toggles and ignores inbound module CC.
 - Same chain UI on both links; EXP stays display-only.
 
@@ -36,13 +36,13 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 
 **Alternative:** Re-dump the chain after every toggle. Rejected; slow on Bluetooth and hides the row.
 
-### 3. `liveFromPedal` means module CC 48–57 only
+### 3. `liveFromPedal` means live-module SysEx (Bluetooth)
 
-**Choice:** On Bluetooth, parse inbound CC 48–57 and set the matching slot's `enabled` without changing order. Ignore CC 7, 11, 58, and other live controls. USB MUST NOT apply 48–57 even if bytes arrive. Requested chain dumps stay a separate apply path on both links.
+**Choice:** On Bluetooth, decode inbound identity-family SysEx (size `0x0A`, command `09`) captured from the pedal: module id in the dump id table (0=NR … 3=AMP … 9=NS), enable at byte 22 (0 off, 1 on). Set that slot's `enabled` without changing order. Still accept CC 48–57 if it ever arrives. Ignore CC 7, 11, 58, and other live controls. USB MUST NOT apply those reports even if bytes arrive. Requested chain dumps stay a separate apply path on both links.
 
-**Why:** Matches the user's USB vs Bluetooth split. The flag already exists; this is the first feature that uses it.
+**Why:** Patone Bluetooth captures of AMP/NR toggles on the pedal are this SysEx, not CC 48–57. App→pedal writes stay official CC.
 
-**Alternative:** Apply every inbound CC when `liveFromPedal` is true. Rejected; volume/tuner are later.
+**Alternative:** Apply every inbound CC when `liveFromPedal` is true. Rejected; volume/tuner are later. **Alternative:** Re-dump the chain on every live report. Rejected; the SysEx already carries on/off.
 
 ### 4. EXP is not a module toggle
 

@@ -60,7 +60,7 @@ Default order is NR (noise gate), PRE, DST, NS (SnapTone), AMP, CAB, EQ, MOD, DL
 
 ### Requirement: Bluetooth pedal module changes update the chain
 
-After initial sync, when the session is on Bluetooth and the pedal reports a module on/off change for the current patch, Controller MUST update that slot's on/off through the device session without changing module order and without sending patch recall or a chain dump solely because that report arrived. When the session is on USB, Controller MUST keep the last known on/off for that slot even if module CC arrives. Volume and other non-module live controls MUST NOT update the chain.
+After initial sync, when the session is on Bluetooth and the pedal reports a module on/off change for the current patch, Controller MUST update that slot's on/off through the device session without changing module order and without sending patch recall or a chain dump solely because that report arrived. When the session is on USB, Controller MUST keep the last known on/off for that slot even if a live-module report arrives. Volume and other non-module live controls MUST NOT update the chain.
 
 #### Scenario: Pedal turns a module off over Bluetooth
 - **WHEN** a Bluetooth session is showing DST on and the pedal reports DST off
@@ -68,6 +68,6 @@ After initial sync, when the session is on Bluetooth and the pedal reports a mod
 - **AND** module order does not change
 - **AND** no patch recall is sent solely because that report arrived
 
-#### Scenario: USB does not follow pedal module CC
-- **WHEN** a USB session is showing DST on and module CC for DST off arrives
+#### Scenario: USB does not follow pedal module reports
+- **WHEN** a USB session is showing DST on and a live-module report for DST off arrives
 - **THEN** the DST slot stays shown as on

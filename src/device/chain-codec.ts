@@ -207,6 +207,40 @@ function classifyDump(midi: Uint8Array): DumpHeader | null {
   return null;
 }
 
+export type LiveModuleChange = {
+  id: EffectId;
+  enabled: boolean;
+};
+
+/**
+ * Bluetooth live module on/off (Patone capture). Same identity-family
+ * template (01 02 04), size 0x0A, command 0x09. Module id uses DUMP_MODULE_IDS
+ * (0=NR … 3=AMP … 9=NS). Enable is byte 22 (0 off, 1 on).
+ */
+export function decodeLiveModule(bytes: Uint8Array): LiveModuleChange | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 23 || midi[0] !== 0xf0) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== 1) {
+    return null;
+  }
+  if (
+    midi[8] !== 0x0a ||
+    midi[9] !== 1 ||
+    midi[10] !== 2 ||
+    midi[11] !== 4 ||
+    midi[12] !== 0x09
+  ) {
+    return null;
+  }
+  const raw = midi[14];
+  if (raw < 0 || raw > 9) {
+    return null;
+  }
+  return { id: DUMP_MODULE_IDS[raw], enabled: midi[22] !== 0 };
+}
+
 function bitOn(data: Uint8Array, offset: number, bit: number): boolean {
   if (offset >= data.length) {
     return false;

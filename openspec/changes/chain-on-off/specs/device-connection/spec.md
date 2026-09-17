@@ -4,7 +4,7 @@
 
 After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. The session MUST NOT send SysEx, extra patch recall, or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. EXP MUST NOT be togglable through this session action.
 
-When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound official module CC 48–57 MUST update the matching slot's on/off without changing order. USB MUST NOT apply inbound module CC to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
+When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. USB MUST NOT apply that inbound report to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
 
 #### Scenario: USB toggle sends module CC
 - **WHEN** a USB session is ready and the user turns DST off
@@ -18,15 +18,15 @@ When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), in
 - **AND** AMP's official module CC is sent on the Bluetooth link
 - **AND** no patch recall or chain dump is sent solely because AMP was toggled
 
-#### Scenario: Bluetooth inbound module CC updates the chain
-- **WHEN** a Bluetooth session is ready and the pedal sends DST's official module CC as off
+#### Scenario: Bluetooth inbound module report updates the chain
+- **WHEN** a Bluetooth session is ready and the pedal reports DST off over live-module SysEx
 - **THEN** the snapshot shows DST off
 - **AND** module order does not change
-- **AND** no patch recall is sent solely because that CC arrived
+- **AND** no patch recall is sent solely because that report arrived
 
-#### Scenario: USB ignores inbound module CC
-- **WHEN** a USB session is ready and DST's official module CC arrives as off
-- **THEN** the snapshot DST on/off does not change from that inbound CC
+#### Scenario: USB ignores inbound live module reports
+- **WHEN** a USB session is ready and a live-module SysEx for DST off arrives
+- **THEN** the snapshot DST on/off does not change from that inbound report
 
 #### Scenario: EXP cannot be toggled
 - **WHEN** a GP-50 session is ready and a toggle is requested for EXP

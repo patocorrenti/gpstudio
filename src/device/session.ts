@@ -9,8 +9,9 @@ import {
   defaultChain,
   type AudioChain,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/chain";
-import { ChainDecoder } from "@/device/chain-codec";
+import { ChainDecoder, decodeLiveModule } from "@/device/chain-codec";
 import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
@@ -369,7 +370,7 @@ export class DeviceSession {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
       if (this.snapshot.status === "connected") {
-        this.applyModuleCc(message);
+        this.applyLiveModule(message);
       }
       if (!this.inboundCapture) {
         continue;
@@ -435,11 +436,16 @@ export class DeviceSession {
     this.releaseWaiters(this.chainWaiters);
   }
 
-  private applyModuleCc(message: Uint8Array): void {
+  private applyLiveModule(message: Uint8Array): void {
     if (this.snapshot.status !== "connected") {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return;
+    }
+    const fromSysex = decodeLiveModule(message);
+    if (fromSysex) {
+      this.setChainSlotEnabled(fromSysex.id, fromSysex.enabled);
       return;
     }
     if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
@@ -449,7 +455,13 @@ export class DeviceSession {
     if (!id) {
       return;
     }
-    const enabled = moduleEnabledFromCc(message[2]);
+    this.setChainSlotEnabled(id, moduleEnabledFromCc(message[2]));
+  }
+
+  private setChainSlotEnabled(id: EffectId, enabled: boolean): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
     const index = this.snapshot.chain.findIndex((slot) => slot.id === id);
     if (index < 0 || this.snapshot.chain[index].enabled === enabled) {
       return;
