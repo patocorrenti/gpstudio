@@ -117,11 +117,12 @@ async fn matching_endpoints(adapter: &Adapter) -> Result<Vec<BleEndpointDto>, St
         if !looks_like_pedal(&label) {
             continue;
         }
+        let suggested_model = suggest_model(&label).map(str::to_string);
         endpoints.push(BleEndpointDto {
             id: endpoint_id(&peripheral),
             label,
             kind: "bluetooth".to_string(),
-            suggested_model: suggest_model(&label).map(str::to_string),
+            suggested_model,
         });
     }
     Ok(endpoints)
