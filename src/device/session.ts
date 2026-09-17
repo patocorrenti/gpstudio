@@ -32,6 +32,7 @@ export type { InboundMidiEvent } from "@/device/midi-log";
 export type { LinkEndpoint } from "@/device/endpoint";
 export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
 export {
+  chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
   type AudioChain,

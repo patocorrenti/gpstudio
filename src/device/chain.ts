@@ -59,6 +59,16 @@ export function chainSlotLabel(id: ChainSlotId): string {
   return CHAIN_LABELS[id];
 }
 
+const BYPASSED_WHEN_NS_ON: ReadonlySet<ChainSlotId> = new Set(["amp", "cab"]);
+
+/** AMP and CAB are bypassed while NS is on. Does not change stored on/off. */
+export function chainSlotBypassed(chain: AudioChain, id: ChainSlotId): boolean {
+  if (!BYPASSED_WHEN_NS_ON.has(id)) {
+    return false;
+  }
+  return chain.some((slot) => slot.id === "ns" && slot.enabled);
+}
+
 export function defaultChain(model: DeviceModel): AudioChain {
   const slots: AudioChain = EFFECT_IDS.map((id) => ({ id, enabled: false }));
   if (model === "gp50") {

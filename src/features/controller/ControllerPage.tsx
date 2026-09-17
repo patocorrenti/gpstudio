@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  chainSlotBypassed,
   chainSlotLabel,
   formatPatch,
   formatPatchOption,
@@ -88,31 +89,53 @@ function PatchBar({
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "flex min-w-18 flex-col items-center gap-2 rounded-lg border px-4 py-3 text-center",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg border px-4 py-3 text-center",
     enabled
       ? "border-foreground/20 bg-muted text-foreground"
-      : "border-border text-muted-foreground opacity-50",
+      : "border-border text-muted-foreground",
   );
 }
 
 function AudioChainSlotView({
   slot,
+  chain,
   disabled,
 }: {
   slot: AudioChainSlot;
+  chain: AudioChain;
   disabled: boolean;
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
+  const bypassed = chainSlotBypassed(chain, slot.id);
+  const power = slot.enabled ? "on" : "off";
 
   return (
     <div className={slotClassName(slot.enabled)}>
-      <span className="text-sm font-semibold tracking-wide">{label}</span>
+      <div className="relative flex min-h-6 w-full items-center justify-center">
+        <span
+          className={cn(
+            "text-sm font-semibold tracking-wide",
+            !slot.enabled && "opacity-50",
+          )}
+        >
+          {label}
+        </span>
+        {bypassed ? (
+          <span
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <Ban className="size-8 text-destructive drop-shadow-sm" strokeWidth={2.5} />
+          </span>
+        ) : null}
+      </div>
       <Switch
         size="sm"
         checked={slot.enabled}
         disabled={disabled}
-        aria-label={`${label} ${slot.enabled ? "on" : "off"}`}
+        className={cn(!slot.enabled && "opacity-50")}
+        aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
         onClick={(event) => {
           event.stopPropagation();
         }}
@@ -141,7 +164,7 @@ function AudioChainRow({
     >
       {chain.map((slot, index) => (
         <li key={`${slot.id}-${index}`}>
-          <AudioChainSlotView slot={slot} disabled={disabled} />
+          <AudioChainSlotView slot={slot} chain={chain} disabled={disabled} />
         </li>
       ))}
     </ol>
