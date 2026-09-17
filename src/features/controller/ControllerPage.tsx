@@ -83,10 +83,7 @@ function PatchBar({
 
 function SyncingController() {
   return (
-    <section
-      role="status"
-      className="flex flex-1 flex-col items-center justify-center"
-    >
+    <section role="status" className="flex flex-1 flex-col items-center">
       <p className="text-muted-foreground">Syncing with the pedal…</p>
     </section>
   );
@@ -102,7 +99,7 @@ function ConnectedController() {
   }
 
   return (
-    <section className="flex flex-1 flex-col items-center justify-center">
+    <section className="flex flex-1 flex-col items-center">
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
     </section>
   );
