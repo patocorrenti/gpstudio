@@ -19,6 +19,7 @@ import {
   useDeviceSession,
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
+import { isTauriRuntime } from "@/midi/detect";
 import type { BluetoothEndpoint } from "@/bluetooth/types";
 import type { MidiEndpoint } from "@/midi/types";
 
@@ -364,6 +365,9 @@ export function ConnectionStatus() {
                 <TabsContent value="bluetooth" className="flex flex-col gap-4">
                   <DialogDescription className="text-center">
                     Two-way connection - slower.
+                    {isTauriRuntime()
+                      ? " Desktop Bluetooth."
+                      : " Browser Bluetooth — use the Patone window for the GATT dump."}
                   </DialogDescription>
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>

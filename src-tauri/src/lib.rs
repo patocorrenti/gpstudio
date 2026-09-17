@@ -13,9 +13,11 @@ pub fn run() {
       midi::midi_close,
       ble::ble_scan,
       ble::ble_open,
+      ble::ble_send,
       ble::ble_close,
     ])
     .setup(|app| {
+      eprintln!("[patone] backend ready");
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

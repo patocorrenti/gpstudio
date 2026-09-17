@@ -89,7 +89,7 @@ La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), 
 
 USB es one-way y super fast: la app manda CC; el pedal no telemetra knobs ni módulos. Puede mandar dumps SysEx al cargar un patch; eso se loguea y se podrá aplicar después, pero no convierte USB en duplex.
 
-Bluetooth es two-way y más lento. El Bluetooth del pedal **no** es BLE-MIDI de clase: es el GATT de Valeton Suite (audio + app). Es otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder de patch (CC 0, o el frame que capturamos si BLE no habla CC) corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. El Log inbound de Bluetooth y el resto de CCs (volumen, módulos) son changes después.
+Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI) en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. El Log inbound de Bluetooth y el resto de CCs (volumen, módulos) son changes después.
 
 `MidiTransport` no es “listar puertos Web MIDI”. Es discovery + tubo USB-MIDI:
 

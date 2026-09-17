@@ -15,8 +15,9 @@ context: |
   - MIDI / link: USB and Bluetooth are asymmetric, not interchangeable.
     USB is one-way and super fast (command out; opportunistic inbound such as
     patch-load dumps may be logged/applied later without becoming duplex).
-    Bluetooth is two-way and slower. Pedal Bluetooth is Valeton Suite GATT,
-    not class-compliant BLE-MIDI, and is a separate backend — not another
+    Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
+    GATT service (Patone capture); BluetoothLink.send writes encoder bytes
+    (CC 0 wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:

@@ -40,15 +40,21 @@ export class TauriBluetoothLink implements BluetoothLink {
   }
 
   async open(id: string): Promise<void> {
-    await invoke("ble_open", { id });
+    console.info("[patone][gatt] ble_open", id);
+    const dump = await invoke<string>("ble_open", { id });
+    console.info(`[patone][gatt]\n${dump}`);
     this.sessionOpen = true;
   }
 
-  async send(_bytes: Uint8Array): Promise<void> {
+  async send(bytes: Uint8Array): Promise<void> {
     if (!this.sessionOpen) {
       throw new Error("No Bluetooth pedal is connected.");
     }
-    throw new Error("Could not send over Bluetooth.");
+    try {
+      await invoke("ble_send", { bytes: Array.from(bytes) });
+    } catch {
+      throw new Error("Could not send over Bluetooth.");
+    }
   }
 
   async close(): Promise<void> {
