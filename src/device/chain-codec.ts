@@ -101,19 +101,13 @@ function sysexPayload(midi: Uint8Array, start: number): Uint8Array {
 }
 
 function isNameDump(midi: Uint8Array): boolean {
-  if (midi.length < 8 || midi[0] !== 0xf0) {
+  if (midi.length < 8) {
     return false;
   }
-  if (midi[3] === 6 && midi[4] === 10) {
-    return true;
+  if (midi[0] === 0xf0) {
+    return (midi[3] === 6 && midi[4] === 10) || (midi[3] === 1 && midi[4] === 5);
   }
-  if (midi[3] === 1 && midi[4] === 5) {
-    return true;
-  }
-  if (midi[5] === 1 && midi[6] === 5) {
-    return true;
-  }
-  return false;
+  return midi[5] === 1 && midi[6] === 5;
 }
 
 function isCurrentPatchIdentity(midi: Uint8Array): boolean {
@@ -148,10 +142,15 @@ function commandAt(
   cmd0: number,
   cmd1: number,
 ): { indexAt: number; payloadAt: number } | null {
-  if (midi[3] === cmd0 && midi[4] === cmd1) {
+  if (midi[0] === 0xf0 && midi[3] === cmd0 && midi[4] === cmd1) {
     return { indexAt: 5, payloadAt: 9 };
   }
-  if (midi.length > 11 && midi[5] === cmd0 && midi[6] === cmd1) {
+  if (
+    midi[0] !== 0xf0 &&
+    midi.length > 11 &&
+    midi[5] === cmd0 &&
+    midi[6] === cmd1
+  ) {
     return { indexAt: 7, payloadAt: 11 };
   }
   return null;
@@ -187,7 +186,7 @@ function classifyDump(midi: Uint8Array): DumpHeader | null {
   }
 
   const gp50Usb = commandAt(midi, 1, 11);
-  if (gp50Usb && midi.length >= 40 && midi.length <= 48) {
+  if (gp50Usb && midi.length >= 40 && midi.length <= 52) {
     const index = nibble(midi, gp50Usb.indexAt);
     return {
       dumpClass: "gp50",
@@ -197,11 +196,11 @@ function classifyDump(midi: Uint8Array): DumpHeader | null {
   }
 
   const gp5Usb = commandAt(midi, 1, 9);
-  if (gp5Usb) {
+  if (gp5Usb && midi.length >= 30 && midi.length <= 52) {
     return {
       dumpClass: "gp5",
       ...gp5Usb,
-      terminator: midi.length >= 30 && midi.length <= 36,
+      terminator: midi.length <= 36,
     };
   }
 
@@ -260,20 +259,20 @@ export class ChainDecoder {
     this.dumpClass = null;
   }
 
-  private orderedPayloads(): Uint8Array[] {
-    return [...this.fragments.entries()]
-      .sort((left, right) => left[0] - right[0])
-      .map((entry) => entry[1]);
-  }
-
   private finish(model: DeviceModel): AudioChain | null {
     if (!this.dumpClass) {
       return null;
     }
-    const parts = this.orderedPayloads();
-    if (parts.length === 0) {
+    const entries = [...this.fragments.entries()].sort((left, right) => left[0] - right[0]);
+    if (entries.length === 0) {
       return null;
     }
+    for (let index = 0; index < entries.length; index += 1) {
+      if (entries[index][0] !== index) {
+        return null;
+      }
+    }
+    const parts = entries.map((entry) => entry[1]);
     const merged = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
     let cursor = 0;
     for (const part of parts) {

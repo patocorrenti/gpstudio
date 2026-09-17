@@ -146,7 +146,8 @@ export class IdentityDecoder {
     }
 
     // Raw BLE-MIDI packet (header + timestamp still present).
-    if (midi[5] === 1 && midi[6] === 5) {
+    // USB SysEx starts at F0; bytes 5–6 are a fragment index, not this command.
+    if (midi[0] !== 0xf0 && midi[5] === 1 && midi[6] === 5) {
       return this.collectNameDump(midi, 7, 11);
     }
 
