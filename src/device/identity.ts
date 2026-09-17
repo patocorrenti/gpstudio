@@ -92,11 +92,40 @@ function parseNameList(payloads: Uint8Array[]): (string | null)[] | null {
   return names;
 }
 
+function sysexPayload(midi: Uint8Array, start: number): Uint8Array {
+  const end = midi[midi.length - 1] === 0xf7 ? midi.length - 1 : midi.length;
+  return midi.subarray(start, end);
+}
+
 export class IdentityDecoder {
   private fragments = new Map<number, Uint8Array>();
 
   reset(): void {
     this.fragments.clear();
+  }
+
+  private orderedPayloads(): Uint8Array[] {
+    return [...this.fragments.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map((entry) => entry[1]);
+  }
+
+  private finishNames(): IdentityEvent | null {
+    const names = parseNameList(this.orderedPayloads());
+    if (!names) {
+      return null;
+    }
+    this.fragments.clear();
+    return { type: "name-list", names };
+  }
+
+  private collectNameDump(
+    midi: Uint8Array,
+    indexAt: number,
+    payloadAt: number,
+  ): IdentityEvent | null {
+    this.fragments.set(nibble(midi, indexAt), sysexPayload(midi, payloadAt));
+    return this.finishNames();
   }
 
   push(bytes: Uint8Array): IdentityEvent | null {
@@ -105,38 +134,20 @@ export class IdentityDecoder {
       return null;
     }
 
+    // USB Web MIDI: 48-byte fragments, 24-byte terminator, command 06 0A.
     if (midi[3] === 6 && midi[4] === 10) {
-      const index = nibble(midi, 5);
-      const payload = midi.subarray(9, midi[midi.length - 1] === 0xf7 ? midi.length - 1 : midi.length);
-      this.fragments.set(index, payload);
-      if (midi.length === 24) {
-        const ordered = [...this.fragments.entries()]
-          .sort((left, right) => left[0] - right[0])
-          .map((entry) => entry[1]);
-        const names = parseNameList(ordered);
-        this.fragments.clear();
-        if (names) {
-          return { type: "name-list", names };
-        }
-      }
-      return null;
+      return this.collectNameDump(midi, 5, 9);
     }
 
+    // Bluetooth after BLE-MIDI unwrap: GATT dumps are ~210-byte SysEx
+    // with command 01 05 (raw packet has those bytes two later).
+    if (midi[3] === 1 && midi[4] === 5) {
+      return this.collectNameDump(midi, 5, 9);
+    }
+
+    // Raw BLE-MIDI packet (header + timestamp still present).
     if (midi[5] === 1 && midi[6] === 5) {
-      const index = nibble(midi, 7);
-      const end = midi[midi.length - 1] === 0xf7 ? midi.length - 1 : midi.length;
-      this.fragments.set(index, midi.subarray(11, end));
-      if (midi.length === 16 && midi[7] === 1 && midi[8] === 4) {
-        const ordered = [...this.fragments.entries()]
-          .sort((left, right) => left[0] - right[0])
-          .map((entry) => entry[1]);
-        const names = parseNameList(ordered);
-        this.fragments.clear();
-        if (names) {
-          return { type: "name-list", names };
-        }
-      }
-      return null;
+      return this.collectNameDump(midi, 7, 11);
     }
 
     if (
@@ -206,14 +217,16 @@ export class SysexAssembler {
     }
     if (this.pending) {
       this.pending.push(...bytes);
-      if (bytes[bytes.length - 1] === 0xf7 || this.pending[this.pending.length - 1] === 0xf7) {
+      if (this.pending[this.pending.length - 1] === 0xf7) {
         const complete = Uint8Array.from(this.pending);
         this.pending = null;
         return [complete];
       }
       return [];
     }
-    if (bytes[0] === 0xf0 && bytes[bytes.length - 1] !== 0xf7) {
+    // Hold only tiny USB splits. Bluetooth name dumps are long SysEx chunks
+    // without a per-fragment F7; concatenating them hides the dump headers.
+    if (bytes[0] === 0xf0 && bytes[bytes.length - 1] !== 0xf7 && bytes.length < 8) {
       this.pending = [...bytes];
       return [];
     }

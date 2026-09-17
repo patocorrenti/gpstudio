@@ -53,20 +53,33 @@ export class BleMidiDecoder {
       return messages;
     }
 
-    let index = isHeader(packet[0]) ? 1 : 0;
+    const firstData = isHeader(packet[0]) ? 1 : 0;
+    let index = firstData;
     while (index < packet.length) {
       const byte = packet[index];
 
       if (this.sysex) {
+        const atPacketStart = index === firstData;
         index += 1;
+        if (isRealtime(byte)) {
+          messages.push(new Uint8Array([byte]));
+          continue;
+        }
+        // Packet timestamp (10xxxxxx or 0xF7) sits right after the BLE-MIDI header.
+        if (atPacketStart && byte & 0x80 && byte !== 0xf0) {
+          continue;
+        }
+        if (byte === 0xf0) {
+          if (this.sysex.length > 1) {
+            messages.push(Uint8Array.from(this.sysex));
+          }
+          this.sysex = [0xf0];
+          continue;
+        }
         if (byte === 0xf7) {
           this.sysex.push(0xf7);
           messages.push(Uint8Array.from(this.sysex));
           this.sysex = null;
-          continue;
-        }
-        if (isRealtime(byte)) {
-          messages.push(new Uint8Array([byte]));
           continue;
         }
         if (byte & 0x80) {
