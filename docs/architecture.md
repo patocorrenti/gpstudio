@@ -14,7 +14,7 @@ El producto habla USB-MIDI con GP-5 y GP-50: fase 1 usa el MIDI CC oficial; edit
     - Browser: Web MIDI (`navigator.requestMIDIAccess`)
     - Desktop/mobile: Rust `midir` vía comandos/eventos Tauri (WebView2 **no** expone Web MIDI)
   - Un endpoint USB lleva `id`, `label`, `kind: usb-midi` y `suggestedModel` opcional
-  - Bluetooth (GATT de Valeton Suite) es otro backend, no un `kind` más del tubo MIDI:
+  - Bluetooth (servicio BLE-MIDI MMA) es otro backend, no un `kind` más del tubo MIDI:
     - Browser: Web Bluetooth
     - Desktop: Rust `btleplug` vía comandos Tauri (WebView2 **no** expone Web Bluetooth)
     - Contrato `BluetoothLink`: `discover` / `open` / `send` / `close`
@@ -103,7 +103,7 @@ Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y P
 
 Web MIDI y `midir` son los dos backends USB. Web Bluetooth y `btleplug` son los dos backends GATT. Connect abre con tabs USB | Bluetooth: el usuario elige el método primero. La pestaña USB usa el tubo MIDI; la pestaña Bluetooth escanea pedales y conecta GATT. Phase 1 MIDI endpoints siguen `kind: usb-midi`.
 
-Si BLE no habla CC, el gancho es el encoder (CC vs SysEx), que de todos modos hace falta para el editor USB.
+Patch recall por Bluetooth ya es CC 0 envuelto en paquete BLE-MIDI. Si un comando futuro no habla CC, el gancho sigue siendo el encoder (CC vs SysEx), el mismo que necesita el editor USB.
 
 Connect no es una pantalla: es estado de sesión global. El chrome lo muestra siempre (sin pedal: Connect) y el flujo de conexión ocurre en un modal. Controller es la home.
 
@@ -202,4 +202,4 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `link-modes`: tabs USB | Bluetooth, `linkMode` en la sesión
 - [x] Change `bluetooth-connect`: scan/conectar GATT (sin encoder de patch)
 - [x] Change `live-controller`: UI de patch 00–99 via MIDI CC oficial (USB)
-- [ ] Change `bluetooth-patch-control`: encoder de patch sobre GATT (mismo Controller que USB)
+- [x] Change `bluetooth-patch-control`: encoder de patch sobre GATT (mismo Controller que USB)
