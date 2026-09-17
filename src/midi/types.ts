@@ -17,4 +17,5 @@ export interface MidiTransport {
   send(bytes: Uint8Array): Promise<void>;
   subscribe(handler: MidiMessageHandler): () => void;
   close(): Promise<void>;
+  sysexEnabled(): boolean;
 }

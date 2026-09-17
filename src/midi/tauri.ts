@@ -48,6 +48,10 @@ export class TauriMidiTransport implements MidiTransport {
     await invoke("midi_close");
   }
 
+  sysexEnabled(): boolean {
+    return true;
+  }
+
   private async ensureInbound(): Promise<void> {
     if (this.unlisten) {
       return;

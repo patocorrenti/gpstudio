@@ -7,7 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatPatch, PATCH_COUNT } from "@/device/session";
+import {
+  formatPatch,
+  formatPatchOption,
+  PATCH_COUNT,
+} from "@/device/session";
 import {
   useDeviceSession,
   useSessionSnapshot,
@@ -16,8 +20,15 @@ import { RequirePedal } from "@/features/connect/RequirePedal";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
-function PatchBar({ patch }: { patch: number }) {
+function PatchBar({
+  patch,
+  patchNames,
+}: {
+  patch: number;
+  patchNames: (string | null)[];
+}) {
   const session = useDeviceSession();
+  const currentName = patchNames[patch];
 
   return (
     <div className="flex items-center justify-center gap-3">
@@ -39,18 +50,20 @@ function PatchBar({ patch }: { patch: number }) {
         <SelectTrigger
           aria-label="Select patch"
           size="default"
-          className="h-auto min-w-28 justify-center py-2.5 text-2xl font-semibold tabular-nums"
+          className="h-auto min-w-40 justify-center py-2.5 text-2xl font-semibold tabular-nums"
         >
-          <SelectValue>{formatPatch(patch)}</SelectValue>
+          <SelectValue>
+            {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72 min-w-28">
+        <SelectContent position="popper" className="max-h-72 min-w-40">
           {patchOptions.map((option) => (
             <SelectItem
               key={option}
               value={String(option)}
               className="font-medium tabular-nums"
             >
-              {formatPatch(option)}
+              {formatPatchOption(option, patchNames[option])}
             </SelectItem>
           ))}
         </SelectContent>
@@ -68,15 +81,26 @@ function PatchBar({ patch }: { patch: number }) {
   );
 }
 
+function SyncingController() {
+  return (
+    <section role="status" className="flex flex-1 flex-col items-center">
+      <p className="text-muted-foreground">Syncing with the pedal…</p>
+    </section>
+  );
+}
+
 function ConnectedController() {
   const snapshot = useSessionSnapshot();
   if (snapshot.status !== "connected") {
     return null;
   }
+  if (snapshot.sync === "syncing") {
+    return <SyncingController />;
+  }
 
   return (
-    <section className="flex flex-1 flex-col items-center justify-center">
-      <PatchBar patch={snapshot.patch} />
+    <section className="flex flex-1 flex-col items-center">
+      <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
     </section>
   );
 }

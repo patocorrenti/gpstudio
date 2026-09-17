@@ -8,7 +8,9 @@ export function AppShell() {
     <div className="flex min-h-svh flex-col bg-background text-foreground">
       <header className="flex items-center gap-4 border-b px-6 py-3">
         <div className="flex items-center gap-3">
-          <p className="text-lg font-semibold tracking-tight">Patone</p>
+          <p className="text-lg font-semibold tracking-tight">
+            Patone
+          </p>
           <ConnectionStatus />
         </div>
         <div className="ml-auto flex items-center gap-3">

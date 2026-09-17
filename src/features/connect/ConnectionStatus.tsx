@@ -194,6 +194,7 @@ export function ConnectionStatus() {
         aria-expanded={open}
         aria-label={connected ? `Connected to ${label}` : "Connect a pedal"}
         onClick={() => setOpen(true)}
+        className={connected ? "shadow-lg shadow-emerald-500/50" : ""}
       >
         <span
           aria-hidden
