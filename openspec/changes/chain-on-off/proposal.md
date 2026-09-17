@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- Controller slots for NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, and RVB become toggles (official CC 48–57). On GP-50, EXP is also a toggle (official CC 13). The same row is used on USB and Bluetooth; React still MUST NOT send raw MIDI.
+- Controller slots for NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, and RVB become toggles (official CC 48–57). On GP-50, EXP is also a toggle: Bluetooth sends official CC 13; USB sends captured EXP SysEx because USB ignores CC 13. The same row is used on USB and Bluetooth; React still MUST NOT send raw MIDI.
 - `DeviceSession` updates the snapshot on-change (optimistic) and sends the matching CC on the open link (`commandToPedal` is already true on both). It MUST NOT send SysEx, extra patch recall, or a chain dump solely because a module was toggled.
 - When `liveFromPedal` is true (Bluetooth only), inbound live-module SysEx MUST update the matching slot’s on/off without changing order. GP-50 EXP inbound uses a separate SysEx (command `02`). USB MUST ignore those reports even if they arrive. Volume, tuner, and other live CCs stay unapplied.
 - Architecture and OpenSpec context: UI module on/off (including GP-50 EXP) is in scope; Bluetooth `liveFromPedal` applies live-module/EXP SysEx; USB remains one-way for those controls. Drag-and-drop reorder stays later.

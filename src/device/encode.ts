@@ -42,8 +42,10 @@ export function encodeModule(
   id: ChainSlotId,
   enabled: boolean,
 ): Uint8Array {
-  const controller = id === "exp" ? gp50Cc.expOnOff : MODULE_CC[id];
-  return encodeLinkMidi(linkMode, midiCc(controller, encodeModuleCcValue(enabled)));
+  if (id === "exp") {
+    return encodeLinkMidi(linkMode, midiCc(gp50Cc.expOnOff, encodeModuleCcValue(enabled)));
+  }
+  return encodeLinkMidi(linkMode, midiCc(MODULE_CC[id], encodeModuleCcValue(enabled)));
 }
 
 export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): Uint8Array {

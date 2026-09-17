@@ -47,11 +47,11 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 
 ### 4. GP-50 EXP is a toggle; GP-5 has no EXP slot
 
-**Choice:** On GP-50, EXP is a chain slot like the others. App→pedal uses official CC 13 (on/off). CC 11 stays expression parameter and is ignored. Bluetooth inbound uses a 24-byte identity-family SysEx (size `0x07`, command `02`) from Patone captures; enable is the last data byte. The preset dump still does not decode an EXP enable bit, so `applyChain` keeps the previous EXP on/off across dumps. GP-5 never shows or sends EXP.
+**Choice:** On GP-50, EXP is a chain slot like the others. Bluetooth app→pedal uses official CC 13 (on/off). CC 11 stays expression parameter and is ignored. USB does not honor CC 13 (the published list is MIDI IN, not USB). App→pedal on USB sends an identity-family *request* (`F0 00 07 … 02 01 02 04 02` plus the captured EXP payload); echoing the Bluetooth *notify* frame did not work. Bluetooth inbound still uses the 24-byte notify SysEx (size `0x07`, command `02`). The preset dump still does not decode an EXP enable bit, so `applyChain` keeps the previous EXP on/off across dumps. GP-5 never shows or sends EXP.
 
-**Why:** The GP-50 MIDI list names CC 13 as EXP on/off. Pedal→app captures are this SysEx, not CC 13.
+**Why:** The GP-50 MIDI list names CC 13 as EXP on/off and that works over BLE-MIDI. USB module CC 48–57 work; USB ignores CC 13. Notify SysEx is pedal→app; writes in this family use byte `0x02` like identity requests.
 
-**Alternative:** Leave EXP display-only. Rejected; it is a module the user turns on and off. **Alternative:** Send CC 11. Rejected; that is the EXP parameter.
+**Alternative:** Leave EXP USB-broken. Rejected; the user needs the same toggle on both links. **Alternative:** Send CC 11. Rejected; that is the EXP parameter.
 
 ### 5. CC values follow the official MIDI list
 

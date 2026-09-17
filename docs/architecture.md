@@ -181,7 +181,7 @@ Chrome siempre visible: nombre Patone, control de conexión a la izquierda, secc
 
 Modal de conexión: tabs USB y Bluetooth. USB pide permiso MIDI, lista endpoints, conecta, sugiere/confirma modelo, y se presenta como one-way y super fast. Bluetooth explica two-way y más lento, escanea pedales GATT, conecta, y sugiere/confirma modelo. Con Bluetooth conectado, Controller manda recall de patch por el encoder GATT (mismo selector 00–99 que USB). Qué muestra el control cuando hay pedal se define en `device-connection`.
 
-Pantalla Controller: al conectar puede mostrar loading mientras sincroniza identidad y la cadena de audio; luego selector de patch 00–99 (con nombres si llegaron) y la cadena del patch actual (10 slots en GP-5, 11 en GP-50 con EXP al final; los diez efectos se encienden/apagan por CC 48–57; EXP en GP-50 por CC 13). Volumen, tuner, reorder y extras GP-50 vienen después.
+Pantalla Controller: al conectar puede mostrar loading mientras sincroniza identidad y la cadena de audio; luego selector de patch 00–99 (con nombres si llegaron) y la cadena del patch actual (10 slots en GP-5, 11 en GP-50 con EXP al final; los diez efectos se encienden/apagan por CC 48–57; EXP en GP-50 por CC 13 en Bluetooth y por SysEx capturado en USB). Volumen, tuner, reorder y extras GP-50 vienen después.
 
 Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot. La sesión puede aplicar identidad de patch, dumps de cadena y, en Bluetooth, SysEx live de on/off de módulos por separado.
 

@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   chainSlotLabel,
   formatPatch,
@@ -87,7 +88,7 @@ function PatchBar({
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "min-w-14 rounded-lg border px-3 py-2 text-center text-sm font-semibold tracking-wide",
+    "flex min-w-18 flex-col items-center gap-2 rounded-lg border px-4 py-3 text-center",
     enabled
       ? "border-foreground/20 bg-muted text-foreground"
       : "border-border text-muted-foreground opacity-50",
@@ -103,21 +104,26 @@ function AudioChainSlotView({
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
-  const state = slot.enabled ? "on" : "off";
 
   return (
-    <button
-      type="button"
-      aria-label={`${label} ${state}`}
-      aria-pressed={slot.enabled}
-      className={slotClassName(slot.enabled)}
-      disabled={disabled}
-      onClick={() => {
-        void session.toggleChainSlot(slot.id);
-      }}
-    >
-      {label}
-    </button>
+    <div className={slotClassName(slot.enabled)}>
+      <span className="text-sm font-semibold tracking-wide">{label}</span>
+      <Switch
+        size="sm"
+        checked={slot.enabled}
+        disabled={disabled}
+        aria-label={`${label} ${slot.enabled ? "on" : "off"}`}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+        onCheckedChange={(checked) => {
+          if (checked === slot.enabled) {
+            return;
+          }
+          void session.toggleChainSlot(slot.id);
+        }}
+      />
+    </div>
   );
 }
 
