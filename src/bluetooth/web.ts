@@ -12,27 +12,19 @@ import type {
 type BluetoothRemoteGattCharacteristicLike = {
   uuid: string;
   properties: {
-    read?: boolean;
     write?: boolean;
     writeWithoutResponse?: boolean;
     notify?: boolean;
-    indicate?: boolean;
   };
   startNotifications: () => Promise<BluetoothRemoteGattCharacteristicLike>;
   writeValueWithoutResponse: (data: Uint8Array) => Promise<void>;
   writeValue: (data: Uint8Array) => Promise<void>;
-  addEventListener: (
-    type: "characteristicvaluechanged",
-    listener: (event: { target: { value?: DataView } }) => void,
-  ) => void;
 };
 
 type BluetoothRemoteGattServiceLike = {
-  uuid: string;
   getCharacteristic: (
     uuid: string,
   ) => Promise<BluetoothRemoteGattCharacteristicLike>;
-  getCharacteristics: () => Promise<BluetoothRemoteGattCharacteristicLike[]>;
 };
 
 type BluetoothRemoteGattServerLike = {
@@ -40,7 +32,6 @@ type BluetoothRemoteGattServerLike = {
   connect: () => Promise<BluetoothRemoteGattServerLike>;
   disconnect: () => void;
   getPrimaryService: (uuid: string) => Promise<BluetoothRemoteGattServiceLike>;
-  getPrimaryServices: () => Promise<BluetoothRemoteGattServiceLike[]>;
 };
 
 type BluetoothDeviceLike = {
@@ -58,71 +49,6 @@ type BluetoothApi = {
 };
 
 const NAME_PREFIXES = ["GP-5", "GP-50", "GP5", "GP50", "Valeton", "valeton"];
-
-/** Advertised on GP-5/GP-50 BLE (Patone capture). Required for Web Bluetooth getPrimaryService. */
-const ADVERTISED_SERVICES = [
-  CONTROL_SERVICE_UUID,
-  "00001800-0000-1000-8000-00805f9b34fb",
-  "0000080b-0000-1000-8000-00805f9b34fb",
-];
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join(" ");
-}
-
-function characteristicProps(
-  properties: BluetoothRemoteGattCharacteristicLike["properties"],
-): string {
-  const names: string[] = [];
-  if (properties.read) names.push("read");
-  if (properties.write) names.push("write");
-  if (properties.writeWithoutResponse) names.push("write-without-response");
-  if (properties.notify) names.push("notify");
-  if (properties.indicate) names.push("indicate");
-  return names.length > 0 ? names.join(", ") : "none";
-}
-
-async function logService(
-  label: string,
-  service: BluetoothRemoteGattServiceLike,
-): Promise<void> {
-  console.info(`[patone][gatt] ${label} ${service.uuid}`);
-  const characteristics = await service.getCharacteristics();
-  if (characteristics.length === 0) {
-    console.info(`[patone][gatt] ${service.uuid} 0 characteristic(s)`);
-    return;
-  }
-  for (const characteristic of characteristics) {
-    console.info(
-      `[patone][gatt] characteristic ${characteristic.uuid} [${characteristicProps(characteristic.properties)}]`,
-    );
-  }
-}
-
-async function logGattMap(server: BluetoothRemoteGattServerLike): Promise<void> {
-  try {
-    const services = await server.getPrimaryServices();
-    console.info(`[patone][gatt] getPrimaryServices: ${services.length} service(s)`);
-    for (const service of services) {
-      await logService("service", service);
-    }
-  } catch (error) {
-    console.info("[patone][gatt] getPrimaryServices failed", error);
-  }
-
-  // Chrome on Linux often throws "No Services found" for getPrimaryServices()
-  // even when a UUID listed at chooser time is reachable via getPrimaryService.
-  for (const uuid of ADVERTISED_SERVICES) {
-    try {
-      const service = await server.getPrimaryService(uuid);
-      await logService("getPrimaryService", service);
-    } catch (error) {
-      console.info(`[patone][gatt] getPrimaryService ${uuid} failed`, error);
-    }
-  }
-}
 
 function bluetoothApi(): BluetoothApi | undefined {
   if (typeof navigator === "undefined") {
@@ -198,13 +124,12 @@ export class WebBluetoothLink implements BluetoothLink {
       }
       if (options.interactive !== false) {
         const picked = await bluetooth.requestDevice({
-          // Require the advertised BLE-MIDI service so Chrome connects LE/GATT,
-          // not the dual-mode audio identity. Name prefix keeps the chooser on pedals.
+          // Require BLE-MIDI so Chrome opens the LE/GATT identity, not dual-mode audio.
           filters: NAME_PREFIXES.map((namePrefix) => ({
             namePrefix,
             services: [CONTROL_SERVICE_UUID],
           })),
-          optionalServices: ADVERTISED_SERVICES,
+          optionalServices: [CONTROL_SERVICE_UUID],
         });
         this.remember(picked);
       }
@@ -237,17 +162,9 @@ export class WebBluetoothLink implements BluetoothLink {
     if (!device?.gatt) {
       throw new Error("The pedal is no longer available.");
     }
-    console.info(
-      `[patone][gatt] connecting ${device.name ?? device.id} via ${CONTROL_SERVICE_UUID}`,
-    );
     const server = await device.gatt.connect();
-    console.info(
-      `[patone][gatt] connected ${device.name ?? device.id} gatt.connected=${String(server.connected)}`,
-    );
-    await logGattMap(server);
-    const characteristic = await this.bindControl(server);
+    this.control = await this.bindControl(server);
     this.openDevice = device;
-    this.control = characteristic;
   }
 
   async send(bytes: Uint8Array): Promise<void> {
@@ -256,7 +173,6 @@ export class WebBluetoothLink implements BluetoothLink {
       throw new Error("No Bluetooth pedal is connected.");
     }
     try {
-      console.info(`[patone][gatt] write ${toHex(bytes)}`);
       if (characteristic.properties.writeWithoutResponse) {
         await characteristic.writeValueWithoutResponse(bytes);
         return;
@@ -288,29 +204,11 @@ export class WebBluetoothLink implements BluetoothLink {
     } catch {
       throw new Error("Could not find the Bluetooth control characteristic.");
     }
-    console.info(
-      `[patone][gatt] bound ${characteristic.uuid} [${characteristicProps(characteristic.properties)}]`,
-    );
     if (characteristic.properties.notify) {
       try {
         await characteristic.startNotifications();
-        characteristic.addEventListener(
-          "characteristicvaluechanged",
-          (event) => {
-            const value = event.target.value;
-            if (!value) {
-              return;
-            }
-            const bytes = new Uint8Array(
-              value.buffer,
-              value.byteOffset,
-              value.byteLength,
-            );
-            console.info(`[patone][gatt] notify ${toHex(bytes)}`);
-          },
-        );
-      } catch (error) {
-        console.info("[patone][gatt] startNotifications failed", error);
+      } catch {
+        // Writes still work if the CCCD enable is rejected.
       }
     }
     return characteristic;

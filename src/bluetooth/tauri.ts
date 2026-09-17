@@ -40,9 +40,7 @@ export class TauriBluetoothLink implements BluetoothLink {
   }
 
   async open(id: string): Promise<void> {
-    console.info("[patone][gatt] ble_open", id);
-    const dump = await invoke<string>("ble_open", { id });
-    console.info(`[patone][gatt]\n${dump}`);
+    await invoke("ble_open", { id });
     this.sessionOpen = true;
   }
 

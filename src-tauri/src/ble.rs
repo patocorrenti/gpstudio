@@ -3,9 +3,6 @@ use btleplug::api::{
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use serde::Serialize;
-use std::fs;
-use std::io::{self, Write};
-use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -77,38 +74,8 @@ fn find_control_characteristic(peripheral: &Peripheral) -> Option<Characteristic
     })
 }
 
-fn characteristic_props(flags: CharPropFlags) -> String {
-    let mut names = Vec::new();
-    if flags.contains(CharPropFlags::READ) {
-        names.push("read");
-    }
-    if flags.contains(CharPropFlags::WRITE) {
-        names.push("write");
-    }
-    if flags.contains(CharPropFlags::WRITE_WITHOUT_RESPONSE) {
-        names.push("write-without-response");
-    }
-    if flags.contains(CharPropFlags::NOTIFY) {
-        names.push("notify");
-    }
-    if flags.contains(CharPropFlags::INDICATE) {
-        names.push("indicate");
-    }
-    if names.is_empty() {
-        return "none".to_string();
-    }
-    names.join(", ")
-}
-
-fn gatt_log(message: &str) {
-    let line = format!("[patone][gatt] {message}");
-    eprintln!("{line}");
-    let _ = io::stderr().flush();
-}
-
 fn connect_error(err: impl ToString) -> String {
     let raw = err.to_string();
-    gatt_log(&format!("connect failed: {raw}"));
     let lower = raw.to_lowercase();
     if lower.contains("auth") {
         return "Bluetooth pairing failed. Put the pedal in pairing mode, accept the pair request on this computer, then connect again.".to_string();
@@ -117,17 +84,6 @@ fn connect_error(err: impl ToString) -> String {
         return format!("Could not open the Bluetooth connection. ({raw})");
     }
     "Could not open the Bluetooth connection.".to_string()
-}
-
-fn gatt_map_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("gatt-map.log")
-}
-
-fn write_gatt_file(dump: &str) {
-    let path = gatt_map_path();
-    if fs::write(&path, dump).is_ok() {
-        gatt_log(&format!("wrote {}", path.display()));
-    }
 }
 
 async fn wait_until_connected(peripheral: &Peripheral) {
@@ -139,58 +95,15 @@ async fn wait_until_connected(peripheral: &Peripheral) {
     }
 }
 
-fn format_gatt_services(peripheral: &Peripheral) -> String {
-    let services = peripheral.services();
-    let mut lines = vec![format!("{} service(s)", services.len())];
-    if services.is_empty() {
-        lines.push(
-            "no GATT services yet; pair/trust the pedal in bluetoothctl and retry".to_string(),
-        );
-        return lines.join("\n");
-    }
-    for service in services {
-        lines.push(format!("service {}", service.uuid));
-        for characteristic in service.characteristics {
-            lines.push(format!(
-                "characteristic {} [{}]",
-                characteristic.uuid,
-                characteristic_props(characteristic.properties)
-            ));
-        }
-    }
-    lines.join("\n")
-}
-
-async fn log_advertised(peripheral: &Peripheral) {
-    let Ok(Some(props)) = peripheral.properties().await else {
-        return;
-    };
-    if props.services.is_empty() {
-        gatt_log("advertised services: (none)");
-        return;
-    }
-    let listed: Vec<String> = props.services.iter().map(ToString::to_string).collect();
-    gatt_log(&format!("advertised services: {}", listed.join(", ")));
-}
-
-async fn collect_gatt_map(peripheral: &Peripheral) -> String {
-    gatt_log("discovering services…");
-    for attempt in 1..=20 {
-        match peripheral.discover_services().await {
-            Ok(()) => {
-                let count = peripheral.services().len();
-                gatt_log(&format!("discover attempt {attempt}: {count} service(s)"));
-                if count > 0 {
-                    return format_gatt_services(peripheral);
-                }
-            }
-            Err(err) => {
-                gatt_log(&format!("discover attempt {attempt} failed: {err}"));
-            }
+async fn discover_control(peripheral: &Peripheral) -> Option<Characteristic> {
+    for _ in 1..=20 {
+        let _ = peripheral.discover_services().await;
+        if let Some(characteristic) = find_control_characteristic(peripheral) {
+            return Some(characteristic);
         }
         sleep(Duration::from_millis(500)).await;
     }
-    format_gatt_services(peripheral)
+    find_control_characteristic(peripheral)
 }
 
 async fn ensure_adapter(state: &tauri::State<'_, BleState>) -> Result<Adapter, String> {
@@ -250,7 +163,6 @@ async fn matching_endpoints(adapter: &Adapter) -> Result<Vec<BleEndpointDto>, St
 
 #[tauri::command]
 pub async fn ble_scan(state: tauri::State<'_, BleState>) -> Result<Vec<BleEndpointDto>, String> {
-    gatt_log("scan start");
     let adapter = ensure_adapter(&state).await?;
     adapter
         .start_scan(ScanFilter::default())
@@ -259,9 +171,6 @@ pub async fn ble_scan(state: tauri::State<'_, BleState>) -> Result<Vec<BleEndpoi
     sleep(Duration::from_secs(4)).await;
     let endpoints = matching_endpoints(&adapter).await;
     let _ = adapter.stop_scan().await;
-    if let Ok(list) = &endpoints {
-        gatt_log(&format!("scan found {} pedal(s)", list.len()));
-    }
     endpoints
 }
 
@@ -282,7 +191,6 @@ async fn find_peripheral(adapter: &Adapter, id: &str) -> Result<Peripheral, Stri
     if let Some(peripheral) = lookup_peripheral(adapter, id).await? {
         return Ok(peripheral);
     }
-    gatt_log("peripheral not cached, scanning again");
     adapter
         .start_scan(ScanFilter::default())
         .await
@@ -294,8 +202,7 @@ async fn find_peripheral(adapter: &Adapter, id: &str) -> Result<Peripheral, Stri
 }
 
 #[tauri::command]
-pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<String, String> {
-    gatt_log(&format!("ble_open start {id}"));
+pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<(), String> {
     {
         let mut connected = state.connected.lock().await;
         if let Some(previous) = connected.take() {
@@ -305,44 +212,27 @@ pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<S
     let adapter = ensure_adapter(&state).await?;
     let peripheral = find_peripheral(&adapter, &id).await?;
     if peripheral.is_connected().await.unwrap_or(false) {
-        gatt_log("already connected; disconnecting so BlueZ can open GATT (not classic audio)");
         let _ = peripheral.disconnect().await;
         sleep(Duration::from_secs(1)).await;
     }
-    gatt_log("starting scan while connecting");
     let _ = adapter.start_scan(ScanFilter::default()).await;
     sleep(Duration::from_millis(400)).await;
-    gatt_log(&format!("connecting {id}"));
     peripheral.connect().await.map_err(connect_error)?;
     wait_until_connected(&peripheral).await;
-    gatt_log("connected");
-    log_advertised(&peripheral).await;
-    let dump = collect_gatt_map(&peripheral).await;
+    let characteristic = discover_control(&peripheral).await;
     let _ = adapter.stop_scan().await;
-    for line in dump.lines() {
-        gatt_log(line);
-    }
-    write_gatt_file(&dump);
-    let Some(characteristic) = find_control_characteristic(&peripheral) else {
-        gatt_log("control characteristic not found");
+    let Some(characteristic) = characteristic else {
         let _ = peripheral.disconnect().await;
         return Err("Could not find the Bluetooth control characteristic.".to_string());
     };
-    gatt_log(&format!(
-        "bound {} [{}]",
-        characteristic.uuid,
-        characteristic_props(characteristic.properties)
-    ));
     if characteristic.properties.contains(CharPropFlags::NOTIFY) {
-        if let Err(err) = peripheral.subscribe(&characteristic).await {
-            gatt_log(&format!("subscribe failed: {err}"));
-        }
+        let _ = peripheral.subscribe(&characteristic).await;
     }
     *state.connected.lock().await = Some(BleSession {
         peripheral,
         characteristic,
     });
-    Ok(dump)
+    Ok(())
 }
 
 #[tauri::command]
