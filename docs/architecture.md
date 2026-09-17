@@ -153,13 +153,15 @@ Detección: el endpoint sugiere modelo por el nombre USB o el advertised name Bl
 
 ## OpenSpec
 
-Trabajo spec-driven desde el día 1. No dump de código sin change.
+Las specs en `openspec/specs/` son el contrato de comportamiento que perdura. Un change no es obligatorio en cada tarea.
 
-1. `git init` en este repo
-2. Instalar CLI (`@fission-ai/openspec`) y `openspec init` con herramienta **Cursor**
-3. Completar `openspec/config.yaml` con contexto: Tauri 2, React/TS, MIDI dual, GP-5/GP-50, fases
-4. Cada feature = un change: `/opsx:propose` → review → `/opsx:apply` → `/opsx:archive`
-5. El agente no prueba en el navegador a menos que el usuario lo pida explícitamente. Typecheck/lint sí; la UI la prueba el usuario.
+**Carril Change** — nueva capability, comportamiento nuevo o controvertido, arquitectura, o algo que conviene acordar antes de codear. `/opsx-propose` → review → `/opsx-apply` → `/opsx-archive`. Se puede omitir `design.md` si no hay cruce de módulos ni ambigüedad. `skip_specs: true` solo si no cambia comportamiento (refactor, tooling, docs).
+
+**Carril Directo** — bugfix, copy, polish de UI, refactor interno, o corrección de Purpose/typos en specs. Codear y, en el mismo trabajo, actualizar lo que debe sobrevivir: `openspec/specs/<capability>/spec.md` si cambió comportamiento observable; este archivo si cambió el plan acordado; el `context:` de `openspec/config.yaml` si cambió una restricción del agente. No crear change, no escribir deltas `ADDED`/`MODIFIED`/`REMOVED` (eso es formato de change, no de spec base), no archivar. Si se tocó una spec, validar con `openspec validate --specs`.
+
+Criterio: si un usuario o sistema podría notar una diferencia y esa diferencia no está en la spec, hay que tocarla. Si no hay diferencia observable, no inventar un requirement ni un change. Si hay duda de carril, preguntar. No usar Change por inercia.
+
+El agente no prueba en el navegador a menos que el usuario lo pida explícitamente. Typecheck/lint sí; la UI la prueba el usuario.
 
 Cambios previstos, en orden:
 

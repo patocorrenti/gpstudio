@@ -108,8 +108,25 @@ context: |
   - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
   - Phase 1 uses only MIDI CC published in the official manuals.
   - Phase 2 SysEx is documented in its own design.md when that change starts.
-  - Spec-driven from day 1: no feature dump without an OpenSpec change
-    (/opsx-propose → review → /opsx-apply → /opsx-archive).
+  - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
+    are the durable behavior contract; a change is not required for every task.
+    Change lane: new capability, new or contested behavior, architecture, or
+    anything that should be agreed before coding. /opsx-propose → review →
+    /opsx-apply → /opsx-archive. Skip design.md when there is no cross-cutting
+    work or ambiguity. skip_specs: true only when behavior does not change
+    (refactor, tooling, docs).
+    Direct lane: bugfix, copy, UI polish, internal refactor, or Purpose/typo
+    fixes in specs. Implement, then in the same work update whatever must
+    persist: openspec/specs/<capability>/spec.md if observable behavior
+    changed; docs/architecture.md if the agreed plan changed; this context
+    field if an agent constraint changed. Do not create a change, do not
+    write ADDED/MODIFIED/REMOVED deltas in main specs, do not archive.
+    Validate with openspec validate --specs if a spec was touched.
+    If a user or system could notice a difference and the spec does not
+    already say it, update the spec. If nothing observable changed, do not
+    invent a requirement or a change. If the lane is unclear, ask. Do not
+    default to a change out of habit. If the user asks to implement without
+    naming a change, classify the lane first; do direct-lane work immediately.
   - Code comments and UI/code strings are in English. Chat with the user is in Spanish.
   - Do not run in-browser verification (browser tools, headless Chrome,
     screenshots, click-throughs) unless the user explicitly asks for it.
@@ -122,11 +139,18 @@ rules:
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
     - Do not propose SysEx copies, preset library, IRs, or mobile packaging in phase 1 changes
     - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
+    - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
+      refactor, Purpose/typo in specs), do not scaffold a change; say it is
+      direct-lane and stop so it can be implemented without propose/archive
   specs:
     - Use WHEN/THEN scenarios (Given/When/Then is fine)
     - Phase 1 capabilities live under midi-transport, device-connection, and live-controller
     - Specs describe observable behavior, not transport-internal byte packing unless that is the capability
     - UI requirements must go through DeviceSession, never raw MIDI from React
+    - Main specs never use delta headers (ADDED/MODIFIED/REMOVED/RENAMED).
+      Direct-lane spec edits go in place under ## Requirements
+    - Direct-lane spec edits must keep Purpose, requirement names, and
+      existing scenarios unless the behavior change itself requires it
   design:
     - Isolate Web MIDI and Tauri/midir behind MidiTransport (endpoints + bytes, kind usb-midi)
     - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
@@ -147,6 +171,7 @@ operations:
   apply:
     guidance:
       - Implement only the current change; leave later-phase features as stubs if the layout requires them
+      - Do not fold unrelated direct-lane work into this change
       - Do not introduce HTTP backends, Electron, or a monorepo
       - Do not verify UI in a browser (tools, headless Chrome, screenshots,
         or click-throughs) unless the user explicitly asks. Typecheck / lint
