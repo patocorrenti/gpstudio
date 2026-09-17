@@ -1,24 +1,83 @@
-import {
-  EFFECT_IDS,
-  type AudioChain,
-  type AudioChainSlot,
-} from "@/device/chain";
+import type { AudioChain, AudioChainSlot, EffectId } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 
 /**
- * Current-preset / chain dump request (F0…F7). Same dump-class header as the
- * name-list identity request (size 0x0E), command 0x01. The short 0x07/0x01
- * frame only elicited a current-patch identity on GP-50 Bluetooth (Patone capture).
+ * Current-preset dump request (F0…F7). Same identity-family template as
+ * name-list (size 0x0E, command 0x00) and current-patch (size 0x07, command 0x03).
+ * Size 0x09 + command 0x01 is the current-preset class. A GP-50 Bluetooth Patone
+ * capture of size 0x0E + command 0x01 only returned a 16-byte ACK, not a dump.
  * Bluetooth wrap is applied by encodeLinkMidi.
  */
 const CURRENT_CHAIN_REQUEST = Uint8Array.from([
-  0xf0, 0x00, 0x0e, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x01, 0x02, 0x04, 0x01,
+  0xf0, 0x00, 0x09, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x01, 0x02, 0x04, 0x01,
   0xf7,
 ]);
 
 export function encodeCurrentChainRequest(): Uint8Array {
   return CURRENT_CHAIN_REQUEST;
 }
+
+/** Dump order ids: NR PRE DST AMP CAB EQ MOD DLY RVB NS (not the UI EFFECT_IDS order). */
+const DUMP_MODULE_IDS = [
+  "nr",
+  "pre",
+  "dst",
+  "amp",
+  "cab",
+  "eq",
+  "mod",
+  "dly",
+  "rvb",
+  "ns",
+] as const satisfies readonly EffectId[];
+
+type EnableBit = readonly [offset: number, bit: number];
+
+type PresetLayout = {
+  enable: Record<EffectId, EnableBit>;
+  orderAt: number;
+};
+
+const GP50_LAYOUT: PresetLayout = {
+  enable: {
+    nr: [227, 0],
+    pre: [227, 1],
+    dst: [227, 2],
+    amp: [227, 3],
+    cab: [226, 0],
+    eq: [226, 1],
+    mod: [226, 2],
+    dly: [226, 3],
+    rvb: [229, 0],
+    ns: [229, 1],
+  },
+  orderAt: 243,
+};
+
+const GP5_LAYOUT: PresetLayout = {
+  enable: {
+    nr: [141, 0],
+    pre: [141, 1],
+    dst: [141, 2],
+    amp: [141, 3],
+    cab: [140, 0],
+    eq: [140, 1],
+    mod: [140, 2],
+    dly: [140, 3],
+    rvb: [143, 0],
+    ns: [143, 1],
+  },
+  orderAt: 157,
+};
+
+type DumpClass = "gp5" | "gp50";
+
+type DumpHeader = {
+  dumpClass: DumpClass;
+  indexAt: number;
+  payloadAt: number;
+  terminator: boolean;
+};
 
 function midiPayload(bytes: Uint8Array): Uint8Array {
   if (
@@ -84,108 +143,121 @@ function isCurrentPatchIdentity(midi: Uint8Array): boolean {
   return false;
 }
 
-function unpackNibbles(bytes: Uint8Array): number[] {
-  const values: number[] = [];
-  for (let index = 0; index + 1 < bytes.length; index += 2) {
-    values.push(nibble(bytes, index));
+function commandAt(
+  midi: Uint8Array,
+  cmd0: number,
+  cmd1: number,
+): { indexAt: number; payloadAt: number } | null {
+  if (midi[3] === cmd0 && midi[4] === cmd1) {
+    return { indexAt: 5, payloadAt: 9 };
   }
-  return values;
-}
-
-function asModuleIndex(value: number): number | null {
-  if (Number.isInteger(value) && value >= 0 && value <= 9) {
-    return value;
-  }
-  if (Number.isInteger(value) && value >= 1 && value <= 10) {
-    return value - 1;
+  if (midi.length > 11 && midi[5] === cmd0 && midi[6] === cmd1) {
+    return { indexAt: 7, payloadAt: 11 };
   }
   return null;
 }
 
-function permutationAt(values: number[], start: number): number[] | null {
-  if (start + 10 > values.length) {
+function classifyDump(midi: Uint8Array): DumpHeader | null {
+  const gp50Bt = commandAt(midi, 0, 6);
+  if (gp50Bt) {
+    const index = nibble(midi, gp50Bt.indexAt);
+    const terminator = midi.length < 50 && index === 5;
+    if (!terminator && midi.length < 200) {
+      return null;
+    }
+    return {
+      dumpClass: "gp50",
+      ...gp50Bt,
+      terminator,
+    };
+  }
+
+  const gp5Bt = commandAt(midi, 0, 5);
+  if (gp5Bt) {
+    const index = nibble(midi, gp5Bt.indexAt);
+    const terminator = midi.length >= 130 && midi.length < 200 && index === 4;
+    if (!terminator && midi.length < 200) {
+      return null;
+    }
+    return {
+      dumpClass: "gp5",
+      ...gp5Bt,
+      terminator,
+    };
+  }
+
+  const gp50Usb = commandAt(midi, 1, 11);
+  if (gp50Usb && midi.length >= 40 && midi.length <= 48) {
+    const index = nibble(midi, gp50Usb.indexAt);
+    return {
+      dumpClass: "gp50",
+      ...gp50Usb,
+      terminator: index === 26,
+    };
+  }
+
+  const gp5Usb = commandAt(midi, 1, 9);
+  if (gp5Usb) {
+    return {
+      dumpClass: "gp5",
+      ...gp5Usb,
+      terminator: midi.length >= 30 && midi.length <= 36,
+    };
+  }
+
+  return null;
+}
+
+function bitOn(data: Uint8Array, offset: number, bit: number): boolean {
+  if (offset >= data.length) {
+    return false;
+  }
+  return (data[offset] & (1 << bit)) !== 0;
+}
+
+function parsePresetDump(data: Uint8Array, layout: PresetLayout, model: DeviceModel): AudioChain | null {
+  const lastOrder = layout.orderAt + 18;
+  if (data.length <= lastOrder) {
     return null;
   }
-  const ids: number[] = [];
-  const seen = new Set<number>();
-  for (let offset = 0; offset < 10; offset += 1) {
-    const id = asModuleIndex(values[start + offset]);
-    if (id === null || seen.has(id)) {
+
+  const order: EffectId[] = [];
+  const seen = new Set<EffectId>();
+  for (let slot = 0; slot < 10; slot += 1) {
+    const raw = data[layout.orderAt + slot * 2];
+    if (raw < 0 || raw > 9) {
+      return null;
+    }
+    const id = DUMP_MODULE_IDS[raw];
+    if (seen.has(id)) {
       return null;
     }
     seen.add(id);
-    ids.push(id);
+    order.push(id);
   }
-  return ids;
-}
-
-function asEnabled(value: number): boolean | null {
-  if (value === 0 || value === 1) {
-    return value === 1;
-  }
-  if (value >= 0 && value <= 127) {
-    return value >= 64;
-  }
-  return null;
-}
-
-function readEnables(values: number[], start: number): boolean[] | null {
-  if (start < 0 || start + 10 > values.length) {
-    return null;
-  }
-  const enables: boolean[] = [];
-  for (let offset = 0; offset < 10; offset += 1) {
-    const enabled = asEnabled(values[start + offset]);
-    if (enabled === null) {
-      return null;
-    }
-    enables.push(enabled);
-  }
-  return enables;
-}
-
-function parseUnpacked(values: number[], model: DeviceModel): AudioChain | null {
-  let order: number[] | null = null;
-  let orderAt = -1;
-  for (let start = 0; start <= values.length - 10; start += 1) {
-    const candidate = permutationAt(values, start);
-    if (candidate) {
-      order = candidate;
-      orderAt = start;
-      break;
-    }
-  }
-  if (!order) {
+  if (seen.size !== 10) {
     return null;
   }
 
-  const enablesBySlot =
-    readEnables(values, orderAt + 10) ?? readEnables(values, orderAt - 10);
-  const slots: AudioChainSlot[] = order.map((id, index) => ({
-    id: EFFECT_IDS[id],
-    enabled: enablesBySlot ? enablesBySlot[index] : false,
-  }));
+  const slots: AudioChainSlot[] = order.map((id) => {
+    const [offset, bit] = layout.enable[id];
+    return { id, enabled: bitOn(data, offset, bit) };
+  });
 
   if (model === "gp50") {
-    const expSource = enablesBySlot ? values[orderAt + 20] : undefined;
-    slots.push({
-      id: "exp",
-      enabled: expSource === undefined ? false : (asEnabled(expSource) ?? false),
-    });
+    slots.push({ id: "exp", enabled: false });
   }
 
   return slots;
 }
 
-function parsePayload(payload: Uint8Array, model: DeviceModel): AudioChain | null {
-  return parseUnpacked(unpackNibbles(payload), model) ?? parseUnpacked([...payload], model);
-}
-
 export class ChainDecoder {
   private fragments = new Map<number, Uint8Array>();
+  private dumpClass: DumpClass | null = null;
 
   reset(): void {
     this.fragments.clear();
+    this.dumpClass = null;
   }
 
   private orderedPayloads(): Uint8Array[] {
@@ -195,6 +267,9 @@ export class ChainDecoder {
   }
 
   private finish(model: DeviceModel): AudioChain | null {
+    if (!this.dumpClass) {
+      return null;
+    }
     const parts = this.orderedPayloads();
     if (parts.length === 0) {
       return null;
@@ -205,21 +280,12 @@ export class ChainDecoder {
       merged.set(part, cursor);
       cursor += part.length;
     }
-    const chain = parsePayload(merged, model);
+    const layout = this.dumpClass === "gp50" ? GP50_LAYOUT : GP5_LAYOUT;
+    const chain = parsePresetDump(merged, layout, model);
     if (chain) {
-      this.fragments.clear();
+      this.reset();
     }
     return chain;
-  }
-
-  private collect(
-    midi: Uint8Array,
-    indexAt: number,
-    payloadAt: number,
-    model: DeviceModel,
-  ): AudioChain | null {
-    this.fragments.set(nibble(midi, indexAt), sysexPayload(midi, payloadAt));
-    return this.finish(model);
   }
 
   push(bytes: Uint8Array, model: DeviceModel): AudioChain | null {
@@ -231,16 +297,19 @@ export class ChainDecoder {
       return null;
     }
 
-    if (midi[3] === 6) {
-      return this.collect(midi, 5, 9, model);
-    }
-    if (midi[3] === 1 && midi[4] !== 0) {
-      return this.collect(midi, 5, 9, model);
-    }
-    if (midi[5] === 1 && midi[6] !== 0) {
-      return this.collect(midi, 7, 11, model);
+    const header = classifyDump(midi);
+    if (!header) {
+      return null;
     }
 
-    return parsePayload(sysexPayload(midi, 1), model);
+    if (this.dumpClass && this.dumpClass !== header.dumpClass) {
+      this.reset();
+    }
+    this.dumpClass = header.dumpClass;
+    this.fragments.set(nibble(midi, header.indexAt), sysexPayload(midi, header.payloadAt));
+    if (!header.terminator) {
+      return null;
+    }
+    return this.finish(model);
   }
 }

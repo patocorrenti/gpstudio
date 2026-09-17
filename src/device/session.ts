@@ -211,13 +211,9 @@ export class DeviceSession {
     const next = clampPatch(patch);
     this.snapshot = { ...this.snapshot, patch: next };
     this.emitSnapshot();
-    this.chainDump.reset();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
-    if (this.snapshot.sync === "ready") {
-      this.beginChainRefresh();
-      await this.sendChainRequest(this.syncGeneration);
-    }
+    this.refreshChain();
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -336,19 +332,31 @@ export class DeviceSession {
       return;
     }
     if (event.type === "current-patch") {
-      this.snapshot = { ...this.snapshot, patch: clampPatch(event.patch) };
+      const next = clampPatch(event.patch);
+      const changed = next !== this.snapshot.patch;
+      this.snapshot = { ...this.snapshot, patch: next };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
+      if (changed) {
+        this.refreshChain();
+      }
       return;
     }
     if (event.type === "patch-changed") {
       if (this.snapshot.sync === "ready") {
-        this.chainDump.reset();
-        this.beginChainRefresh();
         void this.sendIdentity("current-patch", this.syncGeneration);
-        void this.sendChainRequest(this.syncGeneration);
+        this.refreshChain();
       }
     }
+  }
+
+  private refreshChain(): void {
+    if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
+      return;
+    }
+    this.chainDump.reset();
+    this.beginChainRefresh();
+    void this.sendChainRequest(this.syncGeneration);
   }
 
   private applyChain(chain: AudioChain | null): void {
