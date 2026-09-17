@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity and the current audio chain, patch 00–99 previous / select / next once that identity is known or the sync times out, and an audio chain for the current patch whose effect modules can be turned on or off.
+Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity and the current audio chain, patch 00–99 previous / select / next once that identity is known or the sync times out, and an audio chain for the current patch whose effect modules can be turned on or off and whose movable modules can be reordered.
 
 ## Requirements
 
