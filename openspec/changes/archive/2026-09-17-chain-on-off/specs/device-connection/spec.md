@@ -2,7 +2,7 @@
 
 ### Requirement: Connected session toggles audio-chain modules
 
-After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. On GP-50 Bluetooth, toggling EXP MUST send official CC 13. On GP-50 USB, toggling EXP MUST send the captured EXP on/off SysEx (USB does not honor CC 13). The session MUST NOT send extra patch recall or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle.
+After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. On GP-50, toggling EXP MUST send official CC 13 on USB and on Bluetooth. The session MUST NOT send extra patch recall or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle.
 
 When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. On GP-50 Bluetooth, inbound EXP SysEx (identity-family command `02`) MUST update the EXP slot. USB MUST NOT apply those inbound reports to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
 
@@ -34,10 +34,10 @@ When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), in
 - **AND** official EXP on/off CC 13 is sent on the Bluetooth link
 - **AND** no patch recall or chain dump is sent solely because EXP was toggled
 
-#### Scenario: GP-50 EXP toggle over USB sends SysEx
+#### Scenario: GP-50 EXP toggle over USB sends CC 13
 - **WHEN** a GP-50 USB session is ready and the user turns EXP off
 - **THEN** the snapshot shows EXP off
-- **AND** EXP on/off SysEx is sent on the USB link
+- **AND** official EXP on/off CC 13 is sent on the USB link
 - **AND** no patch recall or chain dump is sent solely because EXP was toggled
 
 #### Scenario: Bluetooth inbound EXP report updates the chain
