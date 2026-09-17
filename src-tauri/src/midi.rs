@@ -33,7 +33,9 @@ fn suggest_model(label: &str) -> Option<&'static str> {
     None
 }
 
-fn lock_poisoned<T>(result: Result<std::sync::MutexGuard<T>, std::sync::PoisonError<std::sync::MutexGuard<T>>>) -> std::sync::MutexGuard<T> {
+fn lock_poisoned<'a, T>(
+    result: Result<std::sync::MutexGuard<'a, T>, std::sync::PoisonError<std::sync::MutexGuard<'a, T>>>,
+) -> std::sync::MutexGuard<'a, T> {
     result.unwrap_or_else(|err| err.into_inner())
 }
 

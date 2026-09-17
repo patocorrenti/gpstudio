@@ -1,10 +1,4 @@
-# device-connection Specification
-
-## Purpose
-
-Lets the user connect a Valeton GP-5 or GP-50 over USB-MIDI or Bluetooth from the global Connect control, keep that session across sections, and see the connected device name and link mode.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Connect modal lists USB devices then resolves the model
 
@@ -61,6 +55,8 @@ While a pedal session is connected, the chrome connection control MUST remain vi
 - **THEN** the session remains connected
 - **AND** the chrome still shows the device name
 
+## ADDED Requirements
+
 ### Requirement: Bluetooth tab lists pedals then connects
 
 While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals and MUST list them for the user to pick. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
@@ -87,19 +83,14 @@ While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals an
 - **THEN** the modal shows an English error
 - **AND** the session stays disconnected
 
-### Requirement: Bluetooth session sends patch recall
+### Requirement: Bluetooth session does not send control messages
 
-While a session is connected over Bluetooth, Controller MUST offer working patch previous, patch next, and patch select (00–99), the same controls as a USB session. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session. Connecting MUST NOT send a patch message by itself. USB sessions MUST keep sending patch recall through the device session using official CC 0.
+While a session is connected over Bluetooth and no Bluetooth control encoder is implemented, the system MUST NOT send MIDI CC or SysEx. Controller MUST NOT present patch previous, patch next, or patch select as working. USB sessions MUST keep sending patch CC as they do today.
 
-#### Scenario: Bluetooth connected shows working patch send
+#### Scenario: Bluetooth connected hides working patch send
 - **WHEN** the user is connected over Bluetooth and opens Controller
-- **THEN** patch previous, patch next, and patch select are offered as working controls
-- **AND** no patch is sent solely because the session connected or Controller opened
-
-#### Scenario: Select a patch over Bluetooth
-- **WHEN** the user is connected over Bluetooth and selects patch `42` from the center selector
-- **THEN** the label reads `42`
-- **AND** the pedal is sent patch 42 through the device session
+- **THEN** patch previous, patch next, and patch select are not offered as working controls
+- **AND** no patch MIDI is sent
 
 #### Scenario: USB patch send unchanged
 - **WHEN** the user is connected over USB and selects a patch

@@ -1,11 +1,7 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
-
-const navClass = ({ isActive }: { isActive: boolean }) =>
-  isActive
-    ? "text-sm text-foreground font-medium"
-    : "text-sm text-muted-foreground hover:text-foreground";
+import MainMenu from "@/components/main-menu";
 
 export function AppShell() {
   return (
@@ -15,17 +11,8 @@ export function AppShell() {
           <p className="text-lg font-semibold tracking-tight">Patone</p>
           <ConnectionStatus />
         </div>
-        <nav className="flex gap-3">
-          <NavLink to="/" end className={navClass}>
-            Controller
-          </NavLink>
-        </nav>
         <div className="ml-auto flex items-center gap-3">
-          <nav>
-            <NavLink to="/log" className={navClass}>
-              Log
-            </NavLink>
-          </nav>
+          <MainMenu />
           <ThemeToggle />
         </div>
       </header>

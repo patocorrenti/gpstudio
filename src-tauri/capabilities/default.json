@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "core:event:default",
-    "allow-midi"
+    "allow-midi",
+    "allow-ble"
   ]
 }

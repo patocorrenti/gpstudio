@@ -4,7 +4,7 @@ export function displayModelName(model: DeviceModel): string {
   return model === "gp50" ? "GP-50" : "GP-5";
 }
 
-/** Heuristic from a USB MIDI port label. GP-50 is matched before GP-5. */
+/** Heuristic from a USB MIDI port or Bluetooth advertised name. GP-50 is matched before GP-5. */
 export function suggestModelFromLabel(label: string): DeviceModel | undefined {
   if (/gp-?50/i.test(label)) {
     return "gp50";
@@ -13,4 +13,8 @@ export function suggestModelFromLabel(label: string): DeviceModel | undefined {
     return "gp5";
   }
   return undefined;
+}
+
+export function looksLikePedalName(label: string): boolean {
+  return Boolean(suggestModelFromLabel(label)) || /valeton/i.test(label);
 }
