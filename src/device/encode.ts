@@ -1,4 +1,6 @@
 import { gp5Cc } from "@/device/cc";
+import type { IdentityRequestKind } from "@/device/identity";
+import { encodeIdentityRequest } from "@/device/identity";
 import type { LinkMode } from "@/device/link";
 
 function midiCc0(patch: number): Uint8Array {
@@ -17,10 +19,17 @@ function wrapBleMidi(midi: Uint8Array): Uint8Array {
   return packet;
 }
 
-export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
-  const midi = midiCc0(patch);
+export function encodeLinkMidi(linkMode: LinkMode, midi: Uint8Array): Uint8Array {
   if (linkMode === "bluetooth") {
     return wrapBleMidi(midi);
   }
   return midi;
+}
+
+export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
+  return encodeLinkMidi(linkMode, midiCc0(patch));
+}
+
+export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeIdentityRequest(kind));
 }

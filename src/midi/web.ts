@@ -54,6 +54,7 @@ function webMidiError(error: unknown): Error {
 
 export class WebMidiTransport implements MidiTransport {
   private access: MidiAccessLike | null = null;
+  private sysex = false;
   private portsById = new Map<string, { input?: MidiInputPort; output: MidiOutputPort }>();
   private openPorts: OpenPorts | null = null;
   private handlers = new Set<MidiMessageHandler>();
@@ -145,16 +146,22 @@ export class WebMidiTransport implements MidiTransport {
       this.access = (await navigator.requestMIDIAccess({
         sysex: true,
       })) as unknown as MidiAccessLike;
+      this.sysex = true;
       return this.access;
     } catch (sysexError) {
       try {
         this.access = (await navigator.requestMIDIAccess({
           sysex: false,
         })) as unknown as MidiAccessLike;
+        this.sysex = false;
         return this.access;
       } catch {
         throw webMidiError(sysexError);
       }
     }
+  }
+
+  sysexEnabled(): boolean {
+    return this.sysex;
   }
 }
