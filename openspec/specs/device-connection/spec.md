@@ -63,7 +63,7 @@ While a pedal session is connected, the chrome connection control MUST remain vi
 
 ### Requirement: Connected chrome stays up during patch sync
 
-After a USB or Bluetooth session is marked connected, the chrome connection control MUST keep showing the connected endpoint's label while initial patch identity sync is in progress. Activating it SHALL still reopen the connection modal. Disconnect MUST remain available during sync. Sync MUST NOT by itself send patch recall.
+After a USB or Bluetooth session is marked connected, the chrome connection control MUST keep showing the connected endpoint's label while initial patch identity and audio-chain sync is in progress. Activating it SHALL still reopen the connection modal. Disconnect MUST remain available during sync. Sync MUST NOT by itself send patch recall.
 
 #### Scenario: USB chrome during sync
 - **WHEN** a USB session is connected and Controller is still syncing patch identity
@@ -72,6 +72,11 @@ After a USB or Bluetooth session is marked connected, the chrome connection cont
 
 #### Scenario: Bluetooth chrome during sync
 - **WHEN** a Bluetooth session is connected and Controller is still syncing patch identity
+- **THEN** the chrome control displays the connected endpoint's label
+- **AND** the user can open the connection modal and disconnect
+
+#### Scenario: USB chrome during chain dump
+- **WHEN** a USB session is connected and Controller is still waiting for the audio-chain dump
 - **THEN** the chrome control displays the connected endpoint's label
 - **AND** the user can open the connection modal and disconnect
 
@@ -118,3 +123,83 @@ While a session is connected over Bluetooth and initial patch identity sync has 
 #### Scenario: USB patch send unchanged
 - **WHEN** the user is connected over USB and selects a patch
 - **THEN** that patch is still sent through the device session using official CC 0
+
+### Requirement: Connected session syncs the current audio chain
+
+After a USB or Bluetooth session is marked connected, the device session SHALL request the current patch's audio-chain dump on the open link after patch identity (names and current index) or when that identity step times out. The connected snapshot MUST carry the current chain (module order and on/off) when a dump is decoded. If the dump times out or SysEx is unavailable, the session MUST still become ready after patch identity and MUST NOT send patch recall solely because the dump was missing. The chain request MAY continue in the background after the session is ready. After the session is ready, choosing a patch or a pedal-initiated patch report MUST refresh the chain for that patch without sending extra patch recall solely to obtain the dump. Disconnect MUST drop chain state.
+
+#### Scenario: USB connect requests the chain
+- **WHEN** a USB session becomes connected and SysEx is available
+- **THEN** the session requests the current patch audio-chain dump on the USB link
+- **AND** no patch recall is sent solely because the session connected
+
+#### Scenario: Bluetooth connect requests the chain
+- **WHEN** a Bluetooth session becomes connected
+- **THEN** the session requests the current patch audio-chain dump on the Bluetooth link
+- **AND** no patch recall is sent solely because the session connected
+
+#### Scenario: Chain dump timeout still becomes ready
+- **WHEN** initial sync ends without an audio-chain dump
+- **THEN** the session is ready
+- **AND** no patch recall is sent solely because the dump was missing
+
+#### Scenario: User patch change refreshes the chain
+- **WHEN** the session is ready and the user selects another patch
+- **THEN** that patch is sent through the device session
+- **AND** the session requests or applies a chain dump for the new patch
+- **AND** no extra patch recall is sent solely to obtain that dump
+
+#### Scenario: Pedal patch change refreshes the chain
+- **WHEN** the session is ready and the pedal reports a new current patch
+- **THEN** the session requests or applies a chain dump for that patch
+- **AND** no patch recall is sent solely because that inbound report arrived
+
+#### Scenario: Lost link during a patch change disconnects
+- **WHEN** the session is ready, the user selects another patch, and the open USB or Bluetooth link is gone
+- **THEN** the session becomes disconnected
+- **AND** the chrome control reads Connect
+
+### Requirement: Connected session toggles audio-chain modules
+
+After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. On GP-50, toggling EXP MUST send official CC 13 on USB and on Bluetooth. The session MUST NOT send extra patch recall or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle.
+
+When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. On GP-50 Bluetooth, inbound EXP SysEx (identity-family command `02`) MUST update the EXP slot. USB MUST NOT apply those inbound reports to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
+
+#### Scenario: USB toggle sends module CC
+- **WHEN** a USB session is ready and the user turns DST off
+- **THEN** the snapshot shows DST off
+- **AND** DST's official module CC is sent on the USB link
+- **AND** no patch recall or chain dump is sent solely because DST was toggled
+
+#### Scenario: Bluetooth toggle sends module CC
+- **WHEN** a Bluetooth session is ready and the user turns AMP on
+- **THEN** the snapshot shows AMP on
+- **AND** AMP's official module CC is sent on the Bluetooth link
+- **AND** no patch recall or chain dump is sent solely because AMP was toggled
+
+#### Scenario: Bluetooth inbound module report updates the chain
+- **WHEN** a Bluetooth session is ready and the pedal reports DST off over live-module SysEx
+- **THEN** the snapshot shows DST off
+- **AND** module order does not change
+- **AND** no patch recall is sent solely because that report arrived
+
+#### Scenario: USB ignores inbound live module reports
+- **WHEN** a USB session is ready and a live-module SysEx for DST off arrives
+- **THEN** the snapshot DST on/off does not change from that inbound report
+
+#### Scenario: GP-50 EXP toggle over Bluetooth sends CC 13
+- **WHEN** a GP-50 Bluetooth session is ready and the user turns EXP off
+- **THEN** the snapshot shows EXP off
+- **AND** official EXP on/off CC 13 is sent on the Bluetooth link
+- **AND** no patch recall or chain dump is sent solely because EXP was toggled
+
+#### Scenario: GP-50 EXP toggle over USB sends CC 13
+- **WHEN** a GP-50 USB session is ready and the user turns EXP off
+- **THEN** the snapshot shows EXP off
+- **AND** official EXP on/off CC 13 is sent on the USB link
+- **AND** no patch recall or chain dump is sent solely because EXP was toggled
+
+#### Scenario: Bluetooth inbound EXP report updates the chain
+- **WHEN** a GP-50 Bluetooth session is ready and the pedal reports EXP off over EXP SysEx
+- **THEN** the snapshot shows EXP off
+- **AND** no patch recall is sent solely because that report arrived

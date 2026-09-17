@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { suggestModelFromLabel, type DeviceModel } from "@/device/models";
-import type { MidiEndpoint, MidiMessageHandler, MidiTransport } from "@/midi/types";
+import type {
+  DisconnectHandler,
+  MidiEndpoint,
+  MidiMessageHandler,
+  MidiTransport,
+} from "@/midi/types";
 
 type EndpointDto = {
   id: string;
@@ -12,7 +17,9 @@ type EndpointDto = {
 
 export class TauriMidiTransport implements MidiTransport {
   private handlers = new Set<MidiMessageHandler>();
+  private disconnectHandlers = new Set<DisconnectHandler>();
   private unlisten: UnlistenFn | null = null;
+  private sessionOpen = false;
 
   async discover(): Promise<MidiEndpoint[]> {
     const rows = await invoke<EndpointDto[]>("midi_list_ports");
@@ -31,10 +38,18 @@ export class TauriMidiTransport implements MidiTransport {
   async open(id: string): Promise<void> {
     await this.ensureInbound();
     await invoke("midi_open", { id });
+    this.sessionOpen = true;
   }
 
   async send(bytes: Uint8Array): Promise<void> {
-    await invoke("midi_send", { bytes: Array.from(bytes) });
+    if (!this.sessionOpen) {
+      throw new Error("No pedal is connected.");
+    }
+    try {
+      await invoke("midi_send", { bytes: Array.from(bytes) });
+    } catch {
+      throw new Error("No pedal is connected.");
+    }
   }
 
   subscribe(handler: MidiMessageHandler): () => void {
@@ -44,7 +59,19 @@ export class TauriMidiTransport implements MidiTransport {
     };
   }
 
+  subscribeDisconnect(handler: DisconnectHandler): () => void {
+    this.disconnectHandlers.add(handler);
+    return () => {
+      this.disconnectHandlers.delete(handler);
+    };
+  }
+
+  isOpen(): boolean {
+    return this.sessionOpen;
+  }
+
   async close(): Promise<void> {
+    this.sessionOpen = false;
     await invoke("midi_close");
   }
 

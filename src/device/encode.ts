@@ -1,10 +1,17 @@
-import { gp5Cc } from "@/device/cc";
+import {
+  encodeModuleCcValue,
+  gp50Cc,
+  gp5Cc,
+  MODULE_CC,
+} from "@/device/cc";
+import type { ChainSlotId } from "@/device/chain";
+import { encodeCurrentChainRequest } from "@/device/chain-codec";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
 import type { LinkMode } from "@/device/link";
 
-function midiCc0(patch: number): Uint8Array {
-  return new Uint8Array([0xb0, gp5Cc.patch, patch]);
+function midiCc(controller: number, value: number): Uint8Array {
+  return new Uint8Array([0xb0, controller, value]);
 }
 
 /**
@@ -27,9 +34,24 @@ export function encodeLinkMidi(linkMode: LinkMode, midi: Uint8Array): Uint8Array
 }
 
 export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
-  return encodeLinkMidi(linkMode, midiCc0(patch));
+  return encodeLinkMidi(linkMode, midiCc(gp5Cc.patch, patch));
+}
+
+export function encodeModule(
+  linkMode: LinkMode,
+  id: ChainSlotId,
+  enabled: boolean,
+): Uint8Array {
+  if (id === "exp") {
+    return encodeLinkMidi(linkMode, midiCc(gp50Cc.expOnOff, encodeModuleCcValue(enabled)));
+  }
+  return encodeLinkMidi(linkMode, midiCc(MODULE_CC[id], encodeModuleCcValue(enabled)));
 }
 
 export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): Uint8Array {
   return encodeLinkMidi(linkMode, encodeIdentityRequest(kind));
+}
+
+export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeCurrentChainRequest());
 }

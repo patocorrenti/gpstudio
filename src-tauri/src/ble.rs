@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use uuid::Uuid;
 
 /// Keep in sync with src/bluetooth/uuids.ts (Patone Chrome GATT map, 2026-09-17).
@@ -242,11 +242,26 @@ pub async fn ble_open(
     let notify_task = if characteristic.properties.contains(CharPropFlags::NOTIFY) {
         let _ = peripheral.subscribe(&characteristic).await;
         match peripheral.notifications().await {
-            Ok(mut stream) => Some(tauri::async_runtime::spawn(async move {
-                while let Some(notification) = stream.next().await {
-                    let _ = app.emit("ble-inbound", notification.value);
-                }
-            })),
+            Ok(mut stream) => {
+                let watch = peripheral.clone();
+                let app_watch = app.clone();
+                Some(tauri::async_runtime::spawn(async move {
+                    loop {
+                        match timeout(Duration::from_secs(1), stream.next()).await {
+                            Ok(Some(entry)) => {
+                                let _ = app_watch.emit("ble-inbound", entry.value);
+                            }
+                            Ok(None) => break,
+                            Err(_) => {
+                                if !watch.is_connected().await.unwrap_or(false) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let _ = app_watch.emit("ble-disconnected", ());
+                }))
+            }
             Err(_) => None,
         }
     } else {

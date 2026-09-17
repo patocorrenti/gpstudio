@@ -4,9 +4,10 @@ schema: spec-driven
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
   Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
-  Patch recall uses official MIDI CC. A Patone-owned SysEx identity subset
-  (current patch index + onboard names) is requested after connect.
-  Full SysEx preset editor, library, and IRs/NAM come in later phases.
+  Patch recall and module on/off (CC 48–57) use official MIDI CC. A Patone-owned SysEx subset
+  (current patch index + onboard names, plus current-patch chain order + on/off)
+  is requested after connect and when the patch changes.
+  Full SysEx preset editor (parameters), library, and IRs/NAM come in later phases.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -14,11 +15,11 @@ context: |
     Not a separate change; part of bootstrap-app.
   - Native shell: Tauri 2 (Windows installer now; iOS/Android later)
   - MIDI / link: USB and Bluetooth are asymmetric, not interchangeable.
-    USB is one-way and super fast (command out; requested identity dumps and
+    USB is one-way and super fast (command out; requested identity/chain dumps and
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
-    GATT service (Patone capture); BluetoothLink.send writes encoder bytes
-    (CC 0 or identity SysEx wrapped as BLE-MIDI). Still a separate backend — not another
+    GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
+    (CC 0, module CC 48–57, identity, or chain SysEx wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:
@@ -43,15 +44,19 @@ context: |
   - UI never calls raw MIDI. DeviceSession owns the device model (GP-5 vs GP-50),
     translates actions to CC/SysEx, and the transport only sends/receives bytes.
   - Keep three axes separate: model (GP-5 vs GP-50), protocol (CC recall, identity
-    SysEx, editor SysEx later), link (USB vs Bluetooth; different capabilities, one DeviceSession).
+    SysEx, current-patch chain SysEx, editor SysEx later), link (USB vs Bluetooth; different capabilities, one DeviceSession).
   - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
     Do not leak MIDIPort or Web MIDI types above the transport. Phase 1 MIDI endpoints
     are all kind usb-midi. Bluetooth is BluetoothLink (discover/open/send/subscribe/close),
     not a throwing MidiTransport stub. Do not copy reverse-engineered SysEx. Patch recall
     over GATT is in scope (DeviceSession encodes; BluetoothLink.send writes bytes).
     Bluetooth inbound Log is in scope (same Log page, capture only while visible).
-    Applying inbound patch identity (index + names) to the snapshot is in scope.
-    Applying inbound volume/modules (liveFromPedal knobs) is not.
+    Applying inbound patch identity (index + names) and current-patch chain
+    (order + on/off) to the snapshot is in scope.
+    Applying inbound live-module SysEx (identity-family command 09) to the
+    snapshot is in scope on Bluetooth (liveFromPedal). USB must not apply those
+    reports. Applying inbound volume, tuner, or other live knobs while the
+    patch stays the same is not.
     Protocol references: docs/protocol-references.md (behavioral only; no source drop).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
@@ -62,7 +67,7 @@ context: |
       src/features/controller  Phase 1 live controller (home)
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
-      src/device/              models, profiles, official CC maps, identity codec, session
+      src/device/              models, profiles, official CC maps, identity/chain codecs, session
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir + btleplug
@@ -83,17 +88,22 @@ context: |
     and slower; scan/connect GATT; patch previous/select/next over the encoder.
     Connected label and link
     mode are defined in device-connection.
-  - Controller: patch 00–99 (names when synced), volume, module toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner
+  - Controller: patch 00–99 (names when synced), audio chain
+    (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
+    CC 48–57; GP-50 EXP via CC 13). Volume, tuner, drag-and-drop later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
 
   Out of scope until a dedicated change:
   - Mobile Tauri app
-  - Preset read/write, rename, reorder
+  - Full preset parameter read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Applying liveFromPedal inbound volume/modules to the snapshot
-  - Volume, modules, tuner over Bluetooth
+  - Applying liveFromPedal inbound volume/tuner/other knobs to the snapshot
+    while the patch stays the same (Bluetooth live-module SysEx is in scope)
+  - Drag-and-drop reorder
+  - Volume, tuner over Bluetooth
+  - Applying USB inbound live-module reports (USB is not duplex for those controls)
   Do not copy reverse-engineered SysEx from third-party editors.
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller, bluetooth-link, inbound-log.
@@ -110,7 +120,8 @@ context: |
 
   Hard constraints:
   - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
-  - Patch identity SysEx (current index + names) is a Patone-owned codec; still no third-party source drop.
+  - Patch identity SysEx (current index + names) and current-patch chain SysEx
+    (order + on/off) are Patone-owned codecs; still no third-party source drop.
   - Patch recall uses MIDI CC published in the official manuals.
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
@@ -161,7 +172,11 @@ rules:
     - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
-    - Bluetooth inbound Log is in scope; applying inbound patch identity is in scope; do not apply liveFromPedal knob/module inbound to the snapshot
+    - Bluetooth inbound Log is in scope; applying inbound patch identity and
+      current-patch chain (order + on/off) is in scope; Bluetooth inbound
+      live-module SysEx is in scope; USB must not apply those reports; do not
+      apply liveFromPedal volume/tuner/other knobs to the snapshot while the
+      patch stays the same
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors

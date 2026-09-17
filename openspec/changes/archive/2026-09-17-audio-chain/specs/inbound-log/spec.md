@@ -1,14 +1,8 @@
-# inbound-log Specification
-
-## Purpose
-
-Lets the user watch pedal→app MIDI on the Log page while that page is open, over USB or Bluetooth, without applying that traffic to the live session snapshot.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Log records inbound MIDI only while visible
 
-While a pedal session is connected and the Log page is open, the system SHALL append inbound MIDI from that session to the Log. The same Log surface MUST be used for USB and Bluetooth. Capture MUST run through the device session. While Log is not open, inbound MIDI MUST NOT be stored in the Log buffer. Leaving Log MUST release that buffer. Returning to Log MUST start with an empty list until new inbound MIDI arrives. The Log page MUST NOT apply inbound MIDI to the session snapshot. The device session MAY apply decoded patch identity (current patch index and names), decoded audio-chain dumps, and Bluetooth live-module and EXP on/off SysEx to the snapshot independently of whether Log capture is on.
+While a pedal session is connected and the Log page is open, the system SHALL append inbound MIDI from that session to the Log. The same Log surface MUST be used for USB and Bluetooth. Capture MUST run through the device session. While Log is not open, inbound MIDI MUST NOT be stored in the Log buffer. Leaving Log MUST release that buffer. Returning to Log MUST start with an empty list until new inbound MIDI arrives. The Log page MUST NOT apply inbound MIDI to the session snapshot. The device session MAY apply decoded patch identity (current patch index and names) and decoded audio-chain dumps to the snapshot independently of whether Log capture is on.
 
 #### Scenario: USB inbound appears on Log
 - **WHEN** the user is connected over USB, has Log open, and the pedal sends MIDI
@@ -43,9 +37,4 @@ While a pedal session is connected and the Log page is open, the system SHALL ap
 #### Scenario: Audio chain can apply while Log is closed
 - **WHEN** the user is connected, Log is not open, and the pedal reports a current-patch audio-chain dump
 - **THEN** the session snapshot audio chain updates
-- **AND** that inbound message is not stored in the Log buffer
-
-#### Scenario: Bluetooth live module report can apply while Log is closed
-- **WHEN** the user is connected over Bluetooth, Log is not open, and the pedal sends a live-module on/off SysEx
-- **THEN** the session snapshot chain on/off for that module updates
 - **AND** that inbound message is not stored in the Log buffer

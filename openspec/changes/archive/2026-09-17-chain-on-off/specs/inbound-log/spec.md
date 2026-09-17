@@ -1,10 +1,4 @@
-# inbound-log Specification
-
-## Purpose
-
-Lets the user watch pedal→app MIDI on the Log page while that page is open, over USB or Bluetooth, without applying that traffic to the live session snapshot.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Log records inbound MIDI only while visible
 

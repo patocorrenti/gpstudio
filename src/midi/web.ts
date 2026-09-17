@@ -1,5 +1,10 @@
 import { suggestModelFromLabel } from "@/device/models";
-import type { MidiEndpoint, MidiMessageHandler, MidiTransport } from "@/midi/types";
+import type {
+  DisconnectHandler,
+  MidiEndpoint,
+  MidiMessageHandler,
+  MidiTransport,
+} from "@/midi/types";
 
 type MidiInputPort = {
   id: string;
@@ -22,6 +27,7 @@ type MidiOutputPort = {
 type MidiAccessLike = {
   inputs: { forEach: (cb: (port: MidiInputPort) => void) => void };
   outputs: { forEach: (cb: (port: MidiOutputPort) => void) => void };
+  onstatechange: (() => void) | null;
 };
 
 type OpenPorts = {
@@ -57,7 +63,20 @@ export class WebMidiTransport implements MidiTransport {
   private sysex = false;
   private portsById = new Map<string, { input?: MidiInputPort; output: MidiOutputPort }>();
   private openPorts: OpenPorts | null = null;
+  private closing = false;
   private handlers = new Set<MidiMessageHandler>();
+  private disconnectHandlers = new Set<DisconnectHandler>();
+  private readonly onAccessStateChange = (): void => {
+    if (this.closing || !this.openPorts) {
+      return;
+    }
+    if (
+      this.openPorts.output.state === "disconnected" ||
+      this.openPorts.input?.state === "disconnected"
+    ) {
+      this.noteClosed();
+    }
+  };
 
   async discover(): Promise<MidiEndpoint[]> {
     const access = await this.ensureAccess();
@@ -110,10 +129,14 @@ export class WebMidiTransport implements MidiTransport {
   }
 
   async send(bytes: Uint8Array): Promise<void> {
-    if (!this.openPorts) {
+    if (!this.openPorts || this.openPorts.output.state === "disconnected") {
       throw new Error("No pedal is connected.");
     }
-    this.openPorts.output.send(bytes);
+    try {
+      this.openPorts.output.send(bytes);
+    } catch {
+      throw new Error("No pedal is connected.");
+    }
   }
 
   subscribe(handler: MidiMessageHandler): () => void {
@@ -123,8 +146,20 @@ export class WebMidiTransport implements MidiTransport {
     };
   }
 
+  subscribeDisconnect(handler: DisconnectHandler): () => void {
+    this.disconnectHandlers.add(handler);
+    return () => {
+      this.disconnectHandlers.delete(handler);
+    };
+  }
+
+  isOpen(): boolean {
+    return Boolean(this.openPorts && this.openPorts.output.state !== "disconnected");
+  }
+
   async close(): Promise<void> {
     const openPorts = this.openPorts;
+    this.closing = true;
     this.openPorts = null;
     if (openPorts?.input) {
       openPorts.input.onmidimessage = null;
@@ -132,6 +167,17 @@ export class WebMidiTransport implements MidiTransport {
     }
     if (openPorts) {
       await openPorts.output.close();
+    }
+    this.closing = false;
+  }
+
+  private noteClosed(): void {
+    if (!this.openPorts) {
+      return;
+    }
+    this.openPorts = null;
+    for (const handler of this.disconnectHandlers) {
+      handler();
     }
   }
 
@@ -147,6 +193,7 @@ export class WebMidiTransport implements MidiTransport {
         sysex: true,
       })) as unknown as MidiAccessLike;
       this.sysex = true;
+      this.access.onstatechange = this.onAccessStateChange;
       return this.access;
     } catch (sysexError) {
       try {
@@ -154,6 +201,7 @@ export class WebMidiTransport implements MidiTransport {
           sysex: false,
         })) as unknown as MidiAccessLike;
         this.sysex = false;
+        this.access.onstatechange = this.onAccessStateChange;
         return this.access;
       } catch {
         throw webMidiError(sysexError);

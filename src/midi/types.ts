@@ -10,12 +10,15 @@ export type MidiEndpoint = {
 };
 
 export type MidiMessageHandler = (bytes: Uint8Array) => void;
+export type DisconnectHandler = () => void;
 
 export interface MidiTransport {
   discover(): Promise<MidiEndpoint[]>;
   open(id: string): Promise<void>;
   send(bytes: Uint8Array): Promise<void>;
   subscribe(handler: MidiMessageHandler): () => void;
+  subscribeDisconnect(handler: DisconnectHandler): () => void;
+  isOpen(): boolean;
   close(): Promise<void>;
   sysexEnabled(): boolean;
 }
