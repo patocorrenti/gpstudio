@@ -4,7 +4,12 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
-import { encodeIdentity, encodePatch } from "@/device/encode";
+import {
+  defaultChain,
+  type AudioChain,
+} from "@/device/chain";
+import { ChainDecoder } from "@/device/chain-codec";
+import { encodeChainRequest, encodeIdentity, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
   emptyPatchNames,
@@ -24,11 +29,19 @@ export { capabilitiesForLink } from "@/device/link";
 export type { InboundMidiEvent } from "@/device/midi-log";
 export type { LinkEndpoint } from "@/device/endpoint";
 export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
+export {
+  chainSlotLabel,
+  defaultChain,
+  type AudioChain,
+  type AudioChainSlot,
+  type ChainSlotId,
+} from "@/device/chain";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
 
 export type SessionSync = "syncing" | "ready";
+export type ChainSync = "idle" | "syncing";
 
 export type SessionSnapshot =
   | { status: "disconnected" }
@@ -38,6 +51,8 @@ export type SessionSnapshot =
       model: DeviceModel;
       patch: number;
       patchNames: (string | null)[];
+      chain: AudioChain;
+      chainSync: ChainSync;
       sync: SessionSync;
       linkMode: LinkMode;
     };
@@ -55,6 +70,7 @@ function wrapPatch(value: number): number {
 
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
+const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
 
 export class DeviceSession {
   private readonly transport: MidiTransport;
@@ -66,10 +82,13 @@ export class DeviceSession {
   private readonly snapshotListeners = new Set<() => void>();
   private readonly logListeners = new Set<() => void>();
   private readonly identity = new IdentityDecoder();
+  private readonly chainDump = new ChainDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
   private namesWaiters = new Set<() => void>();
   private patchWaiters = new Set<() => void>();
+  private chainWaiters = new Set<() => void>();
+  private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -135,6 +154,7 @@ export class DeviceSession {
     await Promise.all([this.transport.close(), this.bluetooth.close()]);
     this.inboundLog = EMPTY_INBOUND;
     this.identity.reset();
+    this.chainDump.reset();
     this.sysex.reset();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -145,6 +165,8 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        chain: defaultChain(model),
+        chainSync: "idle",
         sync: "syncing",
         linkMode: "bluetooth",
       };
@@ -156,6 +178,8 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        chain: defaultChain(model),
+        chainSync: "idle",
         sync: "syncing",
         linkMode: "usb",
       };
@@ -171,6 +195,7 @@ export class DeviceSession {
     this.snapshot = { status: "disconnected" };
     this.inboundLog = EMPTY_INBOUND;
     this.identity.reset();
+    this.chainDump.reset();
     this.sysex.reset();
     this.emitSnapshot();
     this.emitLog();
@@ -186,8 +211,13 @@ export class DeviceSession {
     const next = clampPatch(patch);
     this.snapshot = { ...this.snapshot, patch: next };
     this.emitSnapshot();
+    this.chainDump.reset();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
+    if (this.snapshot.sync === "ready") {
+      this.beginChainRefresh();
+      await this.sendChainRequest(this.syncGeneration);
+    }
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -221,17 +251,24 @@ export class DeviceSession {
       return;
     }
     await this.waitFor(this.patchWaiters, PATCH_TIMEOUT_MS[linkMode], generation);
-    this.finishSync(generation);
+    this.finishSync(generation, "syncing");
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+
+    this.chainDump.reset();
+    this.armChainRefreshTimer();
+    await this.sendChainRequest(generation);
   }
 
-  private finishSync(generation: number): void {
+  private finishSync(generation: number, chainSync: ChainSync = "idle"): void {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
     }
     if (this.snapshot.sync === "ready") {
       return;
     }
-    this.snapshot = { ...this.snapshot, sync: "ready" };
+    this.snapshot = { ...this.snapshot, sync: "ready", chainSync };
     this.emitSnapshot();
   }
 
@@ -243,6 +280,13 @@ export class DeviceSession {
       return;
     }
     await this.sendBytes(encodeIdentity(this.snapshot.linkMode, kind));
+  }
+
+  private async sendChainRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.sendBytes(encodeChainRequest(this.snapshot.linkMode));
   }
 
   private async sendBytes(bytes: Uint8Array): Promise<void> {
@@ -262,6 +306,9 @@ export class DeviceSession {
     }
     for (const message of this.sysex.push(bytes)) {
       this.applyIdentity(this.identity.push(message));
+      if (this.snapshot.status === "connected") {
+        this.applyChain(this.chainDump.push(message, this.snapshot.model));
+      }
       if (!this.inboundCapture) {
         continue;
       }
@@ -296,9 +343,58 @@ export class DeviceSession {
     }
     if (event.type === "patch-changed") {
       if (this.snapshot.sync === "ready") {
+        this.chainDump.reset();
+        this.beginChainRefresh();
         void this.sendIdentity("current-patch", this.syncGeneration);
+        void this.sendChainRequest(this.syncGeneration);
       }
     }
+  }
+
+  private applyChain(chain: AudioChain | null): void {
+    if (!chain || this.snapshot.status !== "connected") {
+      return;
+    }
+    this.clearChainRefreshTimer();
+    this.snapshot = { ...this.snapshot, chain, chainSync: "idle" };
+    this.emitSnapshot();
+    this.releaseWaiters(this.chainWaiters);
+  }
+
+  private beginChainRefresh(): void {
+    if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, chainSync: "syncing" };
+    this.emitSnapshot();
+    this.armChainRefreshTimer();
+  }
+
+  private armChainRefreshTimer(): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    this.clearChainRefreshTimer();
+    const generation = this.syncGeneration;
+    const ms = CHAIN_TIMEOUT_MS[this.snapshot.linkMode];
+    this.chainRefreshTimer = setTimeout(() => {
+      if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+        return;
+      }
+      if (this.snapshot.chainSync !== "syncing") {
+        return;
+      }
+      this.snapshot = { ...this.snapshot, chainSync: "idle" };
+      this.emitSnapshot();
+    }, ms);
+  }
+
+  private clearChainRefreshTimer(): void {
+    if (this.chainRefreshTimer === null) {
+      return;
+    }
+    clearTimeout(this.chainRefreshTimer);
+    this.chainRefreshTimer = null;
   }
 
   private waitFor(
@@ -330,8 +426,10 @@ export class DeviceSession {
 
   private beginGeneration(): void {
     this.syncGeneration += 1;
+    this.clearChainRefreshTimer();
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
+    this.releaseWaiters(this.chainWaiters);
   }
 
   private isCurrentGeneration(generation: number): boolean {

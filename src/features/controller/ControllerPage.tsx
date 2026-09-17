@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -8,15 +8,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  chainSlotLabel,
   formatPatch,
   formatPatchOption,
   PATCH_COUNT,
+  type AudioChain,
 } from "@/device/session";
 import {
   useDeviceSession,
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
+import { cn } from "@/lib/utils";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -81,6 +84,59 @@ function PatchBar({
   );
 }
 
+function AudioChainRow({ chain }: { chain: AudioChain }) {
+  return (
+    <ol
+      aria-label="Audio chain"
+      className="flex flex-wrap items-center justify-center gap-2"
+    >
+      {chain.map((slot, index) => (
+        <li key={`${slot.id}-${index}`}>
+          <div
+            aria-label={`${chainSlotLabel(slot.id)} ${slot.enabled ? "on" : "off"}`}
+            className={cn(
+              "min-w-14 rounded-lg border px-3 py-2 text-center text-sm font-semibold tracking-wide",
+              slot.enabled
+                ? "border-foreground/20 bg-muted text-foreground"
+                : "border-border text-muted-foreground opacity-50",
+            )}
+          >
+            {chainSlotLabel(slot.id)}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function PatchBody({
+  chain,
+  busy,
+}: {
+  chain: AudioChain;
+  busy: boolean;
+}) {
+  return (
+    <div className="relative mt-10 flex min-h-40 w-full flex-1 flex-col items-center">
+      <div
+        className={cn("flex w-full justify-center", busy && "invisible")}
+        aria-hidden={busy}
+      >
+        <AudioChainRow chain={chain} />
+      </div>
+      {busy ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-background"
+          role="status"
+          aria-label="Syncing audio chain"
+        >
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SyncingController() {
   return (
     <section role="status" className="flex flex-1 flex-col items-center">
@@ -101,6 +157,7 @@ function ConnectedController() {
   return (
     <section className="flex flex-1 flex-col items-center">
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
+      <PatchBody chain={snapshot.chain} busy={snapshot.chainSync === "syncing"} />
     </section>
   );
 }

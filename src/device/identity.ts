@@ -153,12 +153,11 @@ export class IdentityDecoder {
     if (
       midi[3] === 0 &&
       midi[4] === 1 &&
-      midi[8] === 4 &&
       midi[9] === 1 &&
       midi[10] === 2 &&
       midi[11] === 4 &&
       midi[12] === 3 &&
-      midi.length === 18
+      midi.length >= 16
     ) {
       return { type: "current-patch", patch: nibble(midi, 13) };
     }

@@ -1,4 +1,5 @@
 import { gp5Cc } from "@/device/cc";
+import { encodeCurrentChainRequest } from "@/device/chain-codec";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
 import type { LinkMode } from "@/device/link";
@@ -32,4 +33,8 @@ export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
 
 export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): Uint8Array {
   return encodeLinkMidi(linkMode, encodeIdentityRequest(kind));
+}
+
+export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeCurrentChainRequest());
 }

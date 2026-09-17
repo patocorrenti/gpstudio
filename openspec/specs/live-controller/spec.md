@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity, and patch 00–99 previous / select / next through the device session once that identity is known or the sync times out.
+Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity and the current audio chain, patch 00–99 previous / select / next once that identity is known or the sync times out, and a display-only audio chain for the current patch.
 
 ## Requirements
 

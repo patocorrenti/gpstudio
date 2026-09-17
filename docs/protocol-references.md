@@ -1,8 +1,8 @@
 # Protocol references
 
-Third-party GP-5 / GP-50 web editors that already solve connect, dump, and live control. Use them as **behavioral and runtime references** (what happens after connect, USB vs Bluetooth, loading, name list, current patch).
+Third-party GP-5 / GP-50 web editors that already solve connect, dump, and live control. Use them as **behavioral and runtime references** (what happens after connect, USB vs Bluetooth, loading, name list, current preset).
 
-**Do not copy their source, JavaScript, or SysEx payloads into Patone.** Identity requests and decoders live in `src/device/` from Patone captures and our own codec.
+**Do not copy their source, JavaScript, or SysEx payloads into Patone.** Identity and current-patch chain requests/decoders live in `src/device/` from Patone captures and our own codecs.
 
 | Pedal | Link | Editor |
 | --- | --- | --- |
@@ -17,4 +17,4 @@ Useful observations (not a protocol spec):
 - USB uses Web MIDI with SysEx enabled. Some live global/footswitch changes are not notified over USB.
 - Bluetooth uses the BLE-MIDI GATT service and the same SysEx conversation, wrapped in BLE-MIDI packets.
 
-Patone’s in-scope subset is current patch index + onboard names. Full preset editor dumps stay out.
+Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off) from that class of dump. Full preset parameters, IRs, and NAM stay out.
