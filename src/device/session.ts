@@ -89,6 +89,7 @@ export class DeviceSession {
   private patchWaiters = new Set<() => void>();
   private chainWaiters = new Set<() => void>();
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private dropping = false;
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -98,6 +99,12 @@ export class DeviceSession {
     this.bluetooth = bluetooth;
     this.transport.subscribe((bytes) => this.handleInbound(bytes));
     this.bluetooth.subscribe((bytes) => this.handleInbound(bytes));
+    this.transport.subscribeDisconnect(() => {
+      void this.dropLink();
+    });
+    this.bluetooth.subscribeDisconnect(() => {
+      void this.dropLink();
+    });
   }
 
   getSnapshot(): SessionSnapshot {
@@ -190,15 +197,23 @@ export class DeviceSession {
   }
 
   async disconnect(): Promise<void> {
+    if (this.dropping) {
+      return;
+    }
+    this.dropping = true;
     this.beginGeneration();
-    await Promise.all([this.transport.close(), this.bluetooth.close()]);
-    this.snapshot = { status: "disconnected" };
-    this.inboundLog = EMPTY_INBOUND;
-    this.identity.reset();
-    this.chainDump.reset();
-    this.sysex.reset();
-    this.emitSnapshot();
-    this.emitLog();
+    try {
+      await Promise.all([this.transport.close(), this.bluetooth.close()]);
+    } finally {
+      this.snapshot = { status: "disconnected" };
+      this.inboundLog = EMPTY_INBOUND;
+      this.identity.reset();
+      this.chainDump.reset();
+      this.sysex.reset();
+      this.dropping = false;
+      this.emitSnapshot();
+      this.emitLog();
+    }
   }
 
   async setPatch(patch: number): Promise<void> {
@@ -289,11 +304,31 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    if (this.snapshot.linkMode === "bluetooth") {
-      await this.bluetooth.send(bytes);
-    } else {
-      await this.transport.send(bytes);
+    try {
+      if (this.snapshot.linkMode === "bluetooth") {
+        await this.bluetooth.send(bytes);
+      } else {
+        await this.transport.send(bytes);
+      }
+    } catch {
+      await this.dropLink();
     }
+  }
+
+  private async dropLink(): Promise<void> {
+    if (this.snapshot.status !== "connected" || this.dropping) {
+      return;
+    }
+    await this.disconnect();
+  }
+
+  private linkIsOpen(): boolean {
+    if (this.snapshot.status !== "connected") {
+      return false;
+    }
+    return this.snapshot.linkMode === "bluetooth"
+      ? this.bluetooth.isOpen()
+      : this.transport.isOpen();
   }
 
   private handleInbound(bytes: Uint8Array): void {
@@ -392,8 +427,13 @@ export class DeviceSession {
       if (this.snapshot.chainSync !== "syncing") {
         return;
       }
+      if (!this.linkIsOpen()) {
+        void this.dropLink();
+        return;
+      }
       this.snapshot = { ...this.snapshot, chainSync: "idle" };
       this.emitSnapshot();
+      void this.sendIdentity("current-patch", generation);
     }, ms);
   }
 

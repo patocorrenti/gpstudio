@@ -64,6 +64,11 @@ After initial sync, when the selected patch changes (user previous / select / ne
 - **THEN** Controller shows that dump's module order and on/off states
 - **AND** no patch recall is sent solely because that inbound report arrived
 
+#### Scenario: Lost link during a patch change shows the empty state
+- **WHEN** the user selects another patch after sync and the pedal is no longer connected
+- **THEN** Controller states that no pedals are connected
+- **AND** the patch bar and audio chain are hidden
+
 #### Scenario: USB and Bluetooth share the chain
 - **WHEN** a Bluetooth session finishes initial sync with a chain dump
 - **THEN** Controller shows the same slot count and on/off presentation as USB for that model

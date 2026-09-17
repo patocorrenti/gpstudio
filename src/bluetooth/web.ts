@@ -3,6 +3,7 @@ import type {
   BluetoothDiscoverOptions,
   BluetoothEndpoint,
   BluetoothLink,
+  DisconnectHandler,
   MidiMessageHandler,
 } from "@/bluetooth/types";
 import {
@@ -52,6 +53,14 @@ type BluetoothDeviceLike = {
   id: string;
   name?: string | null;
   gatt?: BluetoothRemoteGattServerLike | null;
+  addEventListener: (
+    type: "gattserverdisconnected",
+    listener: () => void,
+  ) => void;
+  removeEventListener: (
+    type: "gattserverdisconnected",
+    listener: () => void,
+  ) => void;
 };
 
 type BluetoothApi = {
@@ -120,8 +129,21 @@ export class WebBluetoothLink implements BluetoothLink {
   private devicesById = new Map<string, BluetoothDeviceLike>();
   private openDevice: BluetoothDeviceLike | null = null;
   private control: BluetoothRemoteGattCharacteristicLike | null = null;
+  private closing = false;
   private readonly decoder = new BleMidiDecoder();
   private readonly handlers = new Set<MidiMessageHandler>();
+  private readonly disconnectHandlers = new Set<DisconnectHandler>();
+  private readonly onGattDisconnected = (): void => {
+    if (this.closing) {
+      return;
+    }
+    this.openDevice = null;
+    this.control = null;
+    this.decoder.reset();
+    for (const handler of this.disconnectHandlers) {
+      handler();
+    }
+  };
   private readonly onNotify = (event: NotifyEvent): void => {
     const value = event.target?.value;
     if (!value) {
@@ -195,6 +217,7 @@ export class WebBluetoothLink implements BluetoothLink {
     const server = await device.gatt.connect();
     this.control = await this.bindControl(server);
     this.control.addEventListener("characteristicvaluechanged", this.onNotify);
+    device.addEventListener("gattserverdisconnected", this.onGattDisconnected);
     this.openDevice = device;
   }
 
@@ -221,6 +244,17 @@ export class WebBluetoothLink implements BluetoothLink {
     };
   }
 
+  subscribeDisconnect(handler: DisconnectHandler): () => void {
+    this.disconnectHandlers.add(handler);
+    return () => {
+      this.disconnectHandlers.delete(handler);
+    };
+  }
+
+  isOpen(): boolean {
+    return Boolean(this.openDevice?.gatt?.connected);
+  }
+
   resetInbound(): void {
     this.decoder.reset();
   }
@@ -228,15 +262,20 @@ export class WebBluetoothLink implements BluetoothLink {
   async close(): Promise<void> {
     const device = this.openDevice;
     const control = this.control;
+    this.closing = true;
     this.openDevice = null;
     this.control = null;
     this.decoder.reset();
     if (control) {
       control.removeEventListener("characteristicvaluechanged", this.onNotify);
     }
-    if (device?.gatt?.connected) {
-      device.gatt.disconnect();
+    if (device) {
+      device.removeEventListener("gattserverdisconnected", this.onGattDisconnected);
+      if (device.gatt?.connected) {
+        device.gatt.disconnect();
+      }
     }
+    this.closing = false;
   }
 
   private async bindControl(

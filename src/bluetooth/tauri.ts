@@ -5,6 +5,7 @@ import type {
   BluetoothDiscoverOptions,
   BluetoothEndpoint,
   BluetoothLink,
+  DisconnectHandler,
   MidiMessageHandler,
 } from "@/bluetooth/types";
 import { looksLikePedalName, suggestModelFromLabel } from "@/device/models";
@@ -20,7 +21,9 @@ export class TauriBluetoothLink implements BluetoothLink {
   private sessionOpen = false;
   private readonly decoder = new BleMidiDecoder();
   private readonly handlers = new Set<MidiMessageHandler>();
+  private readonly disconnectHandlers = new Set<DisconnectHandler>();
   private unlisten: UnlistenFn | null = null;
+  private unlistenDisconnect: UnlistenFn | null = null;
 
   async discover(
     _options: BluetoothDiscoverOptions = {},
@@ -69,6 +72,17 @@ export class TauriBluetoothLink implements BluetoothLink {
     };
   }
 
+  subscribeDisconnect(handler: DisconnectHandler): () => void {
+    this.disconnectHandlers.add(handler);
+    return () => {
+      this.disconnectHandlers.delete(handler);
+    };
+  }
+
+  isOpen(): boolean {
+    return this.sessionOpen;
+  }
+
   resetInbound(): void {
     this.decoder.reset();
   }
@@ -79,17 +93,32 @@ export class TauriBluetoothLink implements BluetoothLink {
     await invoke("ble_close");
   }
 
-  private async ensureInbound(): Promise<void> {
-    if (this.unlisten) {
+  private noteClosed(): void {
+    if (!this.sessionOpen) {
       return;
     }
-    this.unlisten = await listen<number[]>("ble-inbound", (event) => {
-      const bytes = Uint8Array.from(event.payload);
-      for (const message of this.decoder.push(bytes)) {
-        for (const handler of this.handlers) {
-          handler(message);
+    this.sessionOpen = false;
+    this.decoder.reset();
+    for (const handler of this.disconnectHandlers) {
+      handler();
+    }
+  }
+
+  private async ensureInbound(): Promise<void> {
+    if (!this.unlisten) {
+      this.unlisten = await listen<number[]>("ble-inbound", (event) => {
+        const bytes = Uint8Array.from(event.payload);
+        for (const message of this.decoder.push(bytes)) {
+          for (const handler of this.handlers) {
+            handler(message);
+          }
         }
-      }
-    });
+      });
+    }
+    if (!this.unlistenDisconnect) {
+      this.unlistenDisconnect = await listen("ble-disconnected", () => {
+        this.noteClosed();
+      });
+    }
   }
 }

@@ -30,6 +30,11 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 - **THEN** the session requests or applies a chain dump for that patch
 - **AND** no patch recall is sent solely because that inbound report arrived
 
+#### Scenario: Lost link during a patch change disconnects
+- **WHEN** the session is ready, the user selects another patch, and the open USB or Bluetooth link is gone
+- **THEN** the session becomes disconnected
+- **AND** the chrome control reads Connect
+
 ## MODIFIED Requirements
 
 ### Requirement: Connected chrome stays up during patch sync

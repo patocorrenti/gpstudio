@@ -94,12 +94,12 @@ Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y P
 `MidiTransport` no es “listar puertos Web MIDI”. Es discovery + tubo USB-MIDI:
 
 - `discover()` → endpoints (`id`, `label`, `kind: usb-midi`, `suggestedModel?`)
-- `open(id)` / `send(bytes)` / `onMessage(bytes)` / `close()`
+- `open(id)` / `send(bytes)` / `onMessage(bytes)` / `close()`, plus a disconnect signal if the USB port drops
 
 `BluetoothLink` es discovery + sesión GATT + tubo de bytes:
 
 - `discover()` → endpoints (`id`, `label`, `kind: bluetooth`, `suggestedModel?`)
-- `open(id)` / `send(bytes)` / `subscribe(handler)` / `close()`
+- `open(id)` / `send(bytes)` / `subscribe(handler)` / `close()`, plus a disconnect signal if GATT drops
 
 Web MIDI y `midir` son los dos backends USB. Web Bluetooth y `btleplug` son los dos backends GATT. Connect abre con tabs USB | Bluetooth: el usuario elige el método primero. La pestaña USB usa el tubo MIDI; la pestaña Bluetooth escanea pedales y conecta GATT. Phase 1 MIDI endpoints siguen `kind: usb-midi`.
 
