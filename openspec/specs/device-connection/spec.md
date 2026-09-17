@@ -8,13 +8,14 @@ Lets the user connect a Valeton GP-5 or GP-50 over USB-MIDI or Bluetooth from th
 
 ### Requirement: Connect modal lists USB devices then resolves the model
 
-Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The Bluetooth tab MUST start Bluetooth discovery and MUST list discovered Bluetooth pedals. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
+Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery and MUST list discovered Bluetooth pedals. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
 
 #### Scenario: Discover then pick a USB device
 - **WHEN** the user opens Connect while disconnected
 - **THEN** the modal shows USB and Bluetooth tabs
 - **AND** the USB tab is selected
 - **AND** the USB tab lists available USB-MIDI devices
+- **AND** the USB tab states that USB is a one-way connection and super fast
 - **AND** the current section does not change
 
 #### Scenario: Known USB model connects without asking
