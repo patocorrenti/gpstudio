@@ -39,7 +39,7 @@ export function useSessionSnapshot() {
 export function useInboundLog() {
   const session = useDeviceSession();
   return useSyncExternalStore(
-    (listener) => session.subscribe(listener),
+    (listener) => session.subscribeLog(listener),
     () => session.getInboundLog(),
     () => session.getInboundLog(),
   );

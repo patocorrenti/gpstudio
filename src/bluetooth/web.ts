@@ -1,13 +1,19 @@
+import { BleMidiDecoder } from "@/bluetooth/ble-midi";
+import type {
+  BluetoothDiscoverOptions,
+  BluetoothEndpoint,
+  BluetoothLink,
+  MidiMessageHandler,
+} from "@/bluetooth/types";
 import {
   CONTROL_CHARACTERISTIC_UUID,
   CONTROL_SERVICE_UUID,
 } from "@/bluetooth/uuids";
 import { looksLikePedalName, suggestModelFromLabel } from "@/device/models";
-import type {
-  BluetoothDiscoverOptions,
-  BluetoothEndpoint,
-  BluetoothLink,
-} from "@/bluetooth/types";
+
+type NotifyEvent = {
+  target?: { value?: DataView | null };
+};
 
 type BluetoothRemoteGattCharacteristicLike = {
   uuid: string;
@@ -19,6 +25,14 @@ type BluetoothRemoteGattCharacteristicLike = {
   startNotifications: () => Promise<BluetoothRemoteGattCharacteristicLike>;
   writeValueWithoutResponse: (data: Uint8Array) => Promise<void>;
   writeValue: (data: Uint8Array) => Promise<void>;
+  addEventListener: (
+    type: "characteristicvaluechanged",
+    listener: (event: NotifyEvent) => void,
+  ) => void;
+  removeEventListener: (
+    type: "characteristicvaluechanged",
+    listener: (event: NotifyEvent) => void,
+  ) => void;
 };
 
 type BluetoothRemoteGattServiceLike = {
@@ -106,6 +120,22 @@ export class WebBluetoothLink implements BluetoothLink {
   private devicesById = new Map<string, BluetoothDeviceLike>();
   private openDevice: BluetoothDeviceLike | null = null;
   private control: BluetoothRemoteGattCharacteristicLike | null = null;
+  private readonly decoder = new BleMidiDecoder();
+  private readonly handlers = new Set<MidiMessageHandler>();
+  private readonly onNotify = (event: NotifyEvent): void => {
+    const value = event.target?.value;
+    if (!value) {
+      return;
+    }
+    const bytes = new Uint8Array(
+      value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength),
+    );
+    for (const message of this.decoder.push(bytes)) {
+      for (const handler of this.handlers) {
+        handler(message);
+      }
+    }
+  };
 
   async discover(
     options: BluetoothDiscoverOptions = {},
@@ -164,6 +194,7 @@ export class WebBluetoothLink implements BluetoothLink {
     }
     const server = await device.gatt.connect();
     this.control = await this.bindControl(server);
+    this.control.addEventListener("characteristicvaluechanged", this.onNotify);
     this.openDevice = device;
   }
 
@@ -183,10 +214,26 @@ export class WebBluetoothLink implements BluetoothLink {
     }
   }
 
+  subscribe(handler: MidiMessageHandler): () => void {
+    this.handlers.add(handler);
+    return () => {
+      this.handlers.delete(handler);
+    };
+  }
+
+  resetInbound(): void {
+    this.decoder.reset();
+  }
+
   async close(): Promise<void> {
     const device = this.openDevice;
+    const control = this.control;
     this.openDevice = null;
     this.control = null;
+    this.decoder.reset();
+    if (control) {
+      control.removeEventListener("characteristicvaluechanged", this.onNotify);
+    }
     if (device?.gatt?.connected) {
       device.gatt.disconnect();
     }

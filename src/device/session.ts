@@ -53,7 +53,9 @@ export class DeviceSession {
   private snapshot: SessionSnapshot = { status: "disconnected" };
   private inboundLog: InboundMidiEvent[] = EMPTY_INBOUND;
   private inboundSeq = 0;
-  private readonly listeners = new Set<() => void>();
+  private inboundCapture = false;
+  private readonly snapshotListeners = new Set<() => void>();
+  private readonly logListeners = new Set<() => void>();
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -62,6 +64,7 @@ export class DeviceSession {
     this.transport = transport;
     this.bluetooth = bluetooth;
     this.transport.subscribe((bytes) => this.handleInbound(bytes));
+    this.bluetooth.subscribe((bytes) => this.handleInbound(bytes));
   }
 
   getSnapshot(): SessionSnapshot {
@@ -72,15 +75,34 @@ export class DeviceSession {
     return this.inboundLog;
   }
 
+  setInboundCapture(enabled: boolean): void {
+    if (this.inboundCapture === enabled) {
+      return;
+    }
+    this.inboundCapture = enabled;
+    this.bluetooth.resetInbound();
+    if (!enabled) {
+      this.inboundLog = EMPTY_INBOUND;
+      this.emitLog();
+    }
+  }
+
   clearInboundLog(): void {
     this.inboundLog = EMPTY_INBOUND;
-    this.emit();
+    this.emitLog();
   }
 
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
+    this.snapshotListeners.add(listener);
     return () => {
-      this.listeners.delete(listener);
+      this.snapshotListeners.delete(listener);
+    };
+  }
+
+  subscribeLog(listener: () => void): () => void {
+    this.logListeners.add(listener);
+    return () => {
+      this.logListeners.delete(listener);
     };
   }
 
@@ -116,14 +138,16 @@ export class DeviceSession {
         linkMode: "usb",
       };
     }
-    this.emit();
+    this.emitSnapshot();
+    this.emitLog();
   }
 
   async disconnect(): Promise<void> {
     await Promise.all([this.transport.close(), this.bluetooth.close()]);
     this.snapshot = { status: "disconnected" };
     this.inboundLog = EMPTY_INBOUND;
-    this.emit();
+    this.emitSnapshot();
+    this.emitLog();
   }
 
   async setPatch(patch: number): Promise<void> {
@@ -135,7 +159,7 @@ export class DeviceSession {
     }
     const next = clampPatch(patch);
     this.snapshot = { ...this.snapshot, patch: next };
-    this.emit();
+    this.emitSnapshot();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     if (this.snapshot.linkMode === "bluetooth") {
       await this.bluetooth.send(bytes);
@@ -152,7 +176,7 @@ export class DeviceSession {
   }
 
   private handleInbound(bytes: Uint8Array): void {
-    if (this.snapshot.status !== "connected") {
+    if (!this.inboundCapture || this.snapshot.status !== "connected") {
       return;
     }
     const described = describeMidi(bytes);
@@ -164,11 +188,17 @@ export class DeviceSession {
       summary: described.summary,
     };
     this.inboundLog = [...this.inboundLog.slice(1 - INBOUND_LIMIT), next];
-    this.emit();
+    this.emitLog();
   }
 
-  private emit(): void {
-    for (const listener of this.listeners) {
+  private emitSnapshot(): void {
+    for (const listener of this.snapshotListeners) {
+      listener();
+    }
+  }
+
+  private emitLog(): void {
+    for (const listener of this.logListeners) {
       listener();
     }
   }

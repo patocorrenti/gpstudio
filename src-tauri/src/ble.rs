@@ -2,8 +2,10 @@ use btleplug::api::{
     Central, Characteristic, CharPropFlags, Manager as _, Peripheral as _, ScanFilter, WriteType,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
+use futures::StreamExt;
 use serde::Serialize;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -20,6 +22,7 @@ struct BleRuntime {
 struct BleSession {
     peripheral: Peripheral,
     characteristic: Characteristic,
+    notify_task: Option<tauri::async_runtime::JoinHandle<()>>,
 }
 
 #[derive(Default)]
@@ -201,12 +204,23 @@ async fn find_peripheral(adapter: &Adapter, id: &str) -> Result<Peripheral, Stri
     found?.ok_or_else(|| "The pedal is no longer available.".to_string())
 }
 
+async fn drop_session(session: BleSession) {
+    if let Some(task) = session.notify_task {
+        task.abort();
+    }
+    let _ = session.peripheral.disconnect().await;
+}
+
 #[tauri::command]
-pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<(), String> {
+pub async fn ble_open(
+    app: AppHandle,
+    state: tauri::State<'_, BleState>,
+    id: String,
+) -> Result<(), String> {
     {
         let mut connected = state.connected.lock().await;
         if let Some(previous) = connected.take() {
-            let _ = previous.peripheral.disconnect().await;
+            drop_session(previous).await;
         }
     }
     let adapter = ensure_adapter(&state).await?;
@@ -225,12 +239,23 @@ pub async fn ble_open(state: tauri::State<'_, BleState>, id: String) -> Result<(
         let _ = peripheral.disconnect().await;
         return Err("Could not find the Bluetooth control characteristic.".to_string());
     };
-    if characteristic.properties.contains(CharPropFlags::NOTIFY) {
+    let notify_task = if characteristic.properties.contains(CharPropFlags::NOTIFY) {
         let _ = peripheral.subscribe(&characteristic).await;
-    }
+        match peripheral.notifications().await {
+            Ok(mut stream) => Some(tauri::async_runtime::spawn(async move {
+                while let Some(notification) = stream.next().await {
+                    let _ = app.emit("ble-inbound", notification.value);
+                }
+            })),
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
     *state.connected.lock().await = Some(BleSession {
         peripheral,
         characteristic,
+        notify_task,
     });
     Ok(())
 }
@@ -261,7 +286,7 @@ pub async fn ble_send(state: tauri::State<'_, BleState>, bytes: Vec<u8>) -> Resu
 pub async fn ble_close(state: tauri::State<'_, BleState>) -> Result<(), String> {
     let mut connected = state.connected.lock().await;
     if let Some(session) = connected.take() {
-        let _ = session.peripheral.disconnect().await;
+        drop_session(session).await;
     }
     Ok(())
 }

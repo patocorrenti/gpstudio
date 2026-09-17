@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   useDeviceSession,
@@ -16,6 +17,13 @@ function formatTime(at: number): string {
 export function MidiInMonitor() {
   const session = useDeviceSession();
   const events = useInboundLog();
+
+  useEffect(() => {
+    session.setInboundCapture(true);
+    return () => {
+      session.setInboundCapture(false);
+    };
+  }, [session]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">

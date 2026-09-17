@@ -24,10 +24,11 @@ context: |
       - Browser: Web MIDI (navigator.requestMIDIAccess)
       - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
     - A USB endpoint has id, label, kind usb-midi, optional suggestedModel
-    - Bluetooth uses BluetoothLink (discover / open / send / close)
+    - Bluetooth uses BluetoothLink (discover / open / send / subscribe / close)
       - Browser: Web Bluetooth
       - Desktop: Rust btleplug via Tauri commands (WebView2 does not expose Web Bluetooth)
       - A Bluetooth endpoint has id, label, kind bluetooth, optional suggestedModel
+      - subscribe delivers unwrapped MIDI bytes from GATT notify (Log inbound)
     - Connect opens with USB | Bluetooth tabs; the user chooses the method first.
       DeviceSession records linkMode (usb | bluetooth).
       One session for Controller/Editor/Library; features that need pedal→app
@@ -44,9 +45,10 @@ context: |
     link (USB vs Bluetooth; different capabilities, one DeviceSession).
   - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
     Do not leak MIDIPort or Web MIDI types above the transport. Phase 1 MIDI endpoints
-    are all kind usb-midi. Bluetooth is BluetoothLink (discover/open/send/close), not a
-    throwing MidiTransport stub. Do not copy reverse-engineered SysEx. Patch recall
+    are all kind usb-midi. Bluetooth is BluetoothLink (discover/open/send/subscribe/close),
+    not a throwing MidiTransport stub. Do not copy reverse-engineered SysEx. Patch recall
     over GATT is in scope (DeviceSession encodes; BluetoothLink.send writes bytes).
+    Bluetooth inbound Log is in scope (same Log page, capture only while visible).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
   - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
@@ -58,7 +60,7 @@ context: |
       src/features/library     Phase 3 stub until its change
       src/device/              models, profiles, official CC maps, session
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
-      src/bluetooth/           BluetoothLink (discover/open/send/close), detect (web vs tauri), web.ts, tauri.ts
+      src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir + btleplug
 
   Device profiles (phase 1, official MIDI CC):
@@ -86,7 +88,7 @@ context: |
   - Mobile Tauri app
   - Preset read/write, rename, reorder
   - IR / SnapTone / NAM upload
-  - Bluetooth inbound Log / applying liveFromPedal to the patch snapshot
+  - Applying liveFromPedal inbound to the patch snapshot
   - Volume, modules, tuner over Bluetooth
   Do not copy reverse-engineered SysEx from third-party editors.
 
@@ -129,7 +131,8 @@ rules:
     - Isolate Web MIDI and Tauri/midir behind MidiTransport (endpoints + bytes, kind usb-midi)
     - Do not leak MIDIPort/Web MIDI types into DeviceSession or React
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
-    - BluetoothLink is GATT discover/open/send/close; do not add a throwing send() stub or copy third-party SysEx
+    - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
+    - Bluetooth inbound Log is in scope; do not apply liveFromPedal inbound to the session snapshot
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - Do not copy reverse-engineered SysEx from third-party editors

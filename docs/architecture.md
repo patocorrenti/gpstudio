@@ -17,7 +17,7 @@ El producto habla USB-MIDI con GP-5 y GP-50: fase 1 usa el MIDI CC oficial; edit
   - Bluetooth (servicio BLE-MIDI MMA) es otro backend, no un `kind` más del tubo MIDI:
     - Browser: Web Bluetooth
     - Desktop: Rust `btleplug` vía comandos Tauri (WebView2 **no** expone Web Bluetooth)
-    - Contrato `BluetoothLink`: `discover` / `open` / `send` / `close`
+    - Contrato `BluetoothLink`: `discover` / `open` / `send` / `subscribe` / `close`
     - Un endpoint Bluetooth lleva `id`, `label`, `kind: bluetooth` y `suggestedModel` opcional
 - **Estado de dispositivo:** capa TypeScript compartida, independiente del transporte
 - **Sin backend HTTP.** La app habla directo con el pedal
@@ -89,7 +89,7 @@ La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), 
 
 USB es one-way y super fast: la app manda CC; el pedal no telemetra knobs ni módulos. Puede mandar dumps SysEx al cargar un patch; eso se loguea y se podrá aplicar después, pero no convierte USB en duplex.
 
-Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI) en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. El Log inbound de Bluetooth y el resto de CCs (volumen, módulos) son changes después.
+Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI) en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. El Log muestra MIDI inbound de USB y Bluetooth (framing BLE-MIDI unwrappeado) solo mientras esa pantalla está abierta. Aplicar ese tráfico al snapshot (`liveFromPedal`) y el resto de CCs (volumen, módulos) son changes después.
 
 `MidiTransport` no es “listar puertos Web MIDI”. Es discovery + tubo USB-MIDI:
 
@@ -99,7 +99,7 @@ Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y P
 `BluetoothLink` es discovery + sesión GATT + tubo de bytes:
 
 - `discover()` → endpoints (`id`, `label`, `kind: bluetooth`, `suggestedModel?`)
-- `open(id)` / `send(bytes)` / `close()`
+- `open(id)` / `send(bytes)` / `subscribe(handler)` / `close()`
 
 Web MIDI y `midir` son los dos backends USB. Web Bluetooth y `btleplug` son los dos backends GATT. Connect abre con tabs USB | Bluetooth: el usuario elige el método primero. La pestaña USB usa el tubo MIDI; la pestaña Bluetooth escanea pedales y conecta GATT. Phase 1 MIDI endpoints siguen `kind: usb-midi`.
 
@@ -136,7 +136,7 @@ patone/
       web.ts
       tauri.ts
     bluetooth/
-      types.ts           # BluetoothLink: endpoints + GATT open/send/close (kind bluetooth)
+      types.ts           # BluetoothLink: endpoints + GATT open/send/subscribe/close (kind bluetooth)
       detect.ts          # elige backend BLE web vs tauri
       web.ts
       tauri.ts
@@ -181,6 +181,8 @@ Modal de conexión: tabs USB y Bluetooth. USB pide permiso MIDI, lista endpoints
 
 Pantalla Controller: selector de patch 00–99, volumen, toggles NR/PRE/DST/NS/AMP/CAB/EQ/MOD/DLY/RVB, tuner. GP-50 además: master volume y modo Patch/Stomp.
 
+Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot.
+
 Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrome/Edge (localhost o HTTPS). Mobile queda fuera de estos cambios; la abstracción MIDI ya lo deja preparado.
 
 ## Fuera de alcance ahora
@@ -188,7 +190,7 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - App mobile Tauri
 - Lectura/escritura de presets, rename, reorder
 - Upload de IR / SnapTone / NAM
-- Log inbound Bluetooth / aplicar `liveFromPedal` al snapshot
+- Aplicar `liveFromPedal` al snapshot
 - Volumen, módulos, tuner y extras GP-50 por Bluetooth
 
 
@@ -203,3 +205,4 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `bluetooth-connect`: scan/conectar GATT (sin encoder de patch)
 - [x] Change `live-controller`: UI de patch 00–99 via MIDI CC oficial (USB)
 - [x] Change `bluetooth-patch-control`: encoder de patch sobre GATT (mismo Controller que USB)
+- [ ] Change `inbound-log`: Log inbound USB + Bluetooth solo con la página Log abierta
