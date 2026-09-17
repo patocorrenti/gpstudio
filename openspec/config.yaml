@@ -90,7 +90,7 @@ context: |
     mode are defined in device-connection.
   - Controller: patch 00–99 (names when synced), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
-    CC 48–57; EXP display-only). Volume, tuner, drag-and-drop later.
+    CC 48–57; GP-50 EXP via CC 13). Volume, tuner, drag-and-drop later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)

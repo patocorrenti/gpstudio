@@ -2,7 +2,7 @@
 
 ### Requirement: Controller shows the current patch audio chain
 
-Once initial sync completes or times out, Controller SHALL draw the current patch's audio chain through the device session. GP-5 MUST show 10 ordered slots. GP-50 MUST show 11 ordered slots (the same 10 effect modules plus EXP at the end). Each occupied slot MUST show the module that sits there and whether that module is on or off. Labels MUST be in English. After the chain is shown, the ten effect slots (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) MUST be toggles: activating one MUST flip that module's on/off through the device session and MUST NOT change module order. The GP-50 EXP slot MUST stay display-only: activating it MUST NOT send MIDI and MUST NOT change its on/off. Controller MUST NOT send raw MIDI. If the initial chain dump is missing, Controller MUST still show the default-order slots and MUST NOT treat unknown modules as on; those effect slots MUST still be togglable. Disconnecting MUST hide the chain.
+Once initial sync completes or times out, Controller SHALL draw the current patch's audio chain through the device session. GP-5 MUST show 10 ordered slots. GP-50 MUST show 11 ordered slots (the same 10 effect modules plus EXP at the end). Each occupied slot MUST show the module that sits there and whether that module is on or off. Labels MUST be in English. After the chain is shown, the ten effect slots (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) MUST be toggles: activating one MUST flip that module's on/off through the device session and MUST NOT change module order. On GP-50, the EXP slot MUST be a toggle through the device session and MUST NOT appear on GP-5. Controller MUST NOT send raw MIDI. If the initial chain dump is missing, Controller MUST still show the default-order slots and MUST NOT treat unknown modules as on; those effect slots MUST still be togglable. Disconnecting MUST hide the chain.
 
 Default order is NR (noise gate), PRE, DST, NS (SnapTone), AMP, CAB, EQ, MOD, DLY, RVB, then EXP on GP-50.
 
@@ -42,9 +42,10 @@ Default order is NR (noise gate), PRE, DST, NS (SnapTone), AMP, CAB, EQ, MOD, DL
 - **AND** that change is sent through the device session
 
 #### Scenario: Slots do not edit yet
-- **WHEN** a GP-50 session is showing the audio chain and the user activates the EXP slot
-- **THEN** no MIDI is sent for that activation
-- **AND** the EXP on/off state does not change
+- **WHEN** a GP-50 session is showing the audio chain and the user activates the EXP slot while EXP is on
+- **THEN** the EXP slot is shown as off
+- **AND** that change is sent through the device session
+- **AND** module order does not change
 
 #### Scenario: USB and Bluetooth share the chain toggles
 - **WHEN** a Bluetooth session is showing the audio chain and the user activates the MOD slot
@@ -66,6 +67,11 @@ After initial sync, when the session is on Bluetooth and the pedal reports a mod
 - **WHEN** a Bluetooth session is showing DST on and the pedal reports DST off
 - **THEN** the DST slot is shown as off
 - **AND** module order does not change
+- **AND** no patch recall is sent solely because that report arrived
+
+#### Scenario: Pedal turns EXP off over Bluetooth
+- **WHEN** a GP-50 Bluetooth session is showing EXP on and the pedal reports EXP off
+- **THEN** the EXP slot is shown as off
 - **AND** no patch recall is sent solely because that report arrived
 
 #### Scenario: USB does not follow pedal module reports

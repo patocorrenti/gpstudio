@@ -213,6 +213,40 @@ export type LiveModuleChange = {
 };
 
 /**
+ * GP-50 Bluetooth EXP on/off (Patone capture). Identity-family template
+ * (01 02 04), size 0x07, command 0x02. Enable is the last data byte (0 off, 1 on).
+ */
+export function decodeLiveExp(bytes: Uint8Array): boolean | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 24 || midi[0] !== 0xf0) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== 1) {
+    return null;
+  }
+  if (
+    midi[8] !== 0x07 ||
+    midi[9] !== 1 ||
+    midi[10] !== 2 ||
+    midi[11] !== 4 ||
+    midi[12] !== 0x02
+  ) {
+    return null;
+  }
+  if (
+    midi[13] !== 0 ||
+    midi[14] !== 3 ||
+    midi[15] !== 2 ||
+    midi[16] !== 0 ||
+    midi[17] !== 0 ||
+    midi[18] !== 1
+  ) {
+    return null;
+  }
+  return midi[22] !== 0;
+}
+
+/**
  * Bluetooth live module on/off (Patone capture). Same identity-family
  * template (01 02 04), size 0x0A, command 0x09. Module id uses DUMP_MODULE_IDS
  * (0=NR … 3=AMP … 9=NS). Enable is byte 22 (0 off, 1 on).

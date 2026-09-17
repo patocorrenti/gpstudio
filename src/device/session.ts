@@ -4,14 +4,13 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
-import { effectIdForModuleCc, moduleEnabledFromCc } from "@/device/cc";
+import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
   defaultChain,
   type AudioChain,
   type ChainSlotId,
-  type EffectId,
 } from "@/device/chain";
-import { ChainDecoder, decodeLiveModule } from "@/device/chain-codec";
+import { ChainDecoder, decodeLiveExp, decodeLiveModule } from "@/device/chain-codec";
 import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
@@ -69,6 +68,16 @@ function clampPatch(value: number): number {
 
 function wrapPatch(value: number): number {
   return ((value % PATCH_COUNT) + PATCH_COUNT) % PATCH_COUNT;
+}
+
+function preserveExpEnabled(previous: AudioChain, next: AudioChain): AudioChain {
+  const previousExp = previous.find((slot) => slot.id === "exp");
+  if (!previousExp) {
+    return next;
+  }
+  return next.map((slot) =>
+    slot.id === "exp" ? { ...slot, enabled: previousExp.enabled } : slot,
+  );
 }
 
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
@@ -245,7 +254,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (id === "exp") {
+    if (id === "exp" && this.snapshot.model !== "gp50") {
       return;
     }
     if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
@@ -431,7 +440,11 @@ export class DeviceSession {
       return;
     }
     this.clearChainRefreshTimer();
-    this.snapshot = { ...this.snapshot, chain, chainSync: "idle" };
+    this.snapshot = {
+      ...this.snapshot,
+      chain: preserveExpEnabled(this.snapshot.chain, chain),
+      chainSync: "idle",
+    };
     this.emitSnapshot();
     this.releaseWaiters(this.chainWaiters);
   }
@@ -443,12 +456,21 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
       return;
     }
+    const expEnabled = decodeLiveExp(message);
+    if (expEnabled !== null) {
+      this.setChainSlotEnabled("exp", expEnabled);
+      return;
+    }
     const fromSysex = decodeLiveModule(message);
     if (fromSysex) {
       this.setChainSlotEnabled(fromSysex.id, fromSysex.enabled);
       return;
     }
     if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
+      return;
+    }
+    if (message[1] === gp50Cc.expOnOff) {
+      this.setChainSlotEnabled("exp", moduleEnabledFromCc(message[2]));
       return;
     }
     const id = effectIdForModuleCc(message[1]);
@@ -458,7 +480,7 @@ export class DeviceSession {
     this.setChainSlotEnabled(id, moduleEnabledFromCc(message[2]));
   }
 
-  private setChainSlotEnabled(id: EffectId, enabled: boolean): void {
+  private setChainSlotEnabled(id: ChainSlotId, enabled: boolean): void {
     if (this.snapshot.status !== "connected") {
       return;
     }

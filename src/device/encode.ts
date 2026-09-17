@@ -1,9 +1,10 @@
 import {
   encodeModuleCcValue,
+  gp50Cc,
   gp5Cc,
   MODULE_CC,
 } from "@/device/cc";
-import type { EffectId } from "@/device/chain";
+import type { ChainSlotId } from "@/device/chain";
 import { encodeCurrentChainRequest } from "@/device/chain-codec";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -38,10 +39,11 @@ export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
 
 export function encodeModule(
   linkMode: LinkMode,
-  id: EffectId,
+  id: ChainSlotId,
   enabled: boolean,
 ): Uint8Array {
-  return encodeLinkMidi(linkMode, midiCc(MODULE_CC[id], encodeModuleCcValue(enabled)));
+  const controller = id === "exp" ? gp50Cc.expOnOff : MODULE_CC[id];
+  return encodeLinkMidi(linkMode, midiCc(controller, encodeModuleCcValue(enabled)));
 }
 
 export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): Uint8Array {

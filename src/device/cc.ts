@@ -28,7 +28,7 @@ export const gp50Cc = {
   ...gp5Cc,
   masterVolume: 1,
   exp: 11,
-  extra13: 13,
+  expOnOff: 13,
   extra17: 17,
   extra19: 19,
   bpm: 21,

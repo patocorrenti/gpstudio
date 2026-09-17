@@ -105,14 +105,6 @@ function AudioChainSlotView({
   const label = chainSlotLabel(slot.id);
   const state = slot.enabled ? "on" : "off";
 
-  if (slot.id === "exp") {
-    return (
-      <div aria-label={`${label} ${state}`} className={slotClassName(slot.enabled)}>
-        {label}
-      </div>
-    );
-  }
-
   return (
     <button
       type="button"

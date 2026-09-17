@@ -2,9 +2,9 @@
 
 ### Requirement: Connected session toggles audio-chain modules
 
-After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. The session MUST NOT send SysEx, extra patch recall, or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. EXP MUST NOT be togglable through this session action.
+After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. On GP-50, toggling EXP MUST send official CC 13. The session MUST NOT send SysEx, extra patch recall, or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle.
 
-When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. USB MUST NOT apply that inbound report to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
+When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. On GP-50 Bluetooth, inbound EXP SysEx (identity-family command `02`) MUST update the EXP slot. USB MUST NOT apply those inbound reports to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
 
 #### Scenario: USB toggle sends module CC
 - **WHEN** a USB session is ready and the user turns DST off
@@ -28,7 +28,13 @@ When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), in
 - **WHEN** a USB session is ready and a live-module SysEx for DST off arrives
 - **THEN** the snapshot DST on/off does not change from that inbound report
 
-#### Scenario: EXP cannot be toggled
-- **WHEN** a GP-50 session is ready and a toggle is requested for EXP
-- **THEN** no MIDI is sent for that request
-- **AND** the EXP slot on/off does not change
+#### Scenario: GP-50 EXP toggle sends CC 13
+- **WHEN** a GP-50 session is ready and the user turns EXP off
+- **THEN** the snapshot shows EXP off
+- **AND** official EXP on/off CC 13 is sent on the open link
+- **AND** no patch recall or chain dump is sent solely because EXP was toggled
+
+#### Scenario: Bluetooth inbound EXP report updates the chain
+- **WHEN** a GP-50 Bluetooth session is ready and the pedal reports EXP off over EXP SysEx
+- **THEN** the snapshot shows EXP off
+- **AND** no patch recall is sent solely because that report arrived

@@ -7,16 +7,17 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 **Goals:**
 
 - Toggle the ten effect modules from Controller through the session (official CC 48–57, on-change).
+- GP-50 EXP toggles via official CC 13; Bluetooth inbound uses EXP SysEx (command `02`).
 - Bluetooth applies inbound live-module SysEx to the snapshot (`liveFromPedal`).
-- USB sends the same toggles and ignores inbound module CC.
-- Same chain UI on both links; EXP stays display-only.
+- USB sends the same toggles and ignores inbound live-module reports.
+- Same chain UI on both links; GP-5 has no EXP slot.
 
 **Non-Goals:**
 
 - Drag-and-drop, SysEx chain writes, or a new order encode.
 - Applying inbound volume/tuner/CTL or other non-module CCs.
 - Treating USB as duplex.
-- Volume, tuner, EXP toggle, GP-50 extras.
+- Volume, tuner, GP-50 extras besides EXP.
 
 ## Decisions
 
@@ -30,7 +31,7 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 
 ### 2. Optimistic snapshot, then send CC
 
-**Choice:** Toggle updates `chain[].enabled` immediately, then sends official CC 48–57 on the open link (BLE-MIDI wrap on Bluetooth, same as CC 0). Do not wait for an echo. Do not re-request the chain dump or send CC 0.
+**Choice:** Toggle updates `chain[].enabled` immediately, then sends official CC 48–57 (or CC 13 for GP-50 EXP) on the open link (BLE-MIDI wrap on Bluetooth, same as CC 0). Do not wait for an echo. Do not re-request the chain dump or send CC 0.
 
 **Why:** USB has no echo. Bluetooth echo, if it arrives, is the same on/off. A dump round-trip would revive the busy overlay for a one-bit change.
 
@@ -44,13 +45,13 @@ See `proposal.md` for why. Controller already draws the snapshot chain as displa
 
 **Alternative:** Apply every inbound CC when `liveFromPedal` is true. Rejected; volume/tuner are later. **Alternative:** Re-dump the chain on every live report. Rejected; the SysEx already carries on/off.
 
-### 4. EXP is not a module toggle
+### 4. GP-50 EXP is a toggle; GP-5 has no EXP slot
 
-**Choice:** EXP remains a trailing GP-50 display slot. No session action sends CC 11 for on/off. Inbound CC 11 is ignored.
+**Choice:** On GP-50, EXP is a chain slot like the others. App→pedal uses official CC 13 (on/off). CC 11 stays expression parameter and is ignored. Bluetooth inbound uses a 24-byte identity-family SysEx (size `0x07`, command `02`) from Patone captures; enable is the last data byte. The preset dump still does not decode an EXP enable bit, so `applyChain` keeps the previous EXP on/off across dumps. GP-5 never shows or sends EXP.
 
-**Why:** Manual maps EXP to CC 11 (expression). The dump codec does not decode an EXP enable bit.
+**Why:** The GP-50 MIDI list names CC 13 as EXP on/off. Pedal→app captures are this SysEx, not CC 13.
 
-**Alternative:** Treat EXP like RVB. Rejected; different CC class.
+**Alternative:** Leave EXP display-only. Rejected; it is a module the user turns on and off. **Alternative:** Send CC 11. Rejected; that is the EXP parameter.
 
 ### 5. CC values follow the official MIDI list
 
