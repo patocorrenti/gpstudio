@@ -418,7 +418,7 @@ function SlotControlPanel({
 
   return (
     <section
-      className="flex w-full max-w-xl flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
+      className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
       aria-label={`${kindLabel} controls`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -478,6 +478,9 @@ function SlotControlPanels({
     if (!isEffectSlot(slot.id) || !slot.enabled) {
       return [];
     }
+    if (chainSlotBypassed(chain, slot.id)) {
+      return [];
+    }
     if (slot.modelId === undefined || slot.values === undefined) {
       return [];
     }
@@ -495,7 +498,7 @@ function SlotControlPanels({
   }
 
   return (
-    <div className="mt-6 flex w-full flex-col items-center gap-3 px-2 pb-6">
+    <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-3 px-2 pb-6 md:grid-cols-2">
       {panels.map((slot) => (
         <SlotControlPanel
           key={slot.id}

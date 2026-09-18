@@ -21,6 +21,11 @@ Live module on/off reports and live chain-order reports MUST preserve each slot'
 - **THEN** the snapshot does not treat that AMP identity as a writable factory model
 - **AND** the session does not send an AMP model write solely because that identity was unknown
 
+#### Scenario: Sole NR model loads without a matching wire id
+- **WHEN** a GP-50 session is ready and the current-preset dump has NR THRE at 18 and an NR identity that is not GATE
+- **THEN** the snapshot NR slot's model is GATE
+- **AND** NR THRE is 18
+
 #### Scenario: Bluetooth on/off keeps AMP values
 - **WHEN** a Bluetooth session is showing AMP on with Tweedy and Gain at 30 and the pedal reports AMP off
 - **THEN** the snapshot shows AMP off

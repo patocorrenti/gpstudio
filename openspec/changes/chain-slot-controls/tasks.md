@@ -23,7 +23,7 @@
 ## 5. Controller
 
 - [x] 5.1 Add a shadcn Slider (or equivalent existing control) if missing, and verify it typechecks with the other UI primitives
-- [x] 5.2 Below the audio chain, render a panel per enabled effect slot with known model/values (chain order, English kind + model label, model select only when that kind has more than one factory model for the pedal, sliders/toggles from the catalog), omit EXP and off slots, still show enabled AMP/CAB when NS-bypassed, call session methods (no raw MIDI), keep the existing busy overlay covering those panels, and verify typecheck plus that a dump-missing chain shows no editable panels
+- [x] 5.2 Below the audio chain, render a two-column panel per enabled effect slot with known model/values (chain order, English kind + model label, model select only when that kind has more than one factory model for the pedal, sliders/toggles from the catalog), omit EXP, off slots, and NS-bypassed AMP/CAB, call session methods (no raw MIDI), keep the existing busy overlay covering those panels, and verify typecheck plus that a dump-missing chain shows no editable panels
 
 ## 6. Docs and check
 

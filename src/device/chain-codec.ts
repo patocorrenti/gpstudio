@@ -1,6 +1,7 @@
 import {
   KIND_VALUE_COUNT,
   modelByWire,
+  modelsForKind,
   snapModelValues,
   type WireIdentity,
 } from "@/device/catalog";
@@ -629,14 +630,17 @@ function decodeSlotModel(
   data: Uint8Array,
   layout: PresetLayout,
   id: EffectId,
+  pedal: DeviceModel,
 ): Pick<AudioChainSlot, "modelId" | "values"> {
   const wire = readWireIdentity(data, layout.identityAt[id]);
-  if (!wire) {
-    return {};
-  }
-  const model = modelByWire(id, wire);
+  let model = wire ? modelByWire(id, wire) : undefined;
   if (!model) {
-    return {};
+    const sole = modelsForKind(id, pedal);
+    // NR (GATE) has one factory model; the dump identity is unused in captures.
+    if (sole.length !== 1) {
+      return {};
+    }
+    model = sole[0];
   }
   const count = KIND_VALUE_COUNT[id];
   const raw: number[] = [];
@@ -680,7 +684,11 @@ function parsePresetDump(
 
   const slots: AudioChainSlot[] = order.map((id) => {
     const [offset, bit] = layout.enable[id];
-    return { id, enabled: bitOn(data, offset, bit), ...decodeSlotModel(data, layout, id) };
+    return {
+      id,
+      enabled: bitOn(data, offset, bit),
+      ...decodeSlotModel(data, layout, id, model),
+    };
   });
 
   if (model === "gp50") {
@@ -714,10 +722,16 @@ function assertPresetDumpFixtures(): void {
   tweedy[227] = 1 << 3;
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.amp, Uint8Array.from([0x01, 0x00, 0x00, 0x07]));
   writeNibbleBytes(tweedy, GP50_VALUES_AT.amp, float32Le(30));
+  writeNibbleBytes(tweedy, GP50_IDENTITY_AT.nr, Uint8Array.from([0x12, 0x34, 0x56, 0x78]));
+  writeNibbleBytes(tweedy, GP50_VALUES_AT.nr, float32Le(18));
   const loaded = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
   const amp = loaded?.find((slot) => slot.id === "amp");
   if (amp?.modelId !== "amp-tweedy" || amp.values?.[0] !== 30) {
     throw new Error("GP-50 Tweedy dump fixture did not fill AMP Gain 30");
+  }
+  const nr = loaded?.find((slot) => slot.id === "nr");
+  if (nr?.modelId !== "nr-gate" || nr.values?.[0] !== 18) {
+    throw new Error("GP-50 dump fixture did not fill sole NR GATE from THRE");
   }
 
   const unknown = new Uint8Array(tweedy);

@@ -79,7 +79,7 @@ Unknown means “do not write,” not “pretend the first catalog model is load
 
 ### 4. Same dump, more fields; live reports do not invent params
 
-**Choice:** Extend `parsePresetDump` (and GP-5/GP-50 layouts already branched in the codec) to also read each kind’s wire identity and float32 LE values. Offsets are an apply-time fill-in from Patone captures; the GP-50 reference is a map, not source. Identity lookup: wire bytes → catalog model for that kind. Unknown identity → leave `modelId`/`values` unset for that slot; order + on/off still apply.
+**Choice:** Extend `parsePresetDump` (and GP-5/GP-50 layouts already branched in the codec) to also read each kind’s wire identity and float32 LE values. Offsets are an apply-time fill-in from Patone captures; the GP-50 reference is a map, not source. Identity lookup: wire bytes → catalog model for that kind. Unknown identity → leave `modelId`/`values` unset for that slot, except when the kind has exactly one factory model for this pedal (NR GATE): then use that model if the dump floats decode. Order + on/off still apply.
 
 Requested / opportunistic current-preset dumps replace model + values (same class as today’s chain apply; not `liveFromPedal`). Bluetooth live on/off and live chain-order **keep** `modelId`/`values`. USB still ignores those live reports. Do **not** apply unsolicited live parameter frames while the patch stays the same.
 
@@ -110,7 +110,7 @@ Exact packed bytes are apply-time capture fill-in (operator log / Patone Log). E
 
 ### 6. Controller panels are a simple list under the chain
 
-**Choice:** Below the chain row, one panel per **enabled** effect slot with known model/values, in chain order. Panel: kind label, model `<Select>` if `catalog[kind].length > 1` for this pedal, then a shadcn slider (or switch when `display === "toggle"`) per visible control. English only. The existing chain-refresh overlay already covers controls below the patch bar; panels sit there. NS prohibition overlay stays on the AMP/CAB **slots**; those panels still show if AMP/CAB are enabled. Turning a slot off unmounts its panel; values stay on the snapshot for when it turns back on.
+**Choice:** Below the chain row, one panel per **enabled** effect slot with known model/values, in chain order, **two columns** when width allows. Panel: kind label, model `<Select>` if `catalog[kind].length > 1` for this pedal, then a shadcn slider (or switch when `display === "toggle"`) per visible control. English only. The existing chain-refresh overlay already covers controls below the patch bar; panels sit there. NS prohibition overlay stays on the AMP/CAB **slots**; those panels hide while NS is on. Turning a slot off unmounts its panel; values stay on the snapshot for when it turns back on.
 
 No click-to-focus on the chain in this change. Editor page stays stub.
 

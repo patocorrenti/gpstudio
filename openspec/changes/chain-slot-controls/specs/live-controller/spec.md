@@ -2,7 +2,7 @@
 
 ### Requirement: Controller shows enabled slot control panels
 
-After the audio chain is shown, Controller SHALL show a control panel below the chain for each enabled effect slot (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) whose loaded model and control values are known from the device session. Each panel MUST show that slot's kind, the loaded model's English label, and that model's visible controls (label, current value, and the catalog min / max / step). When a kind has more than one factory model for the connected pedal, the panel MUST offer a model select. A kind with only one factory model MUST still show its controls and MUST NOT require a select. GP-50 EXP MUST NOT get a control panel. Disabled effect slots MUST NOT show a panel. AMP and CAB panels MUST still appear when those slots are enabled even if NS marks them bypassed. Labels MUST be in English.
+After the audio chain is shown, Controller SHALL show a control panel below the chain for each enabled effect slot (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) whose loaded model and control values are known from the device session. Panels MUST be laid out in two columns when width allows. Each panel MUST show that slot's kind, the loaded model's English label, and that model's visible controls (label, current value, and the catalog min / max / step). When a kind has more than one factory model for the connected pedal, the panel MUST offer a model select. A kind with only one factory model MUST still show its controls and MUST NOT require a select. GP-50 EXP MUST NOT get a control panel. Disabled effect slots MUST NOT show a panel. AMP and CAB panels MUST NOT appear while NS marks those slots bypassed. Labels MUST be in English.
 
 Changing the selected model or a control value MUST go through the device session and MUST NOT send raw MIDI from React. Dragging a slider MUST update the displayed value on-change. Control writes for that drag MUST be throttled so the session does not send a SET for every intermediate value. Releasing the slider MUST send the last value if it was not already sent. Toggles and model selects MUST send on-change. The same panels MUST be used on USB and Bluetooth. While the chain-refresh busy overlay is shown, those panels MUST be covered with it and MUST NOT be usable. Disconnecting MUST hide the panels. If the chain dump did not supply a slot's model and values, Controller MUST NOT show an editable panel for that slot.
 
@@ -46,9 +46,9 @@ Changing the selected model or a control value MUST go through the device sessio
 - **WHEN** a GP-50 session is showing the audio chain with EXP on
 - **THEN** Controller does not show an EXP control panel
 
-#### Scenario: NS-bypassed AMP still shows a panel
+#### Scenario: NS-bypassed AMP hides its panel
 - **WHEN** the audio chain is shown with NS on and AMP on
-- **THEN** Controller shows an AMP panel
+- **THEN** Controller does not show an AMP panel
 - **AND** the AMP slot stays marked disabled with a prohibition overlay
 
 #### Scenario: Unknown dump hides editable panels
