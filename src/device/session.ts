@@ -26,6 +26,7 @@ import {
   decodeLiveOnOffChanges,
   decodeLiveSlotControl,
   decodeLiveSlotModel,
+  type ChainDumpResult,
 } from "@/device/chain-codec";
 import {
   encodeChainOrder,
@@ -33,6 +34,7 @@ import {
   encodeIdentity,
   encodeModule,
   encodePatch,
+  encodePatchStore,
   encodeSlotControl,
   encodeSlotModel,
 } from "@/device/encode";
@@ -47,6 +49,11 @@ import {
 import { capabilitiesForLink, type LinkMode } from "@/device/link";
 import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
+import {
+  currentPatchFilename,
+  encodePatchFile,
+  sanitizePatchName,
+} from "@/device/patch-store";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
@@ -89,6 +96,7 @@ export type SessionSnapshot =
       patchNames: (string | null)[];
       chain: AudioChain;
       chainSync: ChainSync;
+      canExportPatch: boolean;
       sync: SessionSync;
       linkMode: LinkMode;
     };
@@ -125,6 +133,7 @@ export class DeviceSession {
   private inboundLog: InboundMidiEvent[] = EMPTY_INBOUND;
   private inboundSeq = 0;
   private inboundCapture = false;
+  private currentPatchDump: Uint8Array | null = null;
   private readonly snapshotListeners = new Set<() => void>();
   private readonly logListeners = new Set<() => void>();
   private readonly identity = new IdentityDecoder();
@@ -218,6 +227,7 @@ export class DeviceSession {
     this.chainDump.reset();
     this.sysex.reset();
     this.clearControlWrites();
+    this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
       await this.bluetooth.open(endpoint.id);
@@ -229,6 +239,7 @@ export class DeviceSession {
         patchNames: emptyPatchNames(),
         chain: defaultChain(model),
         chainSync: "idle",
+        canExportPatch: false,
         sync: "syncing",
         linkMode: "bluetooth",
       };
@@ -242,6 +253,7 @@ export class DeviceSession {
         patchNames: emptyPatchNames(),
         chain: defaultChain(model),
         chainSync: "idle",
+        canExportPatch: false,
         sync: "syncing",
         linkMode: "usb",
       };
@@ -265,6 +277,7 @@ export class DeviceSession {
       this.identity.reset();
       this.chainDump.reset();
       this.sysex.reset();
+      this.dropPatchDump();
       this.dropping = false;
       this.emitSnapshot();
       this.emitLog();
@@ -296,6 +309,66 @@ export class DeviceSession {
       return;
     }
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
+  }
+
+  async savePatch(): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.storePatch(this.snapshot.patch, this.snapshot.patchNames[this.snapshot.patch] ?? "");
+  }
+
+  async renamePatch(name: string): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.storePatch(this.snapshot.patch, name);
+  }
+
+  async duplicatePatch(dest: number): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const slot = clampPatch(dest);
+    if (slot !== dest || slot === this.snapshot.patch) {
+      return;
+    }
+    await this.storePatch(slot, this.snapshot.patchNames[this.snapshot.patch] ?? "");
+  }
+
+  async downloadCurrentPatch(): Promise<{ filename: string; bytes: Uint8Array } | null> {
+    if (this.snapshot.status !== "connected") {
+      return null;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return null;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      return null;
+    }
+    const generation = this.syncGeneration;
+    this.clearControlWrites();
+    this.chainDump.reset();
+    this.beginChainRefresh();
+    await this.sendChainRequest(generation);
+    await this.waitFor(this.chainWaiters, CHAIN_TIMEOUT_MS[this.snapshot.linkMode], generation);
+    if (
+      !this.isCurrentGeneration(generation) ||
+      this.snapshot.status !== "connected" ||
+      !this.currentPatchDump
+    ) {
+      return null;
+    }
+    const name = this.snapshot.patchNames[this.snapshot.patch] ?? "";
+    return {
+      filename: currentPatchFilename(this.snapshot.model, this.snapshot.patch, name),
+      bytes: encodePatchFile({
+        model: this.snapshot.model,
+        slot: this.snapshot.patch,
+        name,
+        dump: this.currentPatchDump,
+      }),
+    };
   }
 
   async toggleChainSlot(id: ChainSlotId): Promise<void> {
@@ -616,15 +689,17 @@ export class DeviceSession {
     void this.sendChainRequest(this.syncGeneration);
   }
 
-  private applyChain(chain: AudioChain | null): void {
-    if (!chain || this.snapshot.status !== "connected") {
+  private applyChain(result: ChainDumpResult | null): void {
+    if (!result || this.snapshot.status !== "connected") {
       return;
     }
     this.clearChainRefreshTimer();
+    this.currentPatchDump = result.dump;
     this.snapshot = {
       ...this.snapshot,
-      chain: preserveExpEnabled(this.snapshot.chain, chain),
+      chain: preserveExpEnabled(this.snapshot.chain, result.chain),
       chainSync: "idle",
+      canExportPatch: true,
     };
     this.emitSnapshot();
     this.releaseWaiters(this.chainWaiters);
@@ -802,7 +877,8 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
-    this.snapshot = { ...this.snapshot, chainSync: "syncing" };
+    this.dropPatchDump();
+    this.snapshot = { ...this.snapshot, chainSync: "syncing", canExportPatch: false };
     this.emitSnapshot();
     this.armChainRefreshTimer();
   }
@@ -870,9 +946,41 @@ export class DeviceSession {
     this.syncGeneration += 1;
     this.clearChainRefreshTimer();
     this.clearControlWrites();
+    this.dropPatchDump();
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
     this.releaseWaiters(this.chainWaiters);
+  }
+
+  private dropPatchDump(): void {
+    this.currentPatchDump = null;
+  }
+
+  private async storePatch(dest: number, name: string): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      return;
+    }
+    const sanitized = sanitizePatchName(name);
+    if (!sanitized) {
+      return;
+    }
+    const packets = encodePatchStore(this.snapshot.linkMode, dest, sanitized);
+    if (!packets) {
+      return;
+    }
+    const patchNames = this.snapshot.patchNames.slice();
+    patchNames[dest] = sanitized;
+    this.snapshot = { ...this.snapshot, patchNames };
+    this.emitSnapshot();
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
   }
 
   private queueControlWrite(
