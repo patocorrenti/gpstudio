@@ -2,7 +2,7 @@
 
 Plan acordado para Patone, editor/controlador de pedales Valeton GP-5 y GP-50.
 
-El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off + modelo de fábrica y knobs de los diez efectos) se pide al conectar. El orden de módulos móviles, el modelo/knob del slot actual y guardar / renombrar / duplicar el patch actual también se escriben (SysEx Patone, path `01 01 04`, CRC-8 + nibble-expand; no un dump completo ni la ruta Editor). Descargar el patch actual a un archivo Patone (el dump que ya pedimos, no `.prst` de Suite) está en alcance. Import/reorder de librería, `.prst` de Valeton, IRs y NAM vienen después.
+El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off + modelo de fábrica y knobs de los diez efectos) se pide al conectar. El orden de módulos móviles, el modelo/knob del slot actual y guardar / renombrar / duplicar el patch actual también se escriben (SysEx Patone, path `01 01 04`, CRC-8 + nibble-expand; no un dump completo ni la ruta Editor). Descargar el patch actual a un `.prst` Valeton del pedal conectado (GP-50 → archivo GP-50, GP-5 → archivo GP-5; el dump que ya pedimos) está en alcance. Import de `.prst` en Library, conversión entre modelos, IRs y NAM vienen después.
 
 ## Stack
 
@@ -84,7 +84,7 @@ flowchart TB
 La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), traduce acciones a CC/SysEx, y el transporte solo envía/recibe bytes. Tres ejes, no mezclarlos:
 
 - **Modelo:** GP-5 vs GP-50 (perfiles / CCs / UI)
-- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off + modelo y knobs de los diez efectos) al conectar y al cambiar de patch; escritura SysEx Patone del orden, del modelo, de un control y del store del patch actual (Save / rename / duplicate; parameter-write `01 01 04`, no el notify live `01 02 04`); descarga local del dump del patch actual (archivo Patone, no `.prst`); Bluetooth aplica SysEx live de orden de cadena y de modelo/control (pedal→app); librería / IRs / NAM después
+- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off + modelo y knobs de los diez efectos) al conectar y al cambiar de patch; escritura SysEx Patone del orden, del modelo, de un control y del store del patch actual (Save / rename / duplicate; parameter-write `01 01 04`, no el notify live `01 02 04`); descarga local a `.prst` Valeton del modelo conectado (sin conversión cruzada); Bluetooth aplica SysEx live de orden de cadena y de modelo/control (pedal→app); librería / IRs / NAM después
 - **Link:** USB vs Bluetooth (cómo llega el paquete). No son intercambiables.
 
 USB es one-way y super fast para knobs y módulos: la app manda CC (patch y on/off de módulos); el pedal no telemetra esos controles. Sí puede responder dumps SysEx pedidos (y al cargar un patch). Eso no convierte USB en duplex de live controls.
@@ -174,7 +174,7 @@ Cambios previstos, en orden:
 
 Dominios de spec: `midi-transport`, `device-connection`, `live-controller`, `bluetooth-link`, `inbound-log`. El editor y la librería no se especifican hasta su change.
 
-El SysEx de librería/IRs está reverse-engineered en proyectos ajenos. **No pegar ese JavaScript en `src/`.** Sí se lee la copia en `reference/` para entender el sobre (CRC-8 + nibble-expand, path `01 01 04` vs notify `01 02 04`). El codec de identidad, el de cadena (orden + on/off + modelo y knobs de los diez efectos), los write SET de orden/modelo/control y el store SET del patch actual (`114a`) son de Patone. La descarga envuelve ese dump; no es `.prst` de Suite. Librería, IRs y NAM se documentan en el design del editor. Índice: `docs/protocol-references.md`.
+El SysEx de librería/IRs está reverse-engineered en proyectos ajenos. **No pegar ese JavaScript en `src/`.** Sí se lee la copia en `reference/` para entender el sobre (CRC-8 + nibble-expand, path `01 01 04` vs notify `01 02 04`). El codec de identidad, el de cadena (orden + on/off + modelo y knobs de los diez efectos), los write SET de orden/modelo/control y el store SET del patch actual (`114a`) son de Patone. La descarga arma un `.prst` Valeton del modelo conectado (header + CRC-8 ATM + dump); no se pega el builder de `reference/` ni se convierte entre GP-5 y GP-50. Import de librería sigue después. Índice: `docs/protocol-references.md`.
 
 ## Fase 1 — lo que se ve
 
@@ -191,7 +191,7 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 ## Fuera de alcance ahora
 
 - App mobile Tauri
-- Lectura/escritura de librería de presets, import, reorder de librería e intercambio `.prst` de Valeton Suite (guardar / renombrar / duplicar el patch actual y descargarlo a un archivo Patone sí están en alcance; no es la ruta Library ni un dump completo)
+- Lectura/escritura de librería de presets, import de `.prst`, reorder de librería (guardar / renombrar / duplicar el patch actual y exportar el `.prst` del modelo conectado sí están en alcance; no es la ruta Library, ni conversión entre GP-5 y GP-50, ni un dump completo)
 - Upload de IR / SnapTone / NAM
 - Aplicar inbound de volumen, tuner u otros CCs que no sean on/off de módulos al snapshot mientras el patch no cambia. Bluetooth live-module / Stomp footswitch, live chain-order y live modelo/control de los diez efectos sí está en alcance. USB no aplica parámetros live.
 - Control o display de modo Patch/Stomp (CC 28)
@@ -219,5 +219,6 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `stomp-footswitch-chain`: footswitch Stomp sigue on/off en Bluetooth (`liveFromPedal`); USB ignora esos reportes
 - [x] Change `chain-reorder`: drag-and-drop de módulos móviles (NR, PRE, MOD, DLY, RVB); write SET `01 01 04` + CRC-8 (USB y Bluetooth); Bluetooth aplica inbound live chain-order `01 02 04`; USB ignora esos reportes
 - [x] Change `chain-slot-controls`: catálogo de fábrica, dump de modelo + knobs de los diez efectos, paneles en Controller, SET `1147`/`1148`
-- [x] Change `patch-save`: Save / rename / duplicate del patch actual (SET `114a`) y descarga del dump a un archivo Patone (USB y Bluetooth)
+- [x] Change `patch-save`: Save / rename / duplicate del patch actual (SET `114a`) y descarga del dump (USB y Bluetooth)
+- [ ] Change `prst-download`: esa descarga escribe un `.prst` Valeton del pedal conectado (GP-50 → GP-50, GP-5 → GP-5; sin conversión cruzada)
 - [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`

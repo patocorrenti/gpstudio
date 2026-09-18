@@ -51,7 +51,7 @@ import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import {
   currentPatchFilename,
-  encodePatchFile,
+  encodePrstFile,
   sanitizePatchName,
 } from "@/device/patch-store";
 import { createMidiTransport } from "@/midi/detect";
@@ -360,14 +360,17 @@ export class DeviceSession {
       return null;
     }
     const name = this.snapshot.patchNames[this.snapshot.patch] ?? "";
+    const bytes = encodePrstFile({
+      model: this.snapshot.model,
+      name,
+      dump: this.currentPatchDump,
+    });
+    if (!bytes) {
+      return null;
+    }
     return {
       filename: currentPatchFilename(this.snapshot.model, this.snapshot.patch, name),
-      bytes: encodePatchFile({
-        model: this.snapshot.model,
-        slot: this.snapshot.patch,
-        name,
-        dump: this.currentPatchDump,
-      }),
+      bytes,
     };
   }
 

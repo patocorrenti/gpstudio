@@ -13,7 +13,7 @@ context: |
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
   current-patch store SETs of that family (114a: Save / rename / duplicate
   onto another slot), current-patch file export of the dump we already request
-  (Patone-owned wrapper, not Valeton Suite .prst),
+  (Valeton .prst for the connected model; not Library import, not cross-model conversion),
   Bluetooth live model (command 07) and live control (command 08) follow,
   and Controller drag-and-drop of movable modules are
   in scope on USB and Bluetooth. Library SysEx (browse / import / reorder),
@@ -131,9 +131,9 @@ context: |
 
   Out of scope until a dedicated change:
   - Mobile Tauri app
-  - Full preset library read/write, import, library reorder, Valeton .prst
-    interchange (current-patch store / rename / duplicate / Patone file export
-    are in scope; not the Library route)
+  - Full preset library read/write, import, library reorder, Library .prst
+    import (current-patch store / rename / duplicate / connected-model .prst
+    export are in scope; not the Library route and not GP-5/GP-50 conversion)
   - IR / SnapTone / NAM upload
   - Applying liveFromPedal inbound volume/tuner to the snapshot
     while the patch stays the same (Bluetooth live-module SysEx, Stomp
@@ -169,7 +169,8 @@ context: |
     decode, Bluetooth live model/control decode, the order-only SET, model/control SETs,
     and current-patch store SET 114a)
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
-    Current-patch download wraps the assembled dump; do not copy Suite .prst.
+    Current-patch download encodes a Valeton .prst for the connected model
+    from that dump; do not paste reference/ builders or convert across models.
   - Patch recall uses MIDI CC published in the official manuals.
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
@@ -201,10 +202,11 @@ rules:
     - Keep proposals focused on one planned change from docs/architecture.md
     - Always include a Non-goals section
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
-    - Do not propose copied SysEx, Library browse/import/reorder, Valeton .prst,
-      IRs, or mobile packaging in phase 1 changes
+    - Do not propose copied SysEx, Library browse/import/reorder, Library .prst
+      import, IRs, or mobile packaging in phase 1 changes
     - Current-patch store SET of the existing parameter-write family and
-      current-patch file export are allowed; they are not the Library route
+      current-patch .prst export for the connected model are allowed; they are
+      not the Library route and not cross-model conversion
     - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
     - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
       refactor, Purpose/typo in specs), do not scaffold a change; say it is
@@ -234,7 +236,8 @@ rules:
       reference/ for SysEx (do not paste it into src/); Patch/Stomp
       control is later; do not apply liveFromPedal volume/tuner
       to the snapshot while the patch stays the same; Library import/reorder
-      and Valeton .prst stay later
+      of .prst stay later (current-patch .prst export of the connected model
+      is in scope; no GP-5/GP-50 conversion)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - NS on bypasses AMP/CAB visually (prohibition overlay); do not rewrite
