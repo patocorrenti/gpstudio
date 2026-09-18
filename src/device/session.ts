@@ -10,7 +10,7 @@ import {
   type AudioChain,
   type ChainSlotId,
 } from "@/device/chain";
-import { ChainDecoder, decodeLiveExp, decodeLiveModule } from "@/device/chain-codec";
+import { ChainDecoder, decodeLiveOnOffChanges } from "@/device/chain-codec";
 import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
@@ -375,12 +375,12 @@ export class DeviceSession {
       return;
     }
     for (const message of this.sysex.push(bytes)) {
-      this.applyIdentity(this.identity.push(message));
-      if (this.snapshot.status === "connected") {
-        this.applyChain(this.chainDump.push(message, this.snapshot.model));
+      const liveOnOff = this.applyLiveModule(message);
+      if (!liveOnOff && this.snapshot.status === "connected") {
+        this.applyIdentity(this.identity.push(message));
       }
       if (this.snapshot.status === "connected") {
-        this.applyLiveModule(message);
+        this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
       if (!this.inboundCapture) {
         continue;
@@ -450,35 +450,36 @@ export class DeviceSession {
     this.releaseWaiters(this.chainWaiters);
   }
 
-  private applyLiveModule(message: Uint8Array): void {
+  private applyLiveModule(message: Uint8Array): boolean {
     if (this.snapshot.status !== "connected") {
-      return;
+      return false;
+    }
+    const fromCc = this.decodeLiveOnOffCc(message);
+    const reports = fromCc ? [fromCc] : decodeLiveOnOffChanges(message);
+    if (reports.length === 0) {
+      return false;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return;
+      return true;
     }
-    const expEnabled = decodeLiveExp(message);
-    if (expEnabled !== null) {
-      this.setChainSlotEnabled("exp", expEnabled);
-      return;
+    for (const report of reports) {
+      this.setChainSlotEnabled(report.id, report.enabled);
     }
-    const fromSysex = decodeLiveModule(message);
-    if (fromSysex) {
-      this.setChainSlotEnabled(fromSysex.id, fromSysex.enabled);
-      return;
-    }
+    return true;
+  }
+
+  private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
     if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
-      return;
+      return null;
     }
     if (message[1] === gp50Cc.expOnOff) {
-      this.setChainSlotEnabled("exp", moduleEnabledFromCc(message[2]));
-      return;
+      return { id: "exp", enabled: moduleEnabledFromCc(message[2]) };
     }
     const id = effectIdForModuleCc(message[1]);
     if (!id) {
-      return;
+      return null;
     }
-    this.setChainSlotEnabled(id, moduleEnabledFromCc(message[2]));
+    return { id, enabled: moduleEnabledFromCc(message[2]) };
   }
 
   private setChainSlotEnabled(id: ChainSlotId, enabled: boolean): void {

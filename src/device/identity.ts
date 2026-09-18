@@ -1,3 +1,5 @@
+import { decodeLiveOnOffChanges } from "@/device/chain-codec";
+
 export const PATCH_COUNT = 100;
 
 export type IdentityRequestKind = "name-list" | "current-patch";
@@ -131,6 +133,12 @@ export class IdentityDecoder {
   push(bytes: Uint8Array): IdentityEvent | null {
     const midi = midiPayload(bytes);
     if (midi.length < 8 || midi[0] !== 0xf0) {
+      return null;
+    }
+
+    // Live-module (09), EXP (02), and Stomp mask (0E) share the identity-family
+    // header. They are chain on/off, never a pedal-initiated patch change.
+    if (decodeLiveOnOffChanges(midi).length > 0) {
       return null;
     }
 
