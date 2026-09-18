@@ -21,7 +21,7 @@ export function formatPatchOption(patch: number, name: string | null): string {
   if (!name) {
     return id;
   }
-  return `${id} - ${name}`;
+  return `${id} | ${name}`;
 }
 
 /**

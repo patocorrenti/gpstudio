@@ -64,15 +64,16 @@ function PatchBar({
   const currentName = patchNames[patch];
 
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex items-center justify-center gap-1">
       <Button
         type="button"
         variant="ghost"
         size="icon-lg"
         aria-label="Previous patch"
+        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(-1)}
       >
-        <ChevronLeft />
+        <ChevronLeft className="size-6" />
       </Button>
       <Select
         value={String(patch)}
@@ -83,13 +84,13 @@ function PatchBar({
         <SelectTrigger
           aria-label="Select patch"
           size="default"
-          className="h-auto min-w-40 justify-center py-2.5 text-2xl font-semibold tabular-nums"
+          className="h-12 min-h-12 w-72 min-w-72 justify-center border-transparent bg-muted py-0 text-xl font-semibold tabular-nums data-[size=default]:h-12 dark:border-transparent dark:bg-muted/40 dark:hover:bg-muted/50"
         >
           <SelectValue>
             {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72 min-w-40">
+        <SelectContent position="popper" className="max-h-72 min-w-72">
           {patchOptions.map((option) => (
             <SelectItem
               key={option}
@@ -106,9 +107,10 @@ function PatchBar({
         variant="ghost"
         size="icon-lg"
         aria-label="Next patch"
+        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(1)}
       >
-        <ChevronRight />
+        <ChevronRight className="size-6" />
       </Button>
     </div>
   );
@@ -236,7 +238,7 @@ function PatchBody({
   busy: boolean;
 }) {
   return (
-    <div className="relative mt-10 flex min-h-40 w-full flex-1 flex-col items-center">
+    <div className="relative mt-4 flex min-h-40 w-full flex-1 flex-col items-center">
       <div
         className={cn("flex w-full justify-center", busy && "invisible")}
         aria-hidden={busy}
