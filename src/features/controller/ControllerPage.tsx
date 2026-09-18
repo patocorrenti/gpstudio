@@ -4,6 +4,7 @@ import iconCab from "@/assets/img/icon-CAB.png";
 import iconDly from "@/assets/img/icon-DLY.png";
 import iconDst from "@/assets/img/icon-DST.png";
 import iconEq from "@/assets/img/icon-EQ.png";
+import iconExp from "@/assets/img/icon-EXP.png";
 import iconMod from "@/assets/img/icon-MOD.png";
 import iconNr from "@/assets/img/icon-NR.png";
 import iconNs from "@/assets/img/icon-NS.png";
@@ -38,7 +39,7 @@ import { cn } from "@/lib/utils";
 /** Distance from the top of each slot to the cable. py-3 + half of size-14 + 1px. */
 const CHAIN_CABLE_TOP = "calc(2.5rem + 1px)";
 
-const CHAIN_SLOT_ICONS: Partial<Record<ChainSlotId, string>> = {
+const CHAIN_SLOT_ICONS: Record<ChainSlotId, string> = {
   nr: iconNr,
   pre: iconPre,
   dst: iconDst,
@@ -49,6 +50,7 @@ const CHAIN_SLOT_ICONS: Partial<Record<ChainSlotId, string>> = {
   mod: iconMod,
   dly: iconDly,
   rvb: iconRvb,
+  exp: iconExp,
 };
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
