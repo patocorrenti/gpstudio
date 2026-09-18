@@ -19,6 +19,10 @@ export type ChainSlotId = EffectId | "exp";
 export type AudioChainSlot = {
   id: ChainSlotId;
   enabled: boolean;
+  /** Factory catalog id. Absent on EXP and when the dump did not identify the model. */
+  modelId?: string;
+  /** Control values keyed by dump index. Absent when the model is unknown. */
+  values?: number[];
 };
 
 export type AudioChain = AudioChainSlot[];
@@ -83,7 +87,7 @@ function fixedBlockIntact(chain: AudioChain): boolean {
  * Move one movable effect among the ten effect slots.
  * Invalid moves (fixed/EXP/same index/out of range, or a split of the
  * DST–NS–AMP–CAB–EQ block) return the same array.
- * EXP stays last on GP-50. Each slot keeps its `enabled`.
+ * EXP stays last on GP-50. Each slot keeps its `enabled`, `modelId`, and `values`.
  */
 export function reorderChain(
   chain: AudioChain,
@@ -106,7 +110,7 @@ export function reorderChain(
   }
   const next = chain.slice();
   const [moved] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, moved);
+  next.splice(toIndex, 0, { ...moved });
   if (!fixedBlockIntact(next)) {
     return chain;
   }
@@ -123,10 +127,15 @@ export function chainSlotBypassed(chain: AudioChain, id: ChainSlotId): boolean {
   return chain.some((slot) => slot.id === "ns" && slot.enabled);
 }
 
+/** Unknown models/values until a current-preset dump fills them. EXP never gets those fields. */
 export function defaultChain(model: DeviceModel): AudioChain {
   const slots: AudioChain = EFFECT_IDS.map((id) => ({ id, enabled: false }));
   if (model === "gp50") {
     slots.push({ id: "exp", enabled: false });
   }
   return slots;
+}
+
+export function isEffectSlot(id: ChainSlotId): id is EffectId {
+  return id !== "exp";
 }

@@ -1,3 +1,9 @@
+import {
+  KIND_VALUE_COUNT,
+  modelByWire,
+  snapModelValues,
+  type WireIdentity,
+} from "@/device/catalog";
 import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
 import { EFFECT_IDS } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
@@ -42,6 +48,9 @@ const CHAIN_ORDER_SIZE = 0x0c;
 const CHAIN_ORDER_COMMAND = 0x04;
 /** Packed SET header: size `0x0C`, path `01 01 04`, command `04`. */
 const CHAIN_ORDER_SET_PREFIX = [0x01, 0x00, 0x0c, 0x11, 0x44] as const;
+/** Packed SET header: size `0x0E`, path `01 01 04`, family `1147` (model) / `1148` (control). */
+const MODEL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x47] as const;
+const CONTROL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x48] as const;
 
 export function dumpOrderIndices(chain: AudioChain): number[] | null {
   const effects = chain.filter((slot) => slot.id !== "exp");
@@ -83,6 +92,74 @@ export function encodeChainOrderSysex(chain: AudioChain): Uint8Array | null {
   midi.set(body, 1);
   midi[midi.length - 1] = 0xf7;
   return midi;
+}
+
+function framePackedSet(packed: Uint8Array): Uint8Array {
+  const framed = Uint8Array.from([crc8Atm(packed), ...packed]);
+  const body = nibbleExpand(framed);
+  const midi = new Uint8Array(2 + body.length);
+  midi[0] = 0xf0;
+  midi.set(body, 1);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
+function float32Le(value: number): Uint8Array {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setFloat32(0, value, true);
+  return bytes;
+}
+
+/**
+ * App→pedal model write SET (family `1147`). Packed kind index + 4-byte wire identity.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is encodeLinkMidiPackets.
+ */
+export function encodeSlotModelSysex(kind: EffectId, wire: WireIdentity): Uint8Array | null {
+  const block = DUMP_MODULE_IDS.indexOf(kind);
+  if (block < 0) {
+    return null;
+  }
+  const packed = Uint8Array.from([
+    ...MODEL_WRITE_SET_PREFIX,
+    block,
+    0x00,
+    0x00,
+    0x00,
+    block,
+    0x00,
+    0x00,
+    0x00,
+    ...wire,
+  ]);
+  return framePackedSet(packed);
+}
+
+/**
+ * App→pedal control write SET (family `1148`). Packed kind index + control index + float32 LE.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is encodeLinkMidiPackets.
+ */
+export function encodeSlotControlSysex(
+  kind: EffectId,
+  index: number,
+  value: number,
+): Uint8Array | null {
+  const block = DUMP_MODULE_IDS.indexOf(kind);
+  if (block < 0 || index < 0 || index > 255 || !Number.isFinite(value)) {
+    return null;
+  }
+  const packed = Uint8Array.from([
+    ...CONTROL_WRITE_SET_PREFIX,
+    block,
+    0x00,
+    0x00,
+    0x00,
+    index,
+    0x00,
+    0x00,
+    0x00,
+    ...float32Le(value),
+  ]);
+  return framePackedSet(packed);
 }
 
 function parseNibbleOrder(bytes: Uint8Array, start: number): EffectId[] | null {
@@ -155,7 +232,37 @@ type EnableBit = readonly [offset: number, bit: number];
 type PresetLayout = {
   enable: Record<EffectId, EnableBit>;
   orderAt: number;
+  identityAt: Record<EffectId, number>;
+  valuesAt: Record<EffectId, number>;
 };
+
+const GP50_IDENTITY_AT: Record<EffectId, number> = {
+  nr: 270,
+  pre: 278,
+  dst: 286,
+  amp: 294,
+  cab: 302,
+  eq: 310,
+  mod: 318,
+  dly: 326,
+  rvb: 334,
+  ns: 342,
+};
+
+const GP50_VALUES_AT: Record<EffectId, number> = {
+  nr: 358,
+  pre: 422,
+  dst: 486,
+  amp: 550,
+  cab: 614,
+  eq: 678,
+  mod: 742,
+  dly: 806,
+  rvb: 870,
+  ns: 934,
+};
+
+const GP5_DUMP_SHIFT = 86;
 
 const GP50_LAYOUT: PresetLayout = {
   enable: {
@@ -171,6 +278,8 @@ const GP50_LAYOUT: PresetLayout = {
     ns: [229, 1],
   },
   orderAt: 243,
+  identityAt: GP50_IDENTITY_AT,
+  valuesAt: GP50_VALUES_AT,
 };
 
 const GP5_LAYOUT: PresetLayout = {
@@ -187,6 +296,30 @@ const GP5_LAYOUT: PresetLayout = {
     ns: [143, 1],
   },
   orderAt: 157,
+  identityAt: {
+    nr: GP50_IDENTITY_AT.nr - GP5_DUMP_SHIFT,
+    pre: GP50_IDENTITY_AT.pre - GP5_DUMP_SHIFT,
+    dst: GP50_IDENTITY_AT.dst - GP5_DUMP_SHIFT,
+    amp: GP50_IDENTITY_AT.amp - GP5_DUMP_SHIFT,
+    cab: GP50_IDENTITY_AT.cab - GP5_DUMP_SHIFT,
+    eq: GP50_IDENTITY_AT.eq - GP5_DUMP_SHIFT,
+    mod: GP50_IDENTITY_AT.mod - GP5_DUMP_SHIFT,
+    dly: GP50_IDENTITY_AT.dly - GP5_DUMP_SHIFT,
+    rvb: GP50_IDENTITY_AT.rvb - GP5_DUMP_SHIFT,
+    ns: GP50_IDENTITY_AT.ns - GP5_DUMP_SHIFT,
+  },
+  valuesAt: {
+    nr: GP50_VALUES_AT.nr - GP5_DUMP_SHIFT,
+    pre: GP50_VALUES_AT.pre - GP5_DUMP_SHIFT,
+    dst: GP50_VALUES_AT.dst - GP5_DUMP_SHIFT,
+    amp: GP50_VALUES_AT.amp - GP5_DUMP_SHIFT,
+    cab: GP50_VALUES_AT.cab - GP5_DUMP_SHIFT,
+    eq: GP50_VALUES_AT.eq - GP5_DUMP_SHIFT,
+    mod: GP50_VALUES_AT.mod - GP5_DUMP_SHIFT,
+    dly: GP50_VALUES_AT.dly - GP5_DUMP_SHIFT,
+    rvb: GP50_VALUES_AT.rvb - GP5_DUMP_SHIFT,
+    ns: GP50_VALUES_AT.ns - GP5_DUMP_SHIFT,
+  },
 };
 
 type DumpClass = "gp5" | "gp50";
@@ -462,7 +595,66 @@ function bitOn(data: Uint8Array, offset: number, bit: number): boolean {
   return (data[offset] & (1 << bit)) !== 0;
 }
 
-function parsePresetDump(data: Uint8Array, layout: PresetLayout, model: DeviceModel): AudioChain | null {
+function readWireIdentity(data: Uint8Array, start: number): WireIdentity | null {
+  if (start + 7 >= data.length) {
+    return null;
+  }
+  const bytes: [number, number, number, number] = [0, 0, 0, 0];
+  for (let index = 0; index < 4; index += 1) {
+    const high = data[start + index * 2];
+    const low = data[start + index * 2 + 1];
+    if (high > 0x0f || low > 0x0f) {
+      return null;
+    }
+    bytes[index] = ((high & 0x0f) << 4) | (low & 0x0f);
+  }
+  return bytes;
+}
+
+function readFloat32Le(data: Uint8Array, start: number): number | null {
+  if (start + 7 >= data.length) {
+    return null;
+  }
+  const packed = new Uint8Array(4);
+  for (let index = 0; index < 4; index += 1) {
+    const high = data[start + index * 2];
+    const low = data[start + index * 2 + 1];
+    packed[index] = (high << 4) | (low & 0x0f);
+  }
+  const value = new DataView(packed.buffer).getFloat32(0, true);
+  return Number.isFinite(value) ? value : null;
+}
+
+function decodeSlotModel(
+  data: Uint8Array,
+  layout: PresetLayout,
+  id: EffectId,
+): Pick<AudioChainSlot, "modelId" | "values"> {
+  const wire = readWireIdentity(data, layout.identityAt[id]);
+  if (!wire) {
+    return {};
+  }
+  const model = modelByWire(id, wire);
+  if (!model) {
+    return {};
+  }
+  const count = KIND_VALUE_COUNT[id];
+  const raw: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const value = readFloat32Le(data, layout.valuesAt[id] + index * 8);
+    if (value === null) {
+      return {};
+    }
+    raw.push(value);
+  }
+  return { modelId: model.id, values: snapModelValues(model, raw) };
+}
+
+function parsePresetDump(
+  data: Uint8Array,
+  layout: PresetLayout,
+  model: DeviceModel,
+): AudioChain | null {
   const lastOrder = layout.orderAt + 18;
   if (data.length <= lastOrder) {
     return null;
@@ -488,7 +680,7 @@ function parsePresetDump(data: Uint8Array, layout: PresetLayout, model: DeviceMo
 
   const slots: AudioChainSlot[] = order.map((id) => {
     const [offset, bit] = layout.enable[id];
-    return { id, enabled: bitOn(data, offset, bit) };
+    return { id, enabled: bitOn(data, offset, bit), ...decodeSlotModel(data, layout, id) };
   });
 
   if (model === "gp50") {
@@ -497,6 +689,47 @@ function parsePresetDump(data: Uint8Array, layout: PresetLayout, model: DeviceMo
 
   return slots;
 }
+
+/** Merged current-preset payload (same bytes ChainDecoder concatenates). */
+export function decodePresetDump(
+  data: Uint8Array,
+  dumpClass: DumpClass,
+  model: DeviceModel,
+): AudioChain | null {
+  return parsePresetDump(data, dumpClass === "gp50" ? GP50_LAYOUT : GP5_LAYOUT, model);
+}
+
+function writeNibbleBytes(data: Uint8Array, start: number, packed: Uint8Array): void {
+  for (let index = 0; index < packed.length; index += 1) {
+    data[start + index * 2] = (packed[index] >> 4) & 0x0f;
+    data[start + index * 2 + 1] = packed[index] & 0x0f;
+  }
+}
+
+function assertPresetDumpFixtures(): void {
+  const tweedy = new Uint8Array(980);
+  for (let slot = 0; slot < DUMP_MODULE_IDS.length; slot += 1) {
+    tweedy[GP50_LAYOUT.orderAt + slot * 2] = slot;
+  }
+  tweedy[227] = 1 << 3;
+  writeNibbleBytes(tweedy, GP50_IDENTITY_AT.amp, Uint8Array.from([0x01, 0x00, 0x00, 0x07]));
+  writeNibbleBytes(tweedy, GP50_VALUES_AT.amp, float32Le(30));
+  const loaded = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
+  const amp = loaded?.find((slot) => slot.id === "amp");
+  if (amp?.modelId !== "amp-tweedy" || amp.values?.[0] !== 30) {
+    throw new Error("GP-50 Tweedy dump fixture did not fill AMP Gain 30");
+  }
+
+  const unknown = new Uint8Array(tweedy);
+  writeNibbleBytes(unknown, GP50_IDENTITY_AT.amp, Uint8Array.from([0x99, 0x00, 0x00, 0x07]));
+  const skipped = parsePresetDump(unknown, GP50_LAYOUT, "gp50");
+  const unknownAmp = skipped?.find((slot) => slot.id === "amp");
+  if (unknownAmp?.modelId !== undefined || unknownAmp?.values !== undefined) {
+    throw new Error("Unknown AMP identity must stay unwritable");
+  }
+}
+
+assertPresetDumpFixtures();
 
 export class ChainDecoder {
   private fragments = new Map<number, Uint8Array>();

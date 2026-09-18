@@ -23,9 +23,10 @@ Useful observations (not a protocol spec):
 - **Two families:** identity / live notify uses path `01 02 04` (checksum unknown). Parameter **SET** uses path `01 01 04`, CRC-8 ATM (poly `0x07`, init 0) of the packed body, then nibble-expand each hex digit to a `0x0n` MIDI byte (`src/device/sysex-nibble.ts`). Echoing a live notify is not a SET.
 - Pedal chain-order **notify** (Patone Log, Bluetooth): size `0x0C` / command `0x04` / path `01 02 04`, 34 bytes, nibble-expanded `DUMP_MODULE_IDS` indices. Patone applies it on Bluetooth (`liveFromPedal`). USB does not emit it and must not apply it.
 - Pedal chain-order **SET** (accepted operator log, Bluetooth, PRE before NR): same 10-slot payload, path `01 01 04`, CRC `08 07` for that order. Packed body `01 00 0C 11 44` + ten dump indices. W1 (host `01 02 04`) and W2 (notify echo, checksum `00 00`) were ignored. Notebook: `openspec/changes/chain-reorder/spike-chain-order-write.md`.
+- Current-preset **model + control** fields live in that same dump (wire identity + float32 LE per kind). App→pedal model write is packed family `1147`; control write is `1148`. Same CRC-8 + nibble-expand SET path `01 01 04`. Do **not** copy `reference/` JavaScript; match captures.
 
 Movable chain modules: NR, PRE, MOD, DLY, RVB. DST, NS, AMP, CAB, EQ stay a contiguous block.
 
-Patone’s in-scope subset is current patch index, onboard names, the current preset’s audio chain (module order + on/off), Bluetooth live chain-order follow, and the order-only SET. Full preset parameters, IRs, and NAM stay out.
+Patone’s in-scope subset is current patch index, onboard names, the current preset’s audio chain (module order + on/off + factory model and control values for the ten effect slots), Bluetooth live chain-order follow, the order-only SET, and model/control SETs of the same parameter-write family (`1147` / `1148`). Library, IRs, NAM, the Editor route, and live knob follow stay out.
 
 Stomp **assignment** (which modules each footswitch toggles) is a paused lab, not product: decode from the current-preset dump is locked for GP-50; SET candidates were ignored. Same CRC + nibble family as chain-order SET (`sendCTL` in the reference editor); H7 used the wrong size/command/body. Resume notes: `openspec/changes/stomp-assignment/spike-assignment-write.md`.

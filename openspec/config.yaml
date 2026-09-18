@@ -5,13 +5,15 @@ schema: spec-driven
 context: |
   Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
-  (current patch index + onboard names, plus current-patch chain order + on/off)
+  (current patch index + onboard names, plus current-patch chain order + on/off +
+  factory model and control values for the ten effect slots)
   is requested after connect and when the patch changes.
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
-  live notify 01 02 04) and Controller drag-and-drop of movable modules are
-  in scope on USB and Bluetooth. Full SysEx preset editor (parameters),
-  library, and IRs/NAM come in later phases.
+  live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
+  and Controller drag-and-drop of movable modules are
+  in scope on USB and Bluetooth. Library SysEx, IRs/NAM, the Editor route, and
+  live knob follow come in later phases.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -23,7 +25,8 @@ context: |
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
     GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
-    (CC 0, module CC 48–57, identity, chain dump, or chain-order SET wrapped as BLE-MIDI). Still a separate backend — not another
+    (CC 0, module CC 48–57, identity, chain dump, chain-order SET, or slot
+    model/control SET wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:
@@ -56,12 +59,12 @@ context: |
     over GATT is in scope (DeviceSession encodes; BluetoothLink.send writes bytes).
     Bluetooth inbound Log is in scope (same Log page, capture only while visible).
     Applying inbound patch identity (index + names) and current-patch chain
-    (order + on/off) to the snapshot is in scope.
+    (order + on/off + factory model and control values) to the snapshot is in scope.
     Applying inbound live-module SysEx (identity-family command 09) and
     Stomp-mode footswitch module on/off (same liveFromPedal class) to the
     snapshot is in scope on Bluetooth. Applying inbound live chain-order
     SysEx is in scope on Bluetooth. USB must not apply those reports.
-    Sending a chain-order SET and Controller drag are in scope.
+    Sending a chain-order SET, slot model/control SETs, and Controller drag are in scope.
     Read reference/ for SysEx shape; do not paste that JavaScript into src/.
     Applying inbound volume, tuner, Patch/Stomp mode, or other live knobs
     while the patch stays the same is not.
@@ -105,6 +108,9 @@ context: |
     Bluetooth follows pedal chain-order reports; USB ignores them.
     When NS is on, AMP and CAB are marked
     bypassed (prohibition overlay) without rewriting their enabled state.
+    Enabled effect slots with a known model show a control panel below the chain
+    (model select when that kind has more than one factory model; sliders/toggles
+    from the catalog). EXP has no model panel.
     Volume and tuner later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
@@ -112,11 +118,13 @@ context: |
 
   Out of scope until a dedicated change:
   - Mobile Tauri app
-  - Full preset parameter read/write, rename, library reorder
+  - Full preset library read/write, rename, library reorder
   - IR / SnapTone / NAM upload
   - Applying liveFromPedal inbound volume/tuner/other knobs to the snapshot
     while the patch stays the same (Bluetooth live-module SysEx, Stomp
-    footswitch chain on/off, and live chain-order are in scope)
+    footswitch chain on/off, and live chain-order are in scope; those reports
+    keep last-known model/values. Current-patch model + control read/write
+    for the ten effect slots is in scope)
   - GP-50 Patch/Stomp mode control or display
   - Volume, tuner over Bluetooth
   - Applying USB inbound live-module, Stomp footswitch, or live chain-order
@@ -142,7 +150,8 @@ context: |
   Hard constraints:
   - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
   - Patch identity SysEx (current index + names) and current-patch chain SysEx
-    (order + on/off, Bluetooth live chain-order decode, and the order-only SET)
+    (order + on/off + factory model/control decode, Bluetooth live chain-order
+    decode, the order-only SET, and model/control SETs)
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
   - Patch recall uses MIDI CC published in the official manuals.
   - Full editor SysEx is documented in its own design.md when that change starts.
@@ -195,9 +204,10 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off) is in scope; Bluetooth inbound
+      current-patch chain (order + on/off + factory model and control values) is in scope; Bluetooth inbound
       live-module SysEx, Stomp-originated chain on/off, and live chain-order
-      are in scope; USB must not apply those reports; chain-order SET writes and
+      are in scope; USB must not apply those reports; chain-order SET writes,
+      slot model/control SETs, and
       Controller drag-and-drop of movable modules are in scope; read
       reference/ for SysEx (do not paste it into src/); Patch/Stomp
       control is later; do not apply liveFromPedal volume/tuner/other knobs

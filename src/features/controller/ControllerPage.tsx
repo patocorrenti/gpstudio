@@ -32,17 +32,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+  modelById,
+  modelsForKind,
+  type FxControl,
+} from "@/device/catalog";
+import type { DeviceModel } from "@/device/models";
 import {
   chainSlotBypassed,
   chainSlotLabel,
   formatPatch,
   formatPatchOption,
+  isEffectSlot,
   isMovableEffect,
   PATCH_COUNT,
   type AudioChain,
   type AudioChainSlot,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/session";
 import {
   useDeviceSession,
@@ -309,11 +318,190 @@ function AudioChainRow({
   );
 }
 
+function formatControlValue(control: FxControl, value: number): string {
+  if (control.display === "toggle") {
+    return value >= 1 ? "On" : "Off";
+  }
+  if (control.step < 1) {
+    return value.toFixed(1);
+  }
+  return String(Math.round(value));
+}
+
+function SlotControl({
+  kind,
+  control,
+  value,
+  disabled,
+}: {
+  kind: EffectId;
+  control: FxControl;
+  value: number;
+  disabled: boolean;
+}) {
+  const session = useDeviceSession();
+  const label = `${chainSlotLabel(kind)} ${control.label}`;
+
+  if (control.display === "toggle") {
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm">{control.label}</span>
+        <Switch
+          size="sm"
+          checked={value >= 1}
+          disabled={disabled}
+          aria-label={`${label} ${value >= 1 ? "on" : "off"}`}
+          onCheckedChange={(checked) => {
+            void session.setSlotControl(kind, control.index, checked ? 1 : 0);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span>{control.label}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {formatControlValue(control, value)}
+        </span>
+      </div>
+      <Slider
+        min={control.min}
+        max={control.max}
+        step={control.step}
+        value={[value]}
+        disabled={disabled}
+        aria-label={label}
+        onValueChange={(next) => {
+          const nextValue = next[0];
+          if (nextValue === undefined) {
+            return;
+          }
+          void session.setSlotControl(kind, control.index, nextValue);
+        }}
+      />
+    </div>
+  );
+}
+
+function SlotControlPanel({
+  slot,
+  pedal,
+  disabled,
+}: {
+  slot: AudioChainSlot & { id: EffectId; modelId: string; values: number[] };
+  pedal: DeviceModel;
+  disabled: boolean;
+}) {
+  const session = useDeviceSession();
+  const model = modelById(slot.modelId);
+  if (!model) {
+    return null;
+  }
+  const options = modelsForKind(slot.id, pedal);
+  const kindLabel = chainSlotLabel(slot.id);
+
+  return (
+    <section
+      className="flex w-full max-w-xl flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
+      aria-label={`${kindLabel} controls`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold tracking-wide">{kindLabel}</h2>
+        {options.length > 1 ? (
+          <Select
+            value={model.id}
+            disabled={disabled}
+            onValueChange={(value) => {
+              void session.setSlotModel(slot.id, value);
+            }}
+          >
+            <SelectTrigger
+              aria-label={`${kindLabel} model`}
+              size="sm"
+              className="min-w-40"
+            >
+              <SelectValue>{model.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {options.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-sm text-muted-foreground">{model.label}</p>
+        )}
+      </div>
+      <div className="flex flex-col gap-3">
+        {model.controls.map((control) => (
+          <SlotControl
+            key={control.index}
+            kind={slot.id}
+            control={control}
+            value={slot.values[control.index] ?? control.default}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SlotControlPanels({
+  chain,
+  pedal,
+  disabled,
+}: {
+  chain: AudioChain;
+  pedal: DeviceModel;
+  disabled: boolean;
+}) {
+  const panels = chain.flatMap((slot) => {
+    if (!isEffectSlot(slot.id) || !slot.enabled) {
+      return [];
+    }
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return [];
+    }
+    return [
+      {
+        ...slot,
+        id: slot.id,
+        modelId: slot.modelId,
+        values: slot.values,
+      },
+    ];
+  });
+  if (panels.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 flex w-full flex-col items-center gap-3 px-2 pb-6">
+      {panels.map((slot) => (
+        <SlotControlPanel
+          key={slot.id}
+          slot={slot}
+          pedal={pedal}
+          disabled={disabled}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PatchBody({
   chain,
+  pedal,
   busy,
 }: {
   chain: AudioChain;
+  pedal: DeviceModel;
   busy: boolean;
 }) {
   return (
@@ -323,6 +511,7 @@ function PatchBody({
         aria-hidden={busy}
       >
         <AudioChainRow chain={chain} disabled={busy} />
+        <SlotControlPanels chain={chain} pedal={pedal} disabled={busy} />
       </div>
       {busy ? (
         <div
@@ -359,6 +548,7 @@ function ConnectedController() {
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
       <PatchBody
         chain={snapshot.chain}
+        pedal={snapshot.model}
         busy={snapshot.chainSync === "syncing"}
       />
     </section>

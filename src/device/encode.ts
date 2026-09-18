@@ -4,11 +4,14 @@ import {
   gp5Cc,
   MODULE_CC,
 } from "@/device/cc";
-import type { AudioChain, ChainSlotId } from "@/device/chain";
+import type { AudioChain, ChainSlotId, EffectId } from "@/device/chain";
 import {
   encodeChainOrderSysex,
   encodeCurrentChainRequest,
+  encodeSlotControlSysex,
+  encodeSlotModelSysex,
 } from "@/device/chain-codec";
+import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
 import type { LinkMode } from "@/device/link";
@@ -94,3 +97,72 @@ export function encodeChainOrder(linkMode: LinkMode, chain: AudioChain): Uint8Ar
   }
   return encodeLinkMidiPackets(linkMode, midi);
 }
+
+/** Parameter-write model SET (family `1147`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodeSlotModel(
+  linkMode: LinkMode,
+  kind: EffectId,
+  wire: WireIdentity,
+): Uint8Array[] | null {
+  const midi = encodeSlotModelSysex(kind, wire);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+/** Parameter-write control SET (family `1148`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodeSlotControl(
+  linkMode: LinkMode,
+  kind: EffectId,
+  index: number,
+  value: number,
+): Uint8Array[] | null {
+  const midi = encodeSlotControlSysex(kind, index, value);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+function concatBlePackets(packets: Uint8Array[]): Uint8Array {
+  const parts = packets.map((packet) => packet.subarray(2));
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let cursor = 0;
+  for (const part of parts) {
+    out.set(part, cursor);
+    cursor += part.length;
+  }
+  return out;
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function assertUsbBluetoothWrapOnly(): void {
+  const usbModel = encodeSlotModel("usb", "amp", [0x01, 0x00, 0x00, 0x07]);
+  const bleModel = encodeSlotModel("bluetooth", "amp", [0x01, 0x00, 0x00, 0x07]);
+  const usbControl = encodeSlotControl("usb", "amp", 0, 45);
+  const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
+  if (
+    !usbModel ||
+    !bleModel ||
+    !usbControl ||
+    !bleControl ||
+    !sameBytes(usbModel[0], concatBlePackets(bleModel)) ||
+    !sameBytes(usbControl[0], concatBlePackets(bleControl))
+  ) {
+    throw new Error("USB and Bluetooth slot writes must differ only by BLE-MIDI wrap");
+  }
+}
+
+assertUsbBluetoothWrapOnly();

@@ -6,10 +6,17 @@ import type {
 } from "@/bluetooth/types";
 import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
+  defaultValuesFor,
+  modelById,
+  modelsForKind,
+  snapControlValue,
+} from "@/device/catalog";
+import {
   defaultChain,
   reorderChain,
   type AudioChain,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/chain";
 import {
   ChainDecoder,
@@ -22,6 +29,8 @@ import {
   encodeIdentity,
   encodeModule,
   encodePatch,
+  encodeSlotControl,
+  encodeSlotModel,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
@@ -46,10 +55,12 @@ export {
   chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
+  isEffectSlot,
   isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/chain";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
@@ -314,6 +325,92 @@ export class DeviceSession {
     }
   }
 
+  async setSlotModel(kind: EffectId, modelId: string): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(modelId);
+    if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    if (!modelsForKind(kind, this.snapshot.model).some((entry) => entry.id === model.id)) {
+      return;
+    }
+    const packets = encodeSlotModel(this.snapshot.linkMode, kind, model.wire);
+    if (!packets) {
+      return;
+    }
+    const values = defaultValuesFor(model);
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
+  async setSlotControl(kind: EffectId, controlIndex: number, value: number): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(slot.modelId);
+    if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    const control = model.controls.find((entry) => entry.index === controlIndex);
+    if (!control) {
+      return;
+    }
+    const nextValue = snapControlValue(control, value);
+    const packets = encodeSlotControl(this.snapshot.linkMode, kind, controlIndex, nextValue);
+    if (!packets) {
+      return;
+    }
+    const values = slot.values.slice();
+    if (controlIndex >= values.length) {
+      return;
+    }
+    values[controlIndex] = nextValue;
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
   private async runIdentitySync(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
@@ -517,14 +614,17 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
       return true;
     }
-    const enabledById = new Map(
-      this.snapshot.chain.map((slot) => [slot.id, slot.enabled] as const),
-    );
+    const previousById = new Map(this.snapshot.chain.map((slot) => [slot.id, slot] as const));
     const exp = this.snapshot.chain.find((slot) => slot.id === "exp");
-    const chain: AudioChain = order.map((id) => ({
-      id,
-      enabled: enabledById.get(id) ?? false,
-    }));
+    const chain: AudioChain = order.map((id) => {
+      const previous = previousById.get(id);
+      return {
+        id,
+        enabled: previous?.enabled ?? false,
+        modelId: previous?.modelId,
+        values: previous?.values,
+      };
+    });
     if (exp) {
       chain.push({ id: "exp", enabled: exp.enabled });
     }
