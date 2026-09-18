@@ -1,4 +1,14 @@
 import { Ban, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import iconAmp from "@/assets/img/icon-AMP.png";
+import iconCab from "@/assets/img/icon-CAB.png";
+import iconDly from "@/assets/img/icon-DLY.png";
+import iconDst from "@/assets/img/icon-DST.png";
+import iconEq from "@/assets/img/icon-EQ.png";
+import iconMod from "@/assets/img/icon-MOD.png";
+import iconNr from "@/assets/img/icon-NR.png";
+import iconNs from "@/assets/img/icon-NS.png";
+import iconPre from "@/assets/img/icon-PRE.png";
+import iconRvb from "@/assets/img/icon-RVB.png";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,6 +26,7 @@ import {
   PATCH_COUNT,
   type AudioChain,
   type AudioChainSlot,
+  type ChainSlotId,
 } from "@/device/session";
 import {
   useDeviceSession,
@@ -23,6 +34,19 @@ import {
 } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { cn } from "@/lib/utils";
+
+const CHAIN_SLOT_ICONS: Partial<Record<ChainSlotId, string>> = {
+  nr: iconNr,
+  pre: iconPre,
+  dst: iconDst,
+  ns: iconNs,
+  amp: iconAmp,
+  cab: iconCab,
+  eq: iconEq,
+  mod: iconMod,
+  dly: iconDly,
+  rvb: iconRvb,
+};
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -89,10 +113,8 @@ function PatchBar({
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg border px-4 py-3 text-center",
-    enabled
-      ? "border-foreground/20 bg-muted text-foreground"
-      : "border-border text-muted-foreground",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-3 py-3 text-center",
+    enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
   );
 }
 
@@ -107,34 +129,44 @@ function AudioChainSlotView({
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
+  const icon = CHAIN_SLOT_ICONS[slot.id];
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
 
   return (
     <div className={slotClassName(slot.enabled)}>
-      <div className="relative flex min-h-6 w-full items-center justify-center">
+      <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
+        <div className="relative">
+          {icon ? (
+            <img
+              src={icon}
+              alt=""
+              className={cn("size-14 object-contain", !slot.enabled && "opacity-50")}
+            />
+          ) : null}
+          {bypassed ? (
+            <span
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <Ban className="size-11 text-destructive drop-shadow-sm" strokeWidth={2.5} />
+            </span>
+          ) : null}
+        </div>
         <span
           className={cn(
-            "text-sm font-semibold tracking-wide",
+            "text-xs font-semibold tracking-wide",
             !slot.enabled && "opacity-50",
           )}
         >
           {label}
         </span>
-        {bypassed ? (
-          <span
-            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-            aria-hidden="true"
-          >
-            <Ban className="size-8 text-destructive drop-shadow-sm" strokeWidth={2.5} />
-          </span>
-        ) : null}
       </div>
       <Switch
         size="sm"
         checked={slot.enabled}
         disabled={disabled}
-        className={cn(!slot.enabled && "opacity-50")}
+        className="data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground"
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
         onClick={(event) => {
           event.stopPropagation();
