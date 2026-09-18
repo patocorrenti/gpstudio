@@ -867,6 +867,11 @@ function assertPresetDumpFixtures(): void {
 
 assertPresetDumpFixtures();
 
+export type ChainDumpResult = {
+  chain: AudioChain;
+  dump: Uint8Array;
+};
+
 export class ChainDecoder {
   private fragments = new Map<number, Uint8Array>();
   private dumpClass: DumpClass | null = null;
@@ -876,7 +881,7 @@ export class ChainDecoder {
     this.dumpClass = null;
   }
 
-  private finish(model: DeviceModel): AudioChain | null {
+  private finish(model: DeviceModel): ChainDumpResult | null {
     if (!this.dumpClass) {
       return null;
     }
@@ -900,11 +905,12 @@ export class ChainDecoder {
     const chain = parsePresetDump(merged, layout, model);
     if (chain) {
       this.reset();
+      return { chain, dump: merged };
     }
-    return chain;
+    return null;
   }
 
-  push(bytes: Uint8Array, model: DeviceModel): AudioChain | null {
+  push(bytes: Uint8Array, model: DeviceModel): ChainDumpResult | null {
     const midi = midiPayload(bytes);
     if (midi.length < 8 || midi[0] !== 0xf0) {
       return null;

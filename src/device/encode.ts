@@ -11,6 +11,7 @@ import {
   encodeSlotControlSysex,
   encodeSlotModelSysex,
 } from "@/device/chain-codec";
+import { encodePatchStoreSysex } from "@/device/patch-store";
 import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -108,6 +109,19 @@ export function encodeSlotControl(
   return encodeLinkMidiPackets(linkMode, midi);
 }
 
+/** Parameter-write store SET (family `114a`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodePatchStore(
+  linkMode: LinkMode,
+  slot: number,
+  name: string,
+): Uint8Array[] | null {
+  const midi = encodePatchStoreSysex(slot, name);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
     return false;
@@ -136,18 +150,25 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleModel = encodeSlotModel("bluetooth", "amp", [0x01, 0x00, 0x00, 0x07]);
   const usbControl = encodeSlotControl("usb", "amp", 0, 45);
   const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
+  const usbStore = encodePatchStore("usb", 5, "Flow");
+  const bleStore = encodePatchStore("bluetooth", 5, "Flow");
   const bleModelMidi = bleModel && bleModel.length === 1 ? unwrapBlePacket(bleModel[0]) : null;
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
+  const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   if (
     !usbModel ||
     !bleModel ||
     !usbControl ||
     !bleControl ||
+    !usbStore ||
+    !bleStore ||
     !bleModelMidi ||
     !bleControlMidi ||
+    !bleStoreMidi ||
     !sameBytes(usbModel[0], bleModelMidi) ||
-    !sameBytes(usbControl[0], bleControlMidi)
+    !sameBytes(usbControl[0], bleControlMidi) ||
+    !sameBytes(usbStore[0], bleStoreMidi)
   ) {
     throw new Error("USB and Bluetooth slot writes must differ only by one BLE-MIDI wrap");
   }

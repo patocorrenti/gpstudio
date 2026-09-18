@@ -12,7 +12,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Ban, ChevronLeft, ChevronRight, Ellipsis, Loader2 } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, Copy, Download, Ellipsis, Loader2, Pencil, Save } from "lucide-react";
 import iconAmp from "@/assets/img/icon-AMP.png";
 import iconCab from "@/assets/img/icon-CAB.png";
 import iconDly from "@/assets/img/icon-DLY.png";
@@ -25,6 +25,15 @@ import iconNs from "@/assets/img/icon-NS.png";
 import iconPre from "@/assets/img/icon-PRE.png";
 import iconRvb from "@/assets/img/icon-RVB.png";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -59,6 +68,7 @@ import {
 } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 /** Cable through the icon: pt-2 + grip h-3 + gap-2 + half of size-14. */
 const CHAIN_CABLE_TOP = "calc(3.5rem + 1px)";
@@ -79,20 +89,80 @@ const CHAIN_SLOT_ICONS: Record<ChainSlotId, string> = {
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
+function triggerPatchDownload(filename: string, bytes: Uint8Array): void {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const blob = new Blob([copy], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function PatchBar({
   patch,
   patchNames,
   busy,
+  canExportPatch,
 }: {
   patch: number;
   patchNames: (string | null)[];
   busy: boolean;
+  canExportPatch: boolean;
 }) {
   const session = useDeviceSession();
   const currentName = patchNames[patch];
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateDest, setDuplicateDest] = useState(String((patch + 1) % PATCH_COUNT));
+  const [overwriteOpen, setOverwriteOpen] = useState(false);
+  const destIndex = Number.parseInt(duplicateDest, 10);
+  const destName =
+    Number.isInteger(destIndex) && destIndex !== patch ? patchNames[destIndex] : null;
+  const destOccupied = Boolean(destName);
+
+  function openRename() {
+    setRenameValue(currentName ?? "");
+    setRenameOpen(true);
+  }
+
+  function openDuplicate() {
+    setDuplicateDest(String((patch + 1) % PATCH_COUNT));
+    setOverwriteOpen(false);
+    setDuplicateOpen(true);
+  }
+
+  function confirmRename() {
+    void session.renamePatch(renameValue);
+    setRenameOpen(false);
+  }
+
+  function confirmDuplicate() {
+    if (!Number.isInteger(destIndex) || destIndex === patch) {
+      return;
+    }
+    if (destOccupied && !overwriteOpen) {
+      setOverwriteOpen(true);
+      return;
+    }
+    void session.duplicatePatch(destIndex);
+    setDuplicateOpen(false);
+    setOverwriteOpen(false);
+  }
+
+  async function downloadPatch() {
+    const file = await session.downloadCurrentPatch();
+    if (!file) {
+      return;
+    }
+    triggerPatchDownload(file.filename, file.bytes);
+  }
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex flex-wrap items-center justify-center gap-1">
       <Button
         type="button"
         variant="ghost"
@@ -142,6 +212,162 @@ function PatchBar({
       >
         <ChevronRight className="size-6" />
       </Button>
+      <div className="ml-2 flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          onClick={() => void session.savePatch()}
+        >
+          <Save />
+          Save
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          aria-label="Rename patch"
+          onClick={openRename}
+        >
+          <Pencil />
+          Rename
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          aria-label="Duplicate patch"
+          onClick={openDuplicate}
+        >
+          <Copy />
+          Duplicate
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy || !canExportPatch}
+          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          aria-label="Download patch"
+          onClick={() => void downloadPatch()}
+        >
+          <Download />
+          Download
+        </Button>
+      </div>
+      <Dialog
+        open={renameOpen}
+        onOpenChange={(open) => {
+          setRenameOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename patch</DialogTitle>
+            <DialogDescription>
+              At most 10 characters. Letters, digits, space, and hyphen.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            id="rename-patch"
+            value={renameValue}
+            maxLength={10}
+            autoFocus
+            aria-label="Patch name"
+            onChange={(event) => {
+              setRenameValue(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                confirmRename();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRenameOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmRename} disabled={!renameValue.trim()}>
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={duplicateOpen}
+        onOpenChange={(open) => {
+          setDuplicateOpen(open);
+          if (!open) {
+            setOverwriteOpen(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {overwriteOpen ? "Overwrite patch" : "Duplicate patch"}
+            </DialogTitle>
+            <DialogDescription>
+              {overwriteOpen
+                ? `Slot ${formatPatch(destIndex)} already has ${destName}. Overwrite it?`
+                : "Copy the current working patch onto another slot. The selected patch stays the same."}
+            </DialogDescription>
+          </DialogHeader>
+          {overwriteOpen ? null : (
+            <Select
+              value={duplicateDest}
+              onValueChange={(value) => {
+                setDuplicateDest(value);
+                setOverwriteOpen(false);
+              }}
+            >
+              <SelectTrigger aria-label="Destination slot" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-72">
+                {patchOptions
+                  .filter((option) => option !== patch)
+                  .map((option) => (
+                    <SelectItem
+                      key={option}
+                      value={String(option)}
+                      className="font-medium tabular-nums"
+                    >
+                      {formatPatchOption(option, patchNames[option])}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (overwriteOpen) {
+                  setOverwriteOpen(false);
+                  return;
+                }
+                setDuplicateOpen(false);
+              }}
+            >
+              {overwriteOpen ? "Back" : "Cancel"}
+            </Button>
+            <Button type="button" onClick={confirmDuplicate}>
+              {overwriteOpen ? "Overwrite" : "Duplicate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -574,6 +800,7 @@ function ConnectedController() {
         patch={snapshot.patch}
         patchNames={snapshot.patchNames}
         busy={snapshot.chainSync === "syncing"}
+        canExportPatch={snapshot.canExportPatch}
       />
       <PatchBody
         chain={snapshot.chain}
