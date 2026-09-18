@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  ArrowLeftRight,
+  ArrowRight,
+  Bluetooth,
+  RefreshCw,
+  TriangleAlert,
+  Turtle,
+  Unplug,
+  Usb,
+  Zap,
+} from "lucide-react";
 import gp5Thumb from "@/assets/img/gp5-thumb.png";
 import gp50Thumb from "@/assets/img/gp50-thumb.png";
 import type { LinkEndpoint } from "@/device/endpoint";
@@ -46,6 +56,26 @@ function pedalThumbSrc(model: DeviceModel | undefined): string | undefined {
     return gp50Thumb;
   }
   return undefined;
+}
+
+function ModeNotes({
+  notes,
+}: {
+  notes: { icon: typeof Zap; text: ReactNode }[];
+}) {
+  return (
+    <ul className="flex flex-col gap-1.5 px-4 py-3 text-sm text-muted-foreground">
+      {notes.map(({ icon: Icon, text }, index) => (
+        <li key={index} className="flex gap-2">
+          <Icon
+            className="mt-0.5 size-3.5 shrink-0 text-neutral-900 dark:text-neutral-100"
+            aria-hidden
+          />
+          <span>{text}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function PedalThumb({ model }: { model?: DeviceModel }) {
@@ -194,6 +224,7 @@ export function ConnectionStatus() {
         aria-expanded={open}
         aria-label={connected ? `Connected to ${label}` : "Connect a pedal"}
         onClick={() => setOpen(true)}
+        className={connected ? "gap-2.5" : undefined}
       >
         <span
           aria-hidden
@@ -204,6 +235,13 @@ export function ConnectionStatus() {
           }
         />
         {label}
+        {connected ? (
+          snapshot.linkMode === "bluetooth" ? (
+            <Bluetooth className="text-muted-foreground" />
+          ) : (
+            <Usb className="text-muted-foreground" />
+          )
+        ) : null}
       </Button>
       <Dialog
         open={open}
@@ -222,7 +260,12 @@ export function ConnectionStatus() {
             <>
               <DialogHeader>
                 <DialogTitle>Connected</DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="flex items-center gap-1.5">
+                  {snapshot.linkMode === "bluetooth" ? (
+                    <Bluetooth className="size-3.5" />
+                  ) : (
+                    <Usb className="size-3.5" />
+                  )}
                   {linkModeLabel(snapshot.linkMode)} ·{" "}
                   {connectedDetail(snapshot.endpoint.label, snapshot.model)}
                 </DialogDescription>
@@ -235,6 +278,7 @@ export function ConnectionStatus() {
                   disabled={busy}
                   onClick={() => void disconnect()}
                 >
+                  <Unplug />
                   Disconnect
                 </Button>
               </DialogFooter>
@@ -301,14 +345,37 @@ export function ConnectionStatus() {
                 }}
                 className="gap-4"
               >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="usb">USB</TabsTrigger>
-                  <TabsTrigger value="bluetooth">Bluetooth</TabsTrigger>
+                <TabsList className="grid h-12 w-full grid-cols-2 group-data-horizontal/tabs:h-12">
+                  <TabsTrigger value="usb" className="gap-1.5 px-2">
+                    <Usb />
+                    USB
+                    <span className="ml-1 rounded-sm bg-blue-500/15 px-1 text-[9px] font-medium text-blue-700 dark:text-blue-400">
+                      Recommended
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="bluetooth" className="gap-1.5 px-2">
+                    <Bluetooth />
+                    Bluetooth
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="usb" className="flex flex-col gap-4">
-                  <DialogDescription className="text-center">
-                    One-way connection - super fast.
-                  </DialogDescription>
+                  <ModeNotes
+                    notes={[
+                      {
+                        icon: Zap,
+                        text: (
+                          <>
+                            Fast, stable connection —{" "}
+                            <span className="font-bold">Super responsive</span>.
+                          </>
+                        ),
+                      },
+                      {
+                        icon: ArrowRight,
+                        text: "The computer talks to the pedal.",
+                      },
+                    ]}
+                  />
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
                   ) : null}
@@ -362,9 +429,18 @@ export function ConnectionStatus() {
                   ) : null}
                 </TabsContent>
                 <TabsContent value="bluetooth" className="flex flex-col gap-4">
-                  <DialogDescription className="text-center">
-                    Two-way connection - slower.
-                  </DialogDescription>
+                  <ModeNotes
+                    notes={[
+                      {
+                        icon: ArrowLeftRight,
+                        text: "The computer talks to the pedal and the pedal talks to the computer.",
+                      },
+                      {
+                        icon: Turtle,
+                        text: "Slower, less stable connection.",
+                      },
+                    ]}
+                  />
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
                   ) : null}
@@ -431,6 +507,7 @@ export function ConnectionStatus() {
                         : scanBluetooth(true))
                     }
                   >
+                    <RefreshCw />
                     Refresh
                   </Button>
                 </DialogFooter>
