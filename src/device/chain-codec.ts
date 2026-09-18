@@ -77,7 +77,7 @@ export function dumpOrderIndices(chain: AudioChain): number[] | null {
  * App→pedal chain-order SET (accepted Bluetooth capture, PRE before NR).
  * Packed `01 00 0C 11 44` + ten `DUMP_MODULE_IDS` indices, CRC-8 ATM,
  * nibble-expand, `F0`…`F7`. Not the identity-family live notify.
- * Bluetooth wrap is applied by encodeLinkMidiPackets.
+ * Bluetooth wrap is one BLE-MIDI GATT write (`encodeLinkMidiPackets`).
  */
 export function encodeChainOrderSysex(chain: AudioChain): Uint8Array | null {
   const indices = dumpOrderIndices(chain);
@@ -112,7 +112,7 @@ function float32Le(value: number): Uint8Array {
 
 /**
  * App→pedal model write SET (family `1147`). Packed kind index + 4-byte wire identity.
- * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is encodeLinkMidiPackets.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is one GATT write.
  */
 export function encodeSlotModelSysex(kind: EffectId, wire: WireIdentity): Uint8Array | null {
   const block = DUMP_MODULE_IDS.indexOf(kind);
@@ -136,7 +136,7 @@ export function encodeSlotModelSysex(kind: EffectId, wire: WireIdentity): Uint8A
 
 /**
  * App→pedal control write SET (family `1148`). Packed kind index + control index + float32 LE.
- * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is encodeLinkMidiPackets.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is one GATT write.
  */
 export function encodeSlotControlSysex(
   kind: EffectId,

@@ -91,7 +91,7 @@ Kind index on the wire follows `DUMP_MODULE_IDS` (NR PRE DST AMP CAB EQ MOD DLY 
 
 ### 5. Two SET encoders, same family as chain-order
 
-**Choice:** Patone-owned encoders, path `01 01 04`, CRC-8 + nibble-expand, wrapped by existing `encode.ts` for Bluetooth:
+**Choice:** Patone-owned encoders, path `01 01 04`, CRC-8 + nibble-expand, wrapped by existing `encode.ts` for Bluetooth as **one** GATT write (`80 80` + full `F0`…`F7`), matching the accepted chain-order capture and the GP-50 Bluetooth reference editor. Do not split a 38-byte `1147`/`1148` SysEx into 20-byte packets; the pedal ignores that even though USB accepts the same MIDI body.
 
 - **Model write:** packed body in the `1147` family — kind index + wire identity.
 - **Control write:** packed body in the `1148` family — kind index + control index + IEEE-754 float32 LE of the UI number.
@@ -128,7 +128,7 @@ No click-to-focus on the chain in this change. Editor page stays stub.
 
 **Choice:** Dragging a slider updates the snapshot (and the displayed number) on every step. The `1148` control SET is coalesced in `DeviceSession`: at most one write per control per ~80 ms (leading + trailing), and a flush on pointer-up (`onValueCommit`). Toggles and model selects still send immediately. Same path on USB and Bluetooth. Pending writes are dropped on patch change, model swap, disconnect.
 
-**Why:** Each SET is a ~38-byte SysEx split into three BLE-MIDI GATT writes. Sending one per slider tick drops the Bluetooth link. USB survives the flood, which is why the bug only showed on BLE. Apply-on-release would spare the radio but Gain would not be audible while dragging. The GP-50 reference editor debounce is 50 ms on `input`; Patone uses throttle + commit flush so the last value always lands.
+**Why:** Each SET is one ~40-byte BLE-MIDI GATT write. Sending one per slider tick still drops the Bluetooth link. USB survives the flood, which is why a write-path bug can look USB-only. Apply-on-release would spare the radio but Gain would not be audible while dragging. The GP-50 reference editor debounce is 50 ms on `input`; Patone uses throttle + commit flush so the last value always lands.
 
 **Alternative:** Send only on release. Rejected; live sweep matters on a pedal. **Alternative:** 50 ms debounce with no flush. Rejected; releasing during the wait can drop the final value.
 
@@ -140,6 +140,7 @@ No click-to-focus on the chain in this change. Editor page stays stub.
 - **Float rounding** → Round trip dump floats to the control’s step before display; send the snapped number.
 - **Large catalog** → One file per kind is fine; do not generate from pasted JS.
 - **BLE-MIDI cannot take a SET per slider tick** → Throttle + commit flush (decision 8). Do not treat USB surviving the flood as proof the write path is fine.
+- **Bluetooth model/control SET ignored while USB works** → Same MIDI body; Bluetooth must be one `80 80` + SysEx write. A 20-byte split of the 38-byte `1147`/`1148` SysEx is ignored on the pedal.
 
 ## Migration Plan
 
