@@ -217,5 +217,5 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `audio-chain`: dump de cadena del patch actual (orden + on/off) y dibujo en Controller
 - [x] Change `chain-on-off`: on/off de módulos (CC 48–57); Bluetooth aplica inbound; USB solo envía
 - [x] Change `stomp-footswitch-chain`: footswitch Stomp sigue on/off en Bluetooth (`liveFromPedal`); USB ignora esos reportes
-- [ ] Change `chain-reorder`: drag-and-drop de módulos móviles (NR, PRE, MOD, DLY, RVB); write SET `01 01 04` + CRC-8 (USB y Bluetooth); Bluetooth aplica inbound live chain-order `01 02 04`; USB ignora esos reportes
+- [x] Change `chain-reorder`: drag-and-drop de módulos móviles (NR, PRE, MOD, DLY, RVB); write SET `01 01 04` + CRC-8 (USB y Bluetooth); Bluetooth aplica inbound live chain-order `01 02 04`; USB ignora esos reportes
 - [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`
