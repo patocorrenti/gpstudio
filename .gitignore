@@ -26,3 +26,6 @@ src-tauri/gen
 *.njsproj
 *.sln
 *.sw?
+
+# Reference files
+_reference/
