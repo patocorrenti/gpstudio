@@ -21,6 +21,10 @@ export function AppShell() {
       <main className="flex min-h-0 flex-1 flex-col p-6">
         <Outlet />
       </main>
+      <footer className="px-10 py-3 text-center text-[11px] border-t leading-none text-muted-foreground/60 ">
+        <span className="font-bold">Patone</span>
+        {" · Unoficial controller for Valeton GP5/50 · Alpha Testing"}
+      </footer>
     </div>
   );
 }
