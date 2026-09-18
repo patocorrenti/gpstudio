@@ -307,10 +307,7 @@ export class DeviceSession {
     );
     this.snapshot = { ...this.snapshot, stomps };
     this.emitSnapshot();
-    const bytes = encodeStompAssignment(this.snapshot.linkMode, stomps);
-    if (bytes) {
-      await this.sendBytes(bytes);
-    }
+    await this.sendBytes(encodeStompAssignment(this.snapshot.linkMode, stomps));
   }
 
   private async runIdentitySync(generation: number): Promise<void> {
@@ -375,15 +372,18 @@ export class DeviceSession {
     await this.sendBytes(encodeChainRequest(this.snapshot.linkMode));
   }
 
-  private async sendBytes(bytes: Uint8Array): Promise<void> {
+  private async sendBytes(bytes: Uint8Array | readonly Uint8Array[]): Promise<void> {
     if (this.snapshot.status !== "connected") {
       return;
     }
+    const packets = bytes instanceof Uint8Array ? [bytes] : bytes;
     try {
-      if (this.snapshot.linkMode === "bluetooth") {
-        await this.bluetooth.send(bytes);
-      } else {
-        await this.transport.send(bytes);
+      for (const packet of packets) {
+        if (this.snapshot.linkMode === "bluetooth") {
+          await this.bluetooth.send(packet);
+        } else {
+          await this.transport.send(packet);
+        }
       }
     } catch {
       await this.dropLink();

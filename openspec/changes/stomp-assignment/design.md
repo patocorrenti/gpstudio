@@ -27,11 +27,13 @@ See `proposal.md` for why. The current-preset dump already runs after identity a
 
 ### 2. Capture-driven offsets and write, not a third-party drop
 
-**Choice:** At apply, change a stomp assignment on the pedal, request the current dump, and diff against the previous dump of the same patch to find assignment bits. Then capture the app→pedal write (or the bytes the pedal accepts when Patone sends a candidate). Keep USB vs Bluetooth wrap on the existing encoder seam. Do not copy third-party payloads (`docs/protocol-references.md`).
+**Choice:** At apply, change a stomp assignment on the pedal, request the current dump, and diff against the previous dump of the same patch to find assignment bits. Then capture the **app→pedal** write (or the bytes the pedal accepts when Patone sends a candidate). Keep USB vs Bluetooth wrap on the existing encoder seam. Do not copy third-party payloads (`docs/protocol-references.md`).
 
 **Why:** Same fill-in as identity and chain codecs. Official CC has no assignment map.
 
 **Alternative:** Write the whole preset blob. Rejected; out of scope and easy to clobber unrelated fields.
+
+**Fill-in (2026-09-17):** Dump offsets are locked (GP-50 1006/1014). Pedal→app live command `0D` is locked as an assignment **notify**. Three SET candidates (host `05`, live `0D` with checksum `00 00`, host `0D`) were ignored on the pedal, including USB, so BLE-MIDI size is not the only cause. Lab log and next experiment: `spike-assignment-write.md`. Encoder still sends the last failed host-`0D` frame until a candidate is accepted.
 
 ### 3. Optimistic edit, no chain overlay
 
@@ -65,7 +67,8 @@ See `proposal.md` for why. The current-preset dump already runs after identity a
 
 ## Risks / Trade-offs
 
-- [Assignment bits sit in the dump but we guess the wrong offset] → Diff two dumps of the same patch after a known pedal-side assignment change; do not copy third-party maps.
+- [Assignment bits sit in the dump but we guess the wrong offset] → Mitigated: GP-50 dump diff locked 1006/1014. GP-5 920 still QA.
+- [Inbound live `0D` is not a SET] → Three write candidates ignored, USB included. Spike `H1` sends the exact captured notify (checksum included) before inventing another envelope.
 - [Write clobbers order or on/off] → Encode only assignment fields; verify a round-trip dump still matches chain order/on/off.
 - [One module on both GP-50 stomps] → Allow it unless a capture shows the pedal forbids it; do not invent exclusivity.
 - [User is in Patch mode and the footswitch still changes patches] → Out of scope; assignment still stored on the patch.
@@ -77,4 +80,4 @@ Additive snapshot field and dump parse. Disconnect drops it. Rollback is reverti
 
 ## Open Questions
 
-None that fork the specs. Dump offsets and write SysEx are apply-time Patone captures.
+Dump offsets are filled in. The assignment **SET** SysEx is not. That does not fork the specs (write stays in scope); it blocks task 3.2 until `spike-assignment-write.md` lands an accepted candidate. Do not apply inbound `0D` until that write works.

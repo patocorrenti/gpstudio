@@ -2,7 +2,7 @@
 
 Plan acordado para Patone, editor/controlador de pedales Valeton GP-5 y GP-50.
 
-El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off + asignación de stomps: 1 en GP-5, 2 en GP-50; NR…NS, no EXP) se pide al conectar. La escritura de esa asignación va por USB y Bluetooth. Editor SysEx completo (parámetros, IRs, NAM) y librería vienen después.
+El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off + asignación de stomps: 1 en GP-5, 2 en GP-50; NR…NS, no EXP) se pide al conectar. La escritura de esa asignación está en alcance en USB y Bluetooth; el SysEx SET todavía es spike (el notify live `0D` no basta). Editor SysEx completo (parámetros, IRs, NAM) y librería vienen después.
 
 ## Stack
 
@@ -84,7 +84,7 @@ flowchart TB
 La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), traduce acciones a CC/SysEx, y el transporte solo envía/recibe bytes. Tres ejes, no mezclarlos:
 
 - **Modelo:** GP-5 vs GP-50 (perfiles / CCs / UI)
-- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off + asignación de stomps) al conectar y al cambiar de patch; escritura de asignación de stomps en USB y Bluetooth; editor SysEx de parámetros después
+- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off + asignación de stomps) al conectar y al cambiar de patch; escritura de asignación de stomps en USB y Bluetooth (frame SET no cerrado; spike en el change `stomp-assignment`); editor SysEx de parámetros después
 - **Link:** USB vs Bluetooth (cómo llega el paquete). No son intercambiables.
 
 USB es one-way y super fast para knobs y módulos: la app manda CC (patch y on/off de módulos) y la escritura de asignación de stomps; el pedal no telemetra esos controles. Sí puede responder dumps SysEx pedidos (y al cargar un patch). Eso no convierte USB en duplex de live controls ni de reportes de asignación.
@@ -173,7 +173,7 @@ Cambios previstos, en orden:
 
 Dominios de spec: `midi-transport`, `device-connection`, `live-controller`, `bluetooth-link`, `inbound-log`. El editor y la librería no se especifican hasta su change.
 
-El SysEx de editor/IRs está reverse-engineered en proyectos ajenos. **No copiar ese código.** El codec de identidad (patch actual + nombres) y el de cadena (orden + on/off + asignación de stomps del patch actual) son de Patone; la escritura de asignación también. Parámetros completos, IRs y NAM se documentan en el design del editor. Editores de referencia: `docs/protocol-references.md`.
+El SysEx de editor/IRs está reverse-engineered en proyectos ajenos. **No copiar ese código.** El codec de identidad (patch actual + nombres) y el de cadena (orden + on/off + asignación de stomps del patch actual) son de Patone; la escritura de asignación también, cuando el spike cierre el SET. Parámetros completos, IRs y NAM se documentan en el design del editor. Editores de referencia: `docs/protocol-references.md`.
 
 ## Fase 1 — lo que se ve
 
@@ -190,7 +190,7 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 ## Fuera de alcance ahora
 
 - App mobile Tauri
-- Lectura/escritura de parámetros de preset, rename, reorder (la cadena actual — orden + on/off + asignación de stomps — sí se lee; on/off de los diez efectos se escribe por CC 48–57; la asignación de stomps se escribe por SysEx de Patone)
+- Lectura/escritura de parámetros de preset, rename, reorder (la cadena actual — orden + on/off + asignación de stomps — sí se lee; on/off de los diez efectos se escribe por CC 48–57; la asignación de stomps se escribe por SysEx de Patone cuando el spike cierre el SET)
 - Upload de IR / SnapTone / NAM
 - Aplicar inbound de volumen, tuner u otros CCs que no sean on/off de módulos al snapshot (`liveFromPedal` de knobs) mientras el patch no cambia. Bluetooth live-module / Stomp footswitch sí está en alcance
 - Control o display de modo Patch/Stomp (CC 28)
@@ -216,4 +216,4 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `audio-chain`: dump de cadena del patch actual (orden + on/off) y dibujo en Controller
 - [x] Change `chain-on-off`: on/off de módulos (CC 48–57); Bluetooth aplica inbound; USB solo envía
 - [x] Change `stomp-footswitch-chain`: footswitch Stomp sigue on/off en Bluetooth (`liveFromPedal`); USB ignora esos reportes
-- [ ] Change `stomp-assignment`: dump decodifica asignación de stomps (1 GP-5 / 2 GP-50; NR…NS, no EXP); escritura en USB y Bluetooth; USB ignora reportes no pedidos
+- [ ] Change `stomp-assignment`: dump decodifica asignación de stomps (1 GP-5 / 2 GP-50; NR…NS, no EXP); escritura SET todavía spike; USB ignora reportes no pedidos

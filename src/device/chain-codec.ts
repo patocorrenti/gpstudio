@@ -448,6 +448,19 @@ export function packStompMask(ids: readonly EffectId[]): Uint8Array {
   return bytes;
 }
 
+/**
+ * Live command 0D payload bytes for one stomp (Patone capture).
+ * Low: NR…DLY as 0E-style byte (cab/eq/mod/dly in the high nibble).
+ * High: RVB/NS. DST-only captures used low=0x04 at stomp 1 (byte 14) or stomp 2 (byte 22).
+ */
+export function packStompLiveBytes(ids: readonly EffectId[]): { low: number; high: number } {
+  const mask = packStompMask(ids);
+  return {
+    low: ((mask[0] & 0x0f) << 4) | (mask[1] & 0x0f),
+    high: mask[3] & 0x0f,
+  };
+}
+
 export class ChainDecoder {
   private fragments = new Map<number, Uint8Array>();
   private dumpClass: DumpClass | null = null;

@@ -19,4 +19,10 @@ Useful observations (not a protocol spec):
 - USB uses Web MIDI with SysEx enabled. Some live global/footswitch changes are not notified over USB.
 - Bluetooth uses the BLE-MIDI GATT service and the same SysEx conversation, wrapped in BLE-MIDI packets.
 
-Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off + stomp assignment) from that class of dump. Assignment write is in scope. Full preset parameters, IRs, and NAM stay out.
+Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off + stomp assignment) from that class of dump. Assignment write is in scope; the SET frame is not locked yet. Full preset parameters, IRs, and NAM stay out.
+
+Patone captures for stomp assignment (not a third-party drop):
+
+- GP-50 dump: stomp 1 mask at merged offset 1006, stomp 2 at 1014 (enable-style nibbles). Decode matches Controller. GP-5 offset 920 is the 86-byte shift, unverified on hardware.
+- Assigning DST on the pedal over Bluetooth emits a 30-byte live SysEx, command `0D`, size `0x0A`, **without** host marker `02`. Stomp 1 DST sets byte 14 to `04`; stomp 2 sets byte 22 to `04`. Bytes 1–2 vary (checksum, unsolved). USB does not show that notify.
+- Echoing that `0D` (checksum `00 00`), the same payload in the host envelope (`02` / size `0x0A` / command `0D`), and an earlier host command `05` with dump-style bytes were all ignored by the pedal on USB and Bluetooth. Lab: `openspec/changes/stomp-assignment/spike-assignment-write.md`.
