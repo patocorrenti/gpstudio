@@ -1,4 +1,18 @@
-import { Ban, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Ban, ChevronLeft, ChevronRight, Ellipsis, Loader2 } from "lucide-react";
 import iconAmp from "@/assets/img/icon-AMP.png";
 import iconCab from "@/assets/img/icon-CAB.png";
 import iconDly from "@/assets/img/icon-DLY.png";
@@ -24,6 +38,7 @@ import {
   chainSlotLabel,
   formatPatch,
   formatPatchOption,
+  isMovableEffect,
   PATCH_COUNT,
   type AudioChain,
   type AudioChainSlot,
@@ -36,8 +51,8 @@ import {
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { cn } from "@/lib/utils";
 
-/** Distance from the top of each slot to the cable. py-3 + half of size-14 + 1px. */
-const CHAIN_CABLE_TOP = "calc(2.5rem + 1px)";
+/** Cable through the icon: pt-2 + grip h-3 + gap-2 + half of size-14. */
+const CHAIN_CABLE_TOP = "calc(3.5rem + 1px)";
 
 const CHAIN_SLOT_ICONS: Record<ChainSlotId, string> = {
   nr: iconNr,
@@ -120,7 +135,7 @@ function PatchBar({
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-3 py-3 text-center",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-3 pt-2 pb-3 text-center",
     enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
   );
 }
@@ -143,9 +158,37 @@ function AudioChainSlotView({
   const icon = CHAIN_SLOT_ICONS[slot.id];
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
+  const movable = isMovableEffect(slot.id);
+  const sortable = movable && !disabled;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: slot.id,
+      disabled: !sortable,
+    });
 
   return (
-    <div className={slotClassName(slot.enabled)}>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+      className={cn(slotClassName(slot.enabled), sortable && "cursor-grab")}
+      {...(sortable ? attributes : {})}
+      {...(sortable ? listeners : {})}
+    >
+      <span
+        className={cn(
+          "relative z-10 flex h-3 w-full items-center justify-center",
+          movable && !slot.enabled && "opacity-50",
+        )}
+        aria-hidden
+      >
+        {movable ? (
+          <Ellipsis className="size-4 text-muted-foreground/70" />
+        ) : null}
+      </span>
       <span
         aria-hidden
         className={cn(
@@ -191,6 +234,9 @@ function AudioChainSlotView({
           "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground",
         )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         onClick={(event) => {
           event.stopPropagation();
         }}
@@ -212,23 +258,50 @@ function AudioChainRow({
   chain: AudioChain;
   disabled: boolean;
 }) {
+  const session = useDeviceSession();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+  const ids = chain.map((slot) => slot.id);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+    const fromIndex = chain.findIndex((slot) => slot.id === active.id);
+    const toIndex = chain.findIndex((slot) => slot.id === over.id);
+    if (fromIndex < 0 || toIndex < 0) {
+      return;
+    }
+    void session.reorderChain(fromIndex, toIndex);
+  }
+
   return (
-    <ol
-      aria-label="Audio chain"
-      className="flex flex-wrap items-center justify-center gap-2 overflow-visible"
+    <DndContext
+      sensors={disabled ? [] : sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
     >
-      {chain.map((slot, index) => (
-        <li key={`${slot.id}-${index}`} className="overflow-visible">
-          <AudioChainSlotView
-            slot={slot}
-            chain={chain}
-            disabled={disabled}
-            isFirst={index === 0}
-            isLast={index === chain.length - 1}
-          />
-        </li>
-      ))}
-    </ol>
+      <SortableContext items={ids} strategy={rectSortingStrategy}>
+        <ol
+          aria-label="Audio chain"
+          className="flex flex-wrap items-center justify-center gap-2 overflow-visible"
+        >
+          {chain.map((slot, index) => (
+            <li key={slot.id} className="overflow-visible">
+              <AudioChainSlotView
+                slot={slot}
+                chain={chain}
+                disabled={disabled}
+                isFirst={index === 0}
+                isLast={index === chain.length - 1}
+              />
+            </li>
+          ))}
+        </ol>
+      </SortableContext>
+    </DndContext>
   );
 }
 

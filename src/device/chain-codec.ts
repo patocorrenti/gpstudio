@@ -1,5 +1,7 @@
 import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
+import { EFFECT_IDS } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
+import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /**
  * Current-preset dump request (F0…F7). Same identity-family template as
@@ -18,7 +20,7 @@ export function encodeCurrentChainRequest(): Uint8Array {
 }
 
 /** Dump order ids: NR PRE DST AMP CAB EQ MOD DLY RVB NS (not the UI EFFECT_IDS order). */
-const DUMP_MODULE_IDS = [
+export const DUMP_MODULE_IDS = [
   "nr",
   "pre",
   "dst",
@@ -30,6 +32,123 @@ const DUMP_MODULE_IDS = [
   "rvb",
   "ns",
 ] as const satisfies readonly EffectId[];
+
+/**
+ * Identity-family live chain-order notify (Patone Log, pedal chain edit).
+ * Size `0x0C` at byte 8, command `0x04`, path `01 02 04`. Not a SET.
+ * App→pedal SET uses parameter-write path `01 01 04` (see encodeChainOrderSysex).
+ */
+const CHAIN_ORDER_SIZE = 0x0c;
+const CHAIN_ORDER_COMMAND = 0x04;
+/** Packed SET header: size `0x0C`, path `01 01 04`, command `04`. */
+const CHAIN_ORDER_SET_PREFIX = [0x01, 0x00, 0x0c, 0x11, 0x44] as const;
+
+export function dumpOrderIndices(chain: AudioChain): number[] | null {
+  const effects = chain.filter((slot) => slot.id !== "exp");
+  if (effects.length !== EFFECT_IDS.length) {
+    return null;
+  }
+  const indices: number[] = [];
+  const seen = new Set<number>();
+  for (const slot of effects) {
+    const index = DUMP_MODULE_IDS.indexOf(slot.id as EffectId);
+    if (index < 0 || seen.has(index)) {
+      return null;
+    }
+    seen.add(index);
+    indices.push(index);
+  }
+  if (seen.size !== DUMP_MODULE_IDS.length) {
+    return null;
+  }
+  return indices;
+}
+
+/**
+ * App→pedal chain-order SET (accepted Bluetooth capture, PRE before NR).
+ * Packed `01 00 0C 11 44` + ten `DUMP_MODULE_IDS` indices, CRC-8 ATM,
+ * nibble-expand, `F0`…`F7`. Not the identity-family live notify.
+ * Bluetooth wrap is applied by encodeLinkMidiPackets.
+ */
+export function encodeChainOrderSysex(chain: AudioChain): Uint8Array | null {
+  const indices = dumpOrderIndices(chain);
+  if (!indices) {
+    return null;
+  }
+  const packed = Uint8Array.from([...CHAIN_ORDER_SET_PREFIX, ...indices]);
+  const framed = Uint8Array.from([crc8Atm(packed), ...packed]);
+  const body = nibbleExpand(framed);
+  const midi = new Uint8Array(2 + body.length);
+  midi[0] = 0xf0;
+  midi.set(body, 1);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
+function parseNibbleOrder(bytes: Uint8Array, start: number): EffectId[] | null {
+  if (start + 19 >= bytes.length) {
+    return null;
+  }
+  const order: EffectId[] = [];
+  const seen = new Set<EffectId>();
+  for (let slot = 0; slot < DUMP_MODULE_IDS.length; slot += 1) {
+    const raw = nibble(bytes, start + slot * 2);
+    if (raw < 0 || raw > 9) {
+      return null;
+    }
+    const id = DUMP_MODULE_IDS[raw];
+    if (seen.has(id)) {
+      return null;
+    }
+    seen.add(id);
+    order.push(id);
+  }
+  if (seen.size !== DUMP_MODULE_IDS.length) {
+    return null;
+  }
+  return order;
+}
+
+/**
+ * Live chain-order SysEx (Patone capture). Identity-family, size `0x0C`,
+ * command `0x04`, path `01 02 04`, 34 bytes. Notify has size at byte 8.
+ * Ten nibble-expanded `DUMP_MODULE_IDS` indices from byte 13. Returns null
+ * for name dumps, current-patch identity, live-module `09`, EXP `02`,
+ * Stomp mask `0E`, and the app→pedal SET (`01 01 04`).
+ */
+export function decodeLiveChainOrder(bytes: Uint8Array): EffectId[] | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 34 || midi[0] !== 0xf0) {
+    return null;
+  }
+  if (isNameDump(midi) || isCurrentPatchIdentity(midi)) {
+    return null;
+  }
+  if (decodeLiveExp(midi) !== null) {
+    return null;
+  }
+  if (decodeLiveModule(midi) !== null) {
+    return null;
+  }
+  if (decodeLiveStompMask(midi) !== null) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== 1) {
+    return null;
+  }
+  const notify = midi[8] === CHAIN_ORDER_SIZE;
+  const host = midi[2] === CHAIN_ORDER_SIZE && midi[8] === 0x02;
+  if (!notify && !host) {
+    return null;
+  }
+  if (midi[9] !== 1 || midi[10] !== 2 || midi[11] !== 4) {
+    return null;
+  }
+  if (midi[12] !== CHAIN_ORDER_COMMAND) {
+    return null;
+  }
+  return parseNibbleOrder(midi, 13);
+}
 
 type EnableBit = readonly [offset: number, bit: number];
 

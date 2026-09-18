@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity and the current audio chain, patch 00–99 previous / select / next once that identity is known or the sync times out, and an audio chain for the current patch whose effect modules can be turned on or off and whose movable modules can be reordered.
+Shows Controller as the live home: an empty state with no pedal, a loading state while the session syncs patch identity and the current audio chain, patch 00–99 previous / select / next once that identity is known or the sync times out, and an audio chain for the current patch whose effect modules can be turned on or off and whose movable modules can be reordered. On Bluetooth, pedal chain-order reports also update that row.
 
 ## Requirements
 
@@ -201,6 +201,19 @@ After initial sync, when the session is on Bluetooth and the pedal reports a mod
 #### Scenario: USB does not follow a Stomp footswitch
 - **WHEN** a USB session is showing DST on and a Stomp-mode footswitch turns DST off on the pedal
 - **THEN** the DST slot stays shown as on
+
+### Requirement: Bluetooth pedal chain-order changes update the chain
+
+After initial sync, when the session is on Bluetooth and the pedal reports a chain-order change for the current patch, Controller MUST update the slot order through the device session without sending patch recall or a chain dump solely because that report arrived. On/off for modules that stay in the chain MUST be preserved unless that report also carries on/off. When the session is on USB, Controller MUST keep the last known order even if a live chain-order report arrives.
+
+#### Scenario: Pedal reorders over Bluetooth
+- **WHEN** a Bluetooth session is showing RVB last among effects and the pedal reports RVB before DST
+- **THEN** Controller shows RVB before DST
+- **AND** no patch recall is sent solely because that report arrived
+
+#### Scenario: USB does not follow pedal chain-order reports
+- **WHEN** a USB session is showing RVB last among effects and a live chain-order report for RVB before DST arrives
+- **THEN** Controller keeps RVB last among effects
 
 ### Requirement: Patch changes refresh the audio chain
 

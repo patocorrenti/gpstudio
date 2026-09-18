@@ -1,0 +1,12 @@
+---
+description: Read the local GP-50 reference editor for SysEx; never paste it into src/
+alwaysApply: true
+---
+
+# Reference editor
+
+A local copy of the third-party GP-50 web editor lives in `reference/`. **Read it** when encoding or decoding Valeton SysEx (chain order, stomps, parameters, dumps). `docs/protocol-references.md` is the index.
+
+- Do **not** copy that HTML/JavaScript into `src/`.
+- Implement Patone-owned codecs. Match observed wire bytes (operator log / Patone Log), not a source drop.
+- Parameter writes use CRC-8 ATM (poly `0x07`, init 0) plus nibble-expand (`src/device/sysex-nibble.ts`), path `01 01 04`. Identity-family live notifies use path `01 02 04` and are not SETs.

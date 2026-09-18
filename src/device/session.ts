@@ -7,11 +7,22 @@ import type {
 import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
   defaultChain,
+  reorderChain,
   type AudioChain,
   type ChainSlotId,
 } from "@/device/chain";
-import { ChainDecoder, decodeLiveOnOffChanges } from "@/device/chain-codec";
-import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
+import {
+  ChainDecoder,
+  decodeLiveChainOrder,
+  decodeLiveOnOffChanges,
+} from "@/device/chain-codec";
+import {
+  encodeChainOrder,
+  encodeChainRequest,
+  encodeIdentity,
+  encodeModule,
+  encodePatch,
+} from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
   emptyPatchNames,
@@ -35,6 +46,7 @@ export {
   chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
+  isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
   type ChainSlotId,
@@ -277,6 +289,31 @@ export class DeviceSession {
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
   }
 
+  async reorderChain(fromIndex: number, toIndex: number): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const chain = reorderChain(this.snapshot.chain, fromIndex, toIndex);
+    if (chain === this.snapshot.chain) {
+      return;
+    }
+    const packets = encodeChainOrder(this.snapshot.linkMode, chain);
+    if (!packets) {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
   private async runIdentitySync(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
@@ -376,7 +413,8 @@ export class DeviceSession {
     }
     for (const message of this.sysex.push(bytes)) {
       const liveOnOff = this.applyLiveModule(message);
-      if (!liveOnOff && this.snapshot.status === "connected") {
+      const liveOrder = this.applyLiveChainOrder(message);
+      if (!liveOnOff && !liveOrder && this.snapshot.status === "connected") {
         this.applyIdentity(this.identity.push(message));
       }
       if (this.snapshot.status === "connected") {
@@ -465,6 +503,33 @@ export class DeviceSession {
     for (const report of reports) {
       this.setChainSlotEnabled(report.id, report.enabled);
     }
+    return true;
+  }
+
+  private applyLiveChainOrder(message: Uint8Array): boolean {
+    if (this.snapshot.status !== "connected") {
+      return false;
+    }
+    const order = decodeLiveChainOrder(message);
+    if (!order) {
+      return false;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return true;
+    }
+    const enabledById = new Map(
+      this.snapshot.chain.map((slot) => [slot.id, slot.enabled] as const),
+    );
+    const exp = this.snapshot.chain.find((slot) => slot.id === "exp");
+    const chain: AudioChain = order.map((id) => ({
+      id,
+      enabled: enabledById.get(id) ?? false,
+    }));
+    if (exp) {
+      chain.push({ id: "exp", enabled: exp.enabled });
+    }
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
     return true;
   }
 

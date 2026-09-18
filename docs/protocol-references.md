@@ -1,8 +1,10 @@
 # Protocol references
 
-Third-party GP-5 / GP-50 web editors that already solve connect, dump, and live control. Use them as **behavioral and runtime references** (what happens after connect, USB vs Bluetooth, loading, name list, current preset).
+Third-party GP-5 / GP-50 web editors that already solve connect, dump, and live control.
 
-**Do not copy their source, JavaScript, or SysEx payloads into Patone.** Identity and current-patch chain requests/decoders live in `src/device/` from Patone captures and our own codecs.
+**Read** the local copy in `reference/` (GP-50 editor HTML) when encoding or decoding SysEx. Do **not** paste that JavaScript into `src/`. Implement Patone-owned codecs; match operator captures and Patone Log.
+
+Online copies (behavioral / runtime):
 
 | Pedal | Link | Editor |
 | --- | --- | --- |
@@ -18,7 +20,12 @@ Useful observations (not a protocol spec):
 - Inbound current-preset fragments differ by pedal and link. Bluetooth GP-50 uses command `00 06` (short terminator); GP-5 uses `00 05`. USB GP-50 uses `01 0B`; GP-5 uses `01 09`. Name-list dumps stay `01 05` (Bluetooth) / `06 0A` (USB) and must not be parsed as a chain.
 - USB uses Web MIDI with SysEx enabled. Some live global/footswitch changes are not notified over USB.
 - Bluetooth uses the BLE-MIDI GATT service and the same SysEx conversation, wrapped in BLE-MIDI packets.
+- **Two families:** identity / live notify uses path `01 02 04` (checksum unknown). Parameter **SET** uses path `01 01 04`, CRC-8 ATM (poly `0x07`, init 0) of the packed body, then nibble-expand each hex digit to a `0x0n` MIDI byte (`src/device/sysex-nibble.ts`). Echoing a live notify is not a SET.
+- Pedal chain-order **notify** (Patone Log, Bluetooth): size `0x0C` / command `0x04` / path `01 02 04`, 34 bytes, nibble-expanded `DUMP_MODULE_IDS` indices. Patone applies it on Bluetooth (`liveFromPedal`). USB does not emit it and must not apply it.
+- Pedal chain-order **SET** (accepted operator log, Bluetooth, PRE before NR): same 10-slot payload, path `01 01 04`, CRC `08 07` for that order. Packed body `01 00 0C 11 44` + ten dump indices. W1 (host `01 02 04`) and W2 (notify echo, checksum `00 00`) were ignored. Notebook: `openspec/changes/chain-reorder/spike-chain-order-write.md`.
 
-Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off) from that class of dump. Full preset parameters, IRs, and NAM stay out.
+Movable chain modules: NR, PRE, MOD, DLY, RVB. DST, NS, AMP, CAB, EQ stay a contiguous block.
 
-Stomp **assignment** (which modules each footswitch toggles) is a paused lab, not product: decode from the current-preset dump is locked for GP-50; every Patone-owned SET candidate was ignored. Do not copy those editors’ assignment SysEx. Resume notes: `openspec/changes/stomp-assignment/spike-assignment-write.md`.
+Patone’s in-scope subset is current patch index, onboard names, the current preset’s audio chain (module order + on/off), Bluetooth live chain-order follow, and the order-only SET. Full preset parameters, IRs, and NAM stay out.
+
+Stomp **assignment** (which modules each footswitch toggles) is a paused lab, not product: decode from the current-preset dump is locked for GP-50; SET candidates were ignored. Same CRC + nibble family as chain-order SET (`sendCTL` in the reference editor); H7 used the wrong size/command/body. Resume notes: `openspec/changes/stomp-assignment/spike-assignment-write.md`.

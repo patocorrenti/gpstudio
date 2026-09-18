@@ -221,6 +221,19 @@ When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), in
 - **THEN** the snapshot shows EXP off
 - **AND** no patch recall is sent solely because that report arrived
 
+### Requirement: Connected session applies Bluetooth live chain-order
+
+When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live chain-order SysEx MUST update the snapshot order without sending patch recall or requesting a chain dump solely because that report arrived. USB MUST NOT apply those inbound reports to the snapshot. Requested or opportunistic audio-chain dumps MUST still replace order and on/off. Disconnect MUST drop chain state.
+
+#### Scenario: Bluetooth inbound order report updates the chain
+- **WHEN** a Bluetooth session is ready and the pedal reports a new chain order over live chain-order SysEx
+- **THEN** the snapshot shows that order
+- **AND** no patch recall is sent solely because that report arrived
+
+#### Scenario: USB ignores inbound live chain-order reports
+- **WHEN** a USB session is ready and a live chain-order SysEx arrives
+- **THEN** the snapshot order does not change from that inbound report
+
 ### Requirement: Toggling NS does not rewrite AMP or CAB on/off
 
 After a USB or Bluetooth session is ready, toggling NS MUST update only NS's on/off in the snapshot and MUST send only NS's official module CC through the open link. AMP and CAB on/off MUST stay unchanged. The session MUST NOT send AMP or CAB CCs solely because NS was toggled. Toggling AMP or CAB while NS is on MUST still update only that slot and MUST send only that slot's official module CC. Toggling MUST NOT change module order.
