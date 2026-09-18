@@ -192,19 +192,22 @@ function AudioChainSlotView({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute z-0 h-0.5 bg-muted-foreground/25",
+          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/25",
           isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
           isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
         )}
         style={{ top: CHAIN_CABLE_TOP }}
       />
-      <div className="relative z-10 flex min-h-6 w-full flex-col items-center justify-center gap-1">
-        <div className="relative">
+      <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
+        <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
           {icon ? (
             <img
               src={icon}
               alt=""
-              className={cn("size-14 object-contain", !slot.enabled && "opacity-50")}
+              className={cn(
+                "object-contain size-14",
+                slot.enabled ? "" : "opacity-20",
+              )}
             />
           ) : null}
           {bypassed ? (
@@ -218,8 +221,8 @@ function AudioChainSlotView({
         </div>
         <span
           className={cn(
-            "text-xs font-semibold tracking-wide",
-            !slot.enabled && "opacity-50",
+            "relative z-10 text-xs font-semibold tracking-wide",
+            !slot.enabled && "opacity-80",
           )}
         >
           {label}
