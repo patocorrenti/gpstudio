@@ -18,6 +18,7 @@
 
 - [x] 4.1 Add Patone-owned model-write and control-write encoders (parameter-write SET path `01 01 04`, CRC-8 + nibble-expand, packed `1147` / `1148` families from captures, `DUMP_MODULE_IDS` kind index), wrap Bluetooth like other SysEx, and verify USB vs Bluetooth only differ by that wrap
 - [x] 4.2 Add `DeviceSession.setSlotModel` and `setSlotControl` that update the snapshot on-change when ready and not chain-syncing, no-op unknown/EXP/wrong-pedal/busy, reset values to catalog defaults on model swap, clamp/snap control values, send the matching SET without extra recall or dump, do not change order/on/off, and verify `npx tsc -b --pretty false` typechecks callers
+- [x] 4.3 Coalesce slider control SETs in the session (throttle ~80 ms, flush on pointer-up; toggles flush immediately), skip an unchanged snapped value, drop pending writes on patch change / model swap / disconnect, and verify typecheck
 
 ## 5. Controller
 

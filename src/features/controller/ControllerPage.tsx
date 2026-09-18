@@ -356,7 +356,9 @@ function SlotControl({
           disabled={disabled}
           aria-label={`${label} ${value >= 1 ? "on" : "off"}`}
           onCheckedChange={(checked) => {
-            void session.setSlotControl(kind, control.index, checked ? 1 : 0);
+            void session.setSlotControl(kind, control.index, checked ? 1 : 0, {
+              flush: true,
+            });
           }}
         />
       </div>
@@ -384,6 +386,13 @@ function SlotControl({
             return;
           }
           void session.setSlotControl(kind, control.index, nextValue);
+        }}
+        onValueCommit={(next) => {
+          const nextValue = next[0];
+          if (nextValue === undefined) {
+            return;
+          }
+          void session.setSlotControl(kind, control.index, nextValue, { flush: true });
         }}
       />
     </div>

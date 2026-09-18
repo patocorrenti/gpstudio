@@ -110,7 +110,9 @@ context: |
     bypassed (prohibition overlay) without rewriting their enabled state.
     Enabled effect slots with a known model show a control panel below the chain
     (model select when that kind has more than one factory model; sliders/toggles
-    from the catalog). EXP has no model panel.
+    from the catalog). Slider numbers follow the drag; control SETs are throttled
+    (~80 ms) and flushed on release so Bluetooth is not flooded. Toggles send
+    on-change. EXP has no model panel.
     Volume and tuner later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI

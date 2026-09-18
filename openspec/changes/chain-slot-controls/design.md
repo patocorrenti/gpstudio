@@ -102,7 +102,7 @@ Exact packed bytes are apply-time capture fill-in (operator log / Patone Log). E
 
 - no-op when not ready, chain busy, unknown slot state, kind not in catalog, model not for this pedal, or EXP
 - model swap: snapshot `modelId` + `values` reset to that model’s catalog defaults (visible controls’ default numbers; others 0), then send model write. Do not extra-dump.
-- control: clamp to min/max, snap to step, update `values[index]`, send control write. Do not extra-dump. Do not change on/off or order.
+- control: clamp to min/max, snap to step, update `values[index]` immediately, coalesce the control SET (throttle ~80 ms, flush on slider release / toggle). Do not extra-dump. Do not change on/off or order.
 
 **Why:** Same seam as chain-order SET. Official CC cannot select Tweedy or set Gain.
 
@@ -124,6 +124,14 @@ No click-to-focus on the chain in this change. Editor page stays stub.
 
 **Why:** Proposal non-goal is upload and user-loaded names, not “NS has no knobs.” NS Gain/EQ still need a model row to hang on.
 
+### 8. Slider control SETs are throttled; UI is immediate
+
+**Choice:** Dragging a slider updates the snapshot (and the displayed number) on every step. The `1148` control SET is coalesced in `DeviceSession`: at most one write per control per ~80 ms (leading + trailing), and a flush on pointer-up (`onValueCommit`). Toggles and model selects still send immediately. Same path on USB and Bluetooth. Pending writes are dropped on patch change, model swap, disconnect.
+
+**Why:** Each SET is a ~38-byte SysEx split into three BLE-MIDI GATT writes. Sending one per slider tick drops the Bluetooth link. USB survives the flood, which is why the bug only showed on BLE. Apply-on-release would spare the radio but Gain would not be audible while dragging. The GP-50 reference editor debounce is 50 ms on `input`; Patone uses throttle + commit flush so the last value always lands.
+
+**Alternative:** Send only on release. Rejected; live sweep matters on a pedal. **Alternative:** 50 ms debounce with no flush. Rejected; releasing during the wait can drop the final value.
+
 ## Risks / Trade-offs
 
 - **GP-5 dump layout / catalog differs** → Keep the existing per-model layout branch; tag `devices` when a GP-5 capture disagrees. Until then share the factory list.
@@ -131,6 +139,7 @@ No click-to-focus on the chain in this change. Editor page stays stub.
 - **Firmware adds models we do not have** → Unknown identity stays unwritable; chain on/off still works.
 - **Float rounding** → Round trip dump floats to the control’s step before display; send the snapped number.
 - **Large catalog** → One file per kind is fine; do not generate from pasted JS.
+- **BLE-MIDI cannot take a SET per slider tick** → Throttle + commit flush (decision 8). Do not treat USB surviving the flood as proof the write path is fine.
 
 ## Migration Plan
 

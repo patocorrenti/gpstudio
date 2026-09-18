@@ -35,7 +35,7 @@ Live module on/off reports and live chain-order reports MUST preserve each slot'
 
 ### Requirement: Connected session writes slot model and control changes
 
-After a USB or Bluetooth session is ready, changing an effect slot's loaded model MUST update the snapshot on-change, MUST load that model's catalog controls, and MUST send a model write for the current patch through the open link. Changing a known control value MUST update the snapshot on-change and MUST send a control write for that slot through the open link. Both writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because a model or control changed. Model and control writes MUST NOT change slot order or on/off by themselves. The session MUST NOT write a model that is not in the factory catalog for that slot kind and connected pedal. The session MUST NOT write a control when that slot's model and values are unknown. GP-5 MUST NOT expose EXP model or control writes. USB MUST NOT apply unsolicited inbound parameter reports to the snapshot. Disconnect MUST drop that state.
+After a USB or Bluetooth session is ready, changing an effect slot's loaded model MUST update the snapshot on-change, MUST load that model's catalog controls, and MUST send a model write for the current patch through the open link. Changing a known control value MUST update the snapshot on-change. Slider drags MUST coalesce control writes (throttle, flush on release) so Bluetooth is not flooded with one SET per intermediate value. Toggles MUST send on-change. Both writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because a model or control changed. Model and control writes MUST NOT change slot order or on/off by themselves. The session MUST NOT write a model that is not in the factory catalog for that slot kind and connected pedal. The session MUST NOT write a control when that slot's model and values are unknown. GP-5 MUST NOT expose EXP model or control writes. USB MUST NOT apply unsolicited inbound parameter reports to the snapshot. Disconnect MUST drop that state.
 
 #### Scenario: USB AMP Gain write
 - **WHEN** a USB session is ready with AMP on Tweedy and Gain at 30 and the user sets Gain to 45
@@ -44,6 +44,11 @@ After a USB or Bluetooth session is ready, changing an effect slot's loaded mode
 - **AND** no patch recall or chain dump is sent solely because Gain changed
 - **AND** AMP stays on Tweedy
 - **AND** slot order does not change
+
+#### Scenario: Bluetooth slider drag coalesces control writes
+- **WHEN** a Bluetooth session is ready with AMP Gain at 30 and the user drags Gain toward 80 without releasing
+- **THEN** the snapshot AMP Gain follows the drag
+- **AND** the session does not send a control write for every intermediate Gain
 
 #### Scenario: Bluetooth AMP model write
 - **WHEN** a Bluetooth session is ready with AMP on Tweedy and the user selects Bellman 59N
