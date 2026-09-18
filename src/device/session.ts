@@ -6,15 +6,26 @@ import type {
 } from "@/bluetooth/types";
 import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
+  defaultValuesFor,
+  modelById,
+  modelByWire,
+  modelsForKind,
+  snapControlValue,
+  type WireIdentity,
+} from "@/device/catalog";
+import {
   defaultChain,
   reorderChain,
   type AudioChain,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/chain";
 import {
   ChainDecoder,
   decodeLiveChainOrder,
   decodeLiveOnOffChanges,
+  decodeLiveSlotControl,
+  decodeLiveSlotModel,
 } from "@/device/chain-codec";
 import {
   encodeChainOrder,
@@ -22,6 +33,8 @@ import {
   encodeIdentity,
   encodeModule,
   encodePatch,
+  encodeSlotControl,
+  encodeSlotModel,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
@@ -46,14 +59,22 @@ export {
   chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
+  isEffectSlot,
   isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
   type ChainSlotId,
+  type EffectId,
 } from "@/device/chain";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
+/** Coalesce slider SETs so BLE-MIDI is not flooded. Toggles flush immediately. */
+const CONTROL_WRITE_THROTTLE_MS = 80;
+
+function controlWriteKey(kind: EffectId, index: number): string {
+  return `${kind}:${index}`;
+}
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
@@ -115,6 +136,14 @@ export class DeviceSession {
   private chainWaiters = new Set<() => void>();
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private dropping = false;
+  private readonly pendingControlWrites = new Map<
+    string,
+    { kind: EffectId; index: number; value: number }
+  >();
+  private readonly controlWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly lastControlWriteAt = new Map<string, number>();
+  private readonly lastControlSentValue = new Map<string, number>();
+  private controlSendTail: Promise<void> = Promise.resolve();
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -188,6 +217,7 @@ export class DeviceSession {
     this.identity.reset();
     this.chainDump.reset();
     this.sysex.reset();
+    this.clearControlWrites();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
       await this.bluetooth.open(endpoint.id);
@@ -249,7 +279,9 @@ export class DeviceSession {
       throw new Error("Patch control is not available on this link.");
     }
     const next = clampPatch(patch);
-    this.snapshot = { ...this.snapshot, patch: next };
+    const chainSync =
+      this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
+    this.snapshot = { ...this.snapshot, patch: next, chainSync };
     this.emitSnapshot();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
@@ -259,6 +291,9 @@ export class DeviceSession {
   async stepPatch(delta: -1 | 1): Promise<void> {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
     }
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
   }
@@ -312,6 +347,106 @@ export class DeviceSession {
     for (const packet of packets) {
       await this.sendBytes(packet);
     }
+  }
+
+  async setSlotModel(kind: EffectId, modelId: string): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(modelId);
+    if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    if (!modelsForKind(kind, this.snapshot.model).some((entry) => entry.id === model.id)) {
+      return;
+    }
+    const packets = encodeSlotModel(this.snapshot.linkMode, kind, model.wire);
+    if (!packets) {
+      return;
+    }
+    this.clearControlWritesForKind(kind);
+    const values = defaultValuesFor(model);
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
+  async setSlotControl(
+    kind: EffectId,
+    controlIndex: number,
+    value: number,
+    options: { flush?: boolean } = {},
+  ): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Module control is not available on this link.");
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(slot.modelId);
+    if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    const control = model.controls.find((entry) => entry.index === controlIndex);
+    if (!control) {
+      return;
+    }
+    const nextValue = snapControlValue(control, value);
+    if (controlIndex >= slot.values.length) {
+      return;
+    }
+    const unchanged = slot.values[controlIndex] === nextValue;
+    if (!unchanged) {
+      const values = slot.values.slice();
+      values[controlIndex] = nextValue;
+      const chain = this.snapshot.chain.map((entry, slotIndex) =>
+        slotIndex === index ? { ...entry, values } : entry,
+      );
+      this.snapshot = { ...this.snapshot, chain };
+      this.emitSnapshot();
+    }
+    if (unchanged && !options.flush) {
+      return;
+    }
+    this.queueControlWrite(kind, controlIndex, nextValue, options.flush === true);
+  }
+
+  /** Send the latest queued value for this control now (slider pointer up). */
+  flushSlotControl(kind: EffectId, controlIndex: number): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    this.flushControlWrite(controlWriteKey(kind, controlIndex));
   }
 
   private async runIdentitySync(generation: number): Promise<void> {
@@ -414,7 +549,13 @@ export class DeviceSession {
     for (const message of this.sysex.push(bytes)) {
       const liveOnOff = this.applyLiveModule(message);
       const liveOrder = this.applyLiveChainOrder(message);
-      if (!liveOnOff && !liveOrder && this.snapshot.status === "connected") {
+      const liveSlot = this.applyLiveSlot(message);
+      if (
+        !liveOnOff &&
+        !liveOrder &&
+        !liveSlot &&
+        this.snapshot.status === "connected"
+      ) {
         this.applyIdentity(this.identity.push(message));
       }
       if (this.snapshot.status === "connected") {
@@ -469,6 +610,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
+    this.clearControlWrites();
     this.chainDump.reset();
     this.beginChainRefresh();
     void this.sendChainRequest(this.syncGeneration);
@@ -517,20 +659,114 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
       return true;
     }
-    const enabledById = new Map(
-      this.snapshot.chain.map((slot) => [slot.id, slot.enabled] as const),
-    );
+    const previousById = new Map(this.snapshot.chain.map((slot) => [slot.id, slot] as const));
     const exp = this.snapshot.chain.find((slot) => slot.id === "exp");
-    const chain: AudioChain = order.map((id) => ({
-      id,
-      enabled: enabledById.get(id) ?? false,
-    }));
+    const chain: AudioChain = order.map((id) => {
+      const previous = previousById.get(id);
+      return {
+        id,
+        enabled: previous?.enabled ?? false,
+        modelId: previous?.modelId,
+        values: previous?.values,
+      };
+    });
     if (exp) {
       chain.push({ id: "exp", enabled: exp.enabled });
     }
     this.snapshot = { ...this.snapshot, chain };
     this.emitSnapshot();
     return true;
+  }
+
+  private applyLiveSlot(message: Uint8Array): boolean {
+    if (this.snapshot.status !== "connected") {
+      return false;
+    }
+    const modelChange = decodeLiveSlotModel(message);
+    if (modelChange) {
+      if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+        return true;
+      }
+      this.applyLiveSlotModel(modelChange.kind, modelChange.wire);
+      return true;
+    }
+    const controlChange = decodeLiveSlotControl(message);
+    if (!controlChange) {
+      return false;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return true;
+    }
+    this.applyLiveSlotControl(controlChange.kind, controlChange.index, controlChange.value);
+    return true;
+  }
+
+  private applyLiveSlotModel(kind: EffectId, wire: WireIdentity): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    let model = modelByWire(kind, wire);
+    if (!model) {
+      const sole = modelsForKind(kind, this.snapshot.model);
+      if (sole.length !== 1) {
+        return;
+      }
+      model = sole[0];
+    }
+    if (!model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    this.clearControlWritesForKind(kind);
+    const values = defaultValuesFor(model);
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+  }
+
+  private applyLiveSlotControl(kind: EffectId, controlIndex: number, value: number): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(slot.modelId);
+    if (!model || model.kind !== kind) {
+      return;
+    }
+    const control = model.controls.find((entry) => entry.index === controlIndex);
+    if (!control || controlIndex >= slot.values.length) {
+      return;
+    }
+    const nextValue = snapControlValue(control, value);
+    this.dropControlWrite(controlWriteKey(kind, controlIndex), nextValue);
+    if (slot.values[controlIndex] === nextValue) {
+      return;
+    }
+    const values = slot.values.slice();
+    values[controlIndex] = nextValue;
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
   }
 
   private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
@@ -633,9 +869,111 @@ export class DeviceSession {
   private beginGeneration(): void {
     this.syncGeneration += 1;
     this.clearChainRefreshTimer();
+    this.clearControlWrites();
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
     this.releaseWaiters(this.chainWaiters);
+  }
+
+  private queueControlWrite(
+    kind: EffectId,
+    index: number,
+    value: number,
+    flush: boolean,
+  ): void {
+    const key = controlWriteKey(kind, index);
+    this.pendingControlWrites.set(key, { kind, index, value });
+    if (flush) {
+      this.flushControlWrite(key);
+      return;
+    }
+    const elapsed = Date.now() - (this.lastControlWriteAt.get(key) ?? 0);
+    const wait = CONTROL_WRITE_THROTTLE_MS - elapsed;
+    if (wait <= 0) {
+      this.flushControlWrite(key);
+      return;
+    }
+    if (this.controlWriteTimers.has(key)) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.controlWriteTimers.delete(key);
+      this.flushControlWrite(key);
+    }, wait);
+    this.controlWriteTimers.set(key, timer);
+  }
+
+  private flushControlWrite(key: string): void {
+    const timer = this.controlWriteTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.controlWriteTimers.delete(key);
+    }
+    this.lastControlWriteAt.set(key, Date.now());
+    this.controlSendTail = this.controlSendTail
+      .then(() => this.sendPendingControl(key))
+      .catch(() => undefined);
+  }
+
+  private async sendPendingControl(key: string): Promise<void> {
+    const pending = this.pendingControlWrites.get(key);
+    if (!pending || this.snapshot.status !== "connected") {
+      return;
+    }
+    this.pendingControlWrites.delete(key);
+    if (this.lastControlSentValue.get(key) === pending.value) {
+      return;
+    }
+    const packets = encodeSlotControl(
+      this.snapshot.linkMode,
+      pending.kind,
+      pending.index,
+      pending.value,
+    );
+    if (!packets) {
+      return;
+    }
+    this.lastControlSentValue.set(key, pending.value);
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
+  private dropControlWrite(key: string, sentValue: number): void {
+    const timer = this.controlWriteTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.controlWriteTimers.delete(key);
+    }
+    this.pendingControlWrites.delete(key);
+    this.lastControlWriteAt.delete(key);
+    this.lastControlSentValue.set(key, sentValue);
+  }
+
+  private clearControlWritesForKind(kind: EffectId): void {
+    const prefix = `${kind}:`;
+    for (const key of [...this.pendingControlWrites.keys()]) {
+      if (key.startsWith(prefix)) {
+        const timer = this.controlWriteTimers.get(key);
+        if (timer) {
+          clearTimeout(timer);
+          this.controlWriteTimers.delete(key);
+        }
+        this.pendingControlWrites.delete(key);
+        this.lastControlWriteAt.delete(key);
+        this.lastControlSentValue.delete(key);
+      }
+    }
+  }
+
+  private clearControlWrites(): void {
+    for (const timer of this.controlWriteTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.controlWriteTimers.clear();
+    this.pendingControlWrites.clear();
+    this.lastControlWriteAt.clear();
+    this.lastControlSentValue.clear();
   }
 
   private isCurrentGeneration(generation: number): boolean {

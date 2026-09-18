@@ -2,7 +2,7 @@
 
 Plan acordado para Patone, editor/controlador de pedales Valeton GP-5 y GP-50.
 
-El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off) se pide al conectar. El orden de módulos móviles de esa cadena también se escribe (SysEx Patone, solo orden: CRC-8 + nibble-expand, path `01 01 04`; no parámetros completos del preset). Editor SysEx completo (parámetros, IRs, NAM) y librería vienen después.
+El producto habla USB-MIDI y Bluetooth con GP-5 y GP-50: recall de patch y on/off de módulos (CC 48–57) usan el MIDI CC oficial; un subset SysEx de identidad (patch actual + nombres) y de la cadena de audio del patch actual (orden + on/off + modelo de fábrica y knobs de los diez efectos) se pide al conectar. El orden de módulos móviles y el modelo/knob del slot actual también se escriben (SysEx Patone, path `01 01 04`, CRC-8 + nibble-expand; no un dump completo ni la ruta Editor). Editor SysEx de librería, IRs y NAM vienen después.
 
 ## Stack
 
@@ -84,12 +84,12 @@ flowchart TB
 La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), traduce acciones a CC/SysEx, y el transporte solo envía/recibe bytes. Tres ejes, no mezclarlos:
 
 - **Modelo:** GP-5 vs GP-50 (perfiles / CCs / UI)
-- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off) al conectar y al cambiar de patch; escritura SysEx Patone del orden de esa cadena (parameter-write `01 01 04`, no el notify live `01 02 04`); Bluetooth aplica SysEx live de orden de cadena (pedal→app); editor SysEx de parámetros después
+- **Protocolo:** CC oficial para recall y on/off de módulos (48–57); SysEx de identidad (índice + nombres) y de la cadena actual (orden + on/off + modelo y knobs de los diez efectos) al conectar y al cambiar de patch; escritura SysEx Patone del orden, del modelo y de un control (parameter-write `01 01 04`, no el notify live `01 02 04`); Bluetooth aplica SysEx live de orden de cadena y de modelo/control (pedal→app); librería / IRs / NAM después
 - **Link:** USB vs Bluetooth (cómo llega el paquete). No son intercambiables.
 
 USB es one-way y super fast para knobs y módulos: la app manda CC (patch y on/off de módulos); el pedal no telemetra esos controles. Sí puede responder dumps SysEx pedidos (y al cargar un patch). Eso no convierte USB en duplex de live controls.
 
-Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI), on/off de módulos (CC 48–57), las peticiones de identidad y de cadena, y el write de orden de la cadena actual en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no pegar** JavaScript de terceros en `src/`. Se **puede leer** la copia local en `reference/` (`docs/protocol-references.md`). El Log muestra MIDI inbound de USB y Bluetooth (framing BLE-MIDI unwrappeado) solo mientras esa pantalla está abierta y no aplica tráfico. `DeviceSession` sí aplica identidad de patch (índice y nombres) y la cadena actual (orden + on/off) al snapshot. En Bluetooth (`liveFromPedal`) también aplica inbound de on/off de módulos: SysEx live (comando 09), EXP (comando 02) y el mismo origen cuando un footswitch en modo Stomp cambia módulos; y SysEx live de orden de cadena (comando 04, path `01 02 04`) si el pedal lo notifica. Eso no es un cambio de patch. Volumen, tuner, control Patch/Stomp y el live-from-pedal de otros knobs siguen después. USB no aplica esos reportes inbound (ni live-module ni live chain-order): USB sigue one-way para esa telemetría.
+Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI), on/off de módulos (CC 48–57), las peticiones de identidad y de cadena, el write de orden de la cadena actual y los SET de modelo/control del patch actual en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no pegar** JavaScript de terceros en `src/`. Se **puede leer** la copia local en `reference/` (`docs/protocol-references.md`). El Log muestra MIDI inbound de USB y Bluetooth (framing BLE-MIDI unwrappeado) solo mientras esa pantalla está abierta y no aplica tráfico. `DeviceSession` sí aplica identidad de patch (índice y nombres) y la cadena actual (orden + on/off + modelo y valores de control) al snapshot. En Bluetooth (`liveFromPedal`) también aplica inbound de on/off de módulos: SysEx live (comando 09), EXP (comando 02) y el mismo origen cuando un footswitch en modo Stomp cambia módulos; SysEx live de orden de cadena (comando 04, path `01 02 04`); y SysEx live de modelo (comando 07) y de control (comando 08) de los diez efectos. On/off y orden no pisan modelo/valores; modelo/control live sí los actualizan. Volumen, tuner y control Patch/Stomp siguen después. USB no aplica esos reportes inbound (ni live-module ni live chain-order ni parámetros live): USB sigue one-way para esa telemetría.
 
 `MidiTransport` no es “listar puertos Web MIDI”. Es discovery + tubo USB-MIDI:
 
@@ -103,7 +103,7 @@ Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y P
 
 Web MIDI y `midir` son los dos backends USB. Web Bluetooth y `btleplug` son los dos backends GATT. Connect abre con tabs USB | Bluetooth: el usuario elige el método primero. La pestaña USB usa el tubo MIDI; la pestaña Bluetooth escanea pedales y conecta GATT. Phase 1 MIDI endpoints siguen `kind: usb-midi`.
 
-Patch recall por Bluetooth ya es CC 0 envuelto en paquete BLE-MIDI. On/off de módulos es CC 48–57 envuelto igual. El write de orden de la cadena actual es SysEx Patone envuelto igual (partido en paquetes BLE-MIDI de 20). Si un comando futuro no habla CC, el gancho sigue siendo el encoder (CC vs SysEx), el mismo que necesita el editor USB.
+Patch recall por Bluetooth ya es CC 0 envuelto en paquete BLE-MIDI. On/off de módulos es CC 48–57 envuelto igual. El write de orden, de modelo y de un control del patch actual es SysEx Patone envuelto igual (partido en paquetes BLE-MIDI de 20). Si un comando futuro no habla CC, el gancho sigue siendo el encoder (CC vs SysEx), el mismo que necesita el editor USB.
 
 Connect no es una pantalla: es estado de sesión global. El chrome lo muestra siempre (sin pedal: Connect) y el flujo de conexión ocurre en un modal. Controller es la home.
 
@@ -174,7 +174,7 @@ Cambios previstos, en orden:
 
 Dominios de spec: `midi-transport`, `device-connection`, `live-controller`, `bluetooth-link`, `inbound-log`. El editor y la librería no se especifican hasta su change.
 
-El SysEx de editor/IRs está reverse-engineered en proyectos ajenos. **No pegar ese JavaScript en `src/`.** Sí se lee la copia en `reference/` para entender el sobre (CRC-8 + nibble-expand, path `01 01 04` vs notify `01 02 04`). El codec de identidad, el de cadena (orden + on/off) y el write de solo orden son de Patone. Parámetros completos, IRs y NAM se documentan en el design del editor. Índice: `docs/protocol-references.md`.
+El SysEx de librería/IRs está reverse-engineered en proyectos ajenos. **No pegar ese JavaScript en `src/`.** Sí se lee la copia en `reference/` para entender el sobre (CRC-8 + nibble-expand, path `01 01 04` vs notify `01 02 04`). El codec de identidad, el de cadena (orden + on/off + modelo y knobs de los diez efectos) y los write SET de orden/modelo/control son de Patone. Librería, IRs y NAM se documentan en el design del editor. Índice: `docs/protocol-references.md`.
 
 ## Fase 1 — lo que se ve
 
@@ -182,18 +182,18 @@ Chrome siempre visible: nombre Patone, control de conexión a la izquierda, secc
 
 Modal de conexión: tabs USB y Bluetooth. USB pide permiso MIDI, lista endpoints, conecta, sugiere/confirma modelo, y se presenta como one-way y super fast. Bluetooth explica two-way y más lento, escanea pedales GATT, conecta, y sugiere/confirma modelo. Con Bluetooth conectado, Controller manda recall de patch por el encoder GATT (mismo selector 00–99 que USB). Qué muestra el control cuando hay pedal se define en `device-connection`.
 
-Pantalla Controller: al conectar puede mostrar loading mientras sincroniza identidad y la cadena de audio; luego selector de patch 00–99 (con nombres si llegaron) y la cadena del patch actual (10 slots en GP-5, 11 en GP-50 con EXP al final; los diez efectos se encienden/apagan por CC 48–57; EXP en GP-50 por CC 13 en Bluetooth y por SysEx capturado en USB). Los módulos móviles (NR, PRE, MOD, DLY, RVB) se reordenan por drag-and-drop sobre esa misma fila (USB y Bluetooth) y muestran tres puntitos arriba; DST, NS, AMP, CAB y EQ no se arrastran y quedan juntos en ese orden (nada en el medio); EXP tampoco se arrastra. En Bluetooth, si el usuario reordena en el pedal, Controller sigue ese orden; USB ignora esos reportes. Si NS (SnapTone) está on, AMP y CAB se marcan como bypassed con un overlay de prohibido; no se reescribe su on/off. Volumen, tuner y extras GP-50 vienen después.
+Pantalla Controller: al conectar puede mostrar loading mientras sincroniza identidad y la cadena de audio; luego selector de patch 00–99 (con nombres si llegaron) y la cadena del patch actual (10 slots en GP-5, 11 en GP-50 con EXP al final; los diez efectos se encienden/apagan por CC 48–57; EXP en GP-50 por CC 13 en Bluetooth y por SysEx capturado en USB). Debajo de esa fila, un panel por cada efecto encendido con modelo y knobs conocidos, en dos columnas cuando el ancho lo permite (select de modelo si hay más de uno de fábrica; sliders/toggles del catálogo; EXP no tiene panel). El número del slider sigue el arrastre; el SET de control se agrupa (throttle ~80 ms y flush al soltar) para no saturar BLE-MIDI. Los módulos móviles (NR, PRE, MOD, DLY, RVB) se reordenan por drag-and-drop sobre esa misma fila (USB y Bluetooth) y muestran tres puntitos arriba; DST, NS, AMP, CAB y EQ no se arrastran y quedan juntos en ese orden (nada en el medio); EXP tampoco se arrastra. En Bluetooth, si el usuario reordena, cambia un modelo o un knob en el pedal, Controller sigue esos reportes; USB ignora esa telemetría. Si NS (SnapTone) está on, AMP y CAB se marcan como bypassed con un overlay de prohibido; no se reescribe su on/off y no se muestran sus paneles. Volumen, tuner y extras GP-50 vienen después.
 
-Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot. La sesión puede aplicar identidad de patch, dumps de cadena y, en Bluetooth, SysEx live de on/off de módulos (incluido un footswitch Stomp) y SysEx live de orden de cadena por separado.
+Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot. La sesión puede aplicar identidad de patch, dumps de cadena y, en Bluetooth, SysEx live de on/off de módulos (incluido un footswitch Stomp), SysEx live de orden de cadena y SysEx live de modelo/control por separado.
 
 Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrome/Edge (localhost o HTTPS). Mobile queda fuera de estos cambios; la abstracción MIDI ya lo deja preparado.
 
 ## Fuera de alcance ahora
 
 - App mobile Tauri
-- Lectura/escritura de parámetros de preset, rename, reorder de librería (la cadena actual — orden + on/off — sí se lee; on/off de los diez efectos se escribe por CC 48–57; el orden de módulos móviles se escribe por SysEx Patone, no un dump completo)
+- Lectura/escritura de librería de presets, rename, reorder de librería (la cadena actual — orden + on/off + modelo y knobs de los diez efectos — sí se lee; on/off de los diez efectos se escribe por CC 48–57; orden, modelo y un control se escriben por SysEx Patone del patch actual, no un dump completo ni la ruta Editor)
 - Upload de IR / SnapTone / NAM
-- Aplicar inbound de volumen, tuner u otros CCs que no sean on/off de módulos al snapshot (`liveFromPedal` de knobs) mientras el patch no cambia. Bluetooth live-module / Stomp footswitch y live chain-order sí está en alcance
+- Aplicar inbound de volumen, tuner u otros CCs que no sean on/off de módulos al snapshot mientras el patch no cambia. Bluetooth live-module / Stomp footswitch, live chain-order y live modelo/control de los diez efectos sí está en alcance. USB no aplica parámetros live.
 - Control o display de modo Patch/Stomp (CC 28)
 - Tratar USB como duplex de live controls, ni aplicar inbound USB de live-module / Stomp / live chain-order
 - Volumen, tuner y extras GP-50 por Bluetooth
@@ -218,4 +218,5 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `chain-on-off`: on/off de módulos (CC 48–57); Bluetooth aplica inbound; USB solo envía
 - [x] Change `stomp-footswitch-chain`: footswitch Stomp sigue on/off en Bluetooth (`liveFromPedal`); USB ignora esos reportes
 - [x] Change `chain-reorder`: drag-and-drop de módulos móviles (NR, PRE, MOD, DLY, RVB); write SET `01 01 04` + CRC-8 (USB y Bluetooth); Bluetooth aplica inbound live chain-order `01 02 04`; USB ignora esos reportes
+- [x] Change `chain-slot-controls`: catálogo de fábrica, dump de modelo + knobs de los diez efectos, paneles en Controller, SET `1147`/`1148`
 - [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`
