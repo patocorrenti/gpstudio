@@ -66,6 +66,10 @@ Changing the selected model or a control value MUST go through the device sessio
 - **THEN** Controller shows the same AMP panel presentation as USB for that pedal
 - **AND** a control change is sent through the device session
 
+#### Scenario: Bluetooth panel follows a pedal control change
+- **WHEN** a Bluetooth session is showing AMP Gain at 30 and the pedal reports AMP Gain 45
+- **THEN** the AMP panel shows Gain at 45
+
 #### Scenario: Disconnect hides the panels
 - **WHEN** the user disconnects while Controller is showing slot control panels
 - **THEN** the panels are hidden

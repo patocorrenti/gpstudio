@@ -81,7 +81,7 @@ Unknown means “do not write,” not “pretend the first catalog model is load
 
 **Choice:** Extend `parsePresetDump` (and GP-5/GP-50 layouts already branched in the codec) to also read each kind’s wire identity and float32 LE values. Offsets are an apply-time fill-in from Patone captures; the GP-50 reference is a map, not source. Identity lookup: wire bytes → catalog model for that kind. Unknown identity → leave `modelId`/`values` unset for that slot, except when the kind has exactly one factory model for this pedal (NR GATE): then use that model if the dump floats decode. Order + on/off still apply.
 
-Requested / opportunistic current-preset dumps replace model + values (same class as today’s chain apply; not `liveFromPedal`). Bluetooth live on/off and live chain-order **keep** `modelId`/`values`. USB still ignores those live reports. Do **not** apply unsolicited live parameter frames while the patch stays the same.
+Requested / opportunistic current-preset dumps replace model + values (same class as today’s chain apply; not `liveFromPedal`). Bluetooth live on/off and live chain-order **keep** `modelId`/`values`. Bluetooth live model (command `07`) and live control (command `08`) notifies **update** `modelId`/`values` when `liveFromPedal` is true. USB still ignores those live reports.
 
 Kind index on the wire follows `DUMP_MODULE_IDS` (NR PRE DST AMP CAB EQ MOD DLY RVB NS), not UI `EFFECT_IDS` order.
 

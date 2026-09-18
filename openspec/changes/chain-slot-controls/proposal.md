@@ -6,7 +6,7 @@ Controller already shows the current patch’s audio chain (slot order + on/off,
 
 - Introduce a Patone-owned **factory catalog**: each **slot kind** (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) lists the **models** it can load. A model has an English label, which pedals it exists on (GP-5, GP-50, or both), the wire identity used in dumps/SETs, and a list of **controls** (label, min, max, step, display kind). Catalog data is typed TypeScript in `src/device/`, transcribed from observed pedal behavior and the local reference editor — not a JavaScript paste from `reference/`.
 - Extend the connected snapshot so each effect **slot** carries the loaded **model** and current control **values**, decoded from the same current-preset dump already requested after connect and on patch change (`docs/architecture.md`). Missing or unknown dump fields fail open: do not invent values that get written to the pedal.
-- After the chain is shown, Controller draws a simple control panel **below the audio chain for each enabled effect slot**: a model select (when that kind has more than one factory model) and that model’s controls, in two columns when width allows. AMP and CAB panels hide while NS bypasses those slots. Changing a model or a control goes through `DeviceSession` and is sent as a parameter-write SET (path `01 01 04`, CRC-8 + nibble-expand; not live notify `01 02 04`). Slider drags update the snapshot immediately and coalesce the SET (throttle + flush on release) so Bluetooth is not flooded. USB and Bluetooth share the same UI; USB remains one-way for unsolicited knob telemetry.
+- After the chain is shown, Controller draws a simple control panel **below the audio chain for each enabled effect slot**: a model select (when that kind has more than one factory model) and that model’s controls, in two columns when width allows. AMP and CAB panels hide while NS bypasses those slots. Changing a model or a control goes through `DeviceSession` and is sent as a parameter-write SET (path `01 01 04`, CRC-8 + nibble-expand; not live notify `01 02 04`). On Bluetooth, pedal→app live model (`01 02 04` command `07`) and live control (`01 02 04` command `08`) notifies update the same snapshot; USB ignores those reports. Slider drags update the snapshot immediately and coalesce the SET (throttle + flush on release) so Bluetooth is not flooded. USB and Bluetooth share the same UI; USB remains one-way for unsolicited knob telemetry.
 - Vocabulary for this work (full rationale in `design.md`): **audio chain** → **slot** (position) → **kind** (`nr`…`rvb`, plus GP-50 `exp`) → **model** (Tweedy, COMP) → **controls** / **values**. Existing specs may still say “module” for a slot kind; new requirements use **kind** and **model** so those two ideas stay distinct.
 
 ## Non-goals
@@ -14,8 +14,7 @@ Controller already shows the current patch’s audio chain (slot order + on/off,
 - The Editor and Library routes stay stubs. No preset rename, save-as, library reorder, or full preset file write (`docs/architecture.md`).
 - IR / SnapTone / NAM **upload**. User-loaded IR and SnapTone **names** (extra dumps) stay later; factory CAB/NS models that already have wire ids may appear in the catalog with stable English labels.
 - GP-50 EXP: still on/off only. No EXP model panel in this change.
-- Applying inbound live parameter/knob SysEx while the patch stays the same (`liveFromPedal` of knobs). Bluetooth still follows module on/off and chain-order as today. USB still must not apply those live reports.
-- Volume, tuner, globals, BPM, Patch/Stomp mode, stomp-assignment edit (paused lab).
+- Applying inbound volume, tuner, globals, BPM, Patch/Stomp mode, or stomp-assignment edit (paused lab). Bluetooth live model/control follow for the ten effect slots is in this change. USB still must not apply those live reports.
 - Polished knob chrome (custom knobs, per-slot colors, card selection on the chain). This change’s UI is functional panels under the chain.
 - Copying reverse-engineered JavaScript from `reference/` or other third-party editors. Mobile packaging. Treating USB and Bluetooth as interchangeable.
 
@@ -28,7 +27,7 @@ Controller already shows the current patch’s audio chain (slot order + on/off,
 ### Modified Capabilities
 
 - `live-controller`: After the audio chain is shown, Controller shows a two-column control panel for each enabled effect slot (model select + that model’s controls) through the device session. Panels hide when the slot is off, NS-bypassed (AMP/CAB), or the session disconnects. Same presentation on USB and Bluetooth.
-- `device-connection`: The connected snapshot carries each effect slot’s loaded model and control values from the current-preset dump. User model/control edits update the snapshot on-change and send a parameter-write SET on the open link. Slider control writes are coalesced. Unknown dump fields must not be written back. Disconnect drops that state.
+- `device-connection`: The connected snapshot carries each effect slot’s loaded model and control values from the current-preset dump. User model/control edits update the snapshot on-change and send a parameter-write SET on the open link. Slider control writes are coalesced. Bluetooth (`liveFromPedal`) applies inbound live model and live control notifies. USB does not apply those reports. Unknown dump fields must not be written back. Disconnect drops that state.
 
 ## Impact
 

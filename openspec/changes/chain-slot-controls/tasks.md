@@ -27,6 +27,11 @@
 
 ## 6. Docs and check
 
-- [x] 6.1 Update `docs/architecture.md` and `docs/protocol-references.md` so current-patch model + control read/write for the ten effect slots is in-scope SysEx (same dump, SET family), Editor/IRs/NAM/live knob follow stay out, and verify the files still forbid copying `reference/` JavaScript
+- [x] 6.1 Update `docs/architecture.md` and `docs/protocol-references.md` so current-patch model + control read/write for the ten effect slots is in-scope SysEx (same dump, SET family), Bluetooth live model/control follow is in scope, Editor/IRs/NAM stay out, and verify the files still forbid copying `reference/` JavaScript
 - [x] 6.2 Mirror that in `openspec/config.yaml` context and rules, and verify the file still parses as YAML
 - [x] 6.3 Run `npx tsc -b --pretty false` and fix type errors from this change
+
+## 7. Bluetooth live model/control follow
+
+- [x] 7.1 Decode pedal→app live control (path `01 02 04`, command `08`) and live model (command `07`) notifies from the same identity-family as live on/off, map `DUMP_MODULE_IDS` + float32 / wire identity, and verify a fixture AMP Gain 45 and a Bellman identity decode
+- [x] 7.2 Apply those notifies to the snapshot when `liveFromPedal` is true (Bluetooth), ignore them on USB, skip SET/recall/dump, drop pending control writes for that slot, and verify typecheck

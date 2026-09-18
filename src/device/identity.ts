@@ -1,4 +1,9 @@
-import { decodeLiveChainOrder, decodeLiveOnOffChanges } from "@/device/chain-codec";
+import {
+  decodeLiveChainOrder,
+  decodeLiveOnOffChanges,
+  decodeLiveSlotControl,
+  decodeLiveSlotModel,
+} from "@/device/chain-codec";
 
 export const PATCH_COUNT = 100;
 
@@ -136,12 +141,16 @@ export class IdentityDecoder {
       return null;
     }
 
-    // Live-module (09), EXP (02), Stomp mask (0E), and live chain-order share
-    // the identity-family header. They are chain state, never a patch change.
+    // Live-module (09), EXP (02), Stomp mask (0E), live chain-order,
+    // live model (07), and live control (08) share the identity-family
+    // header. They are chain state, never a patch change.
     if (decodeLiveOnOffChanges(midi).length > 0) {
       return null;
     }
     if (decodeLiveChainOrder(midi)) {
+      return null;
+    }
+    if (decodeLiveSlotControl(midi) || decodeLiveSlotModel(midi)) {
       return null;
     }
 

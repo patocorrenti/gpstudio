@@ -589,6 +589,82 @@ export function decodeLiveOnOffChanges(bytes: Uint8Array): LiveOnOffChange[] {
   return decodeLiveStompMask(bytes) ?? [];
 }
 
+export type LiveSlotControlChange = {
+  kind: EffectId;
+  index: number;
+  value: number;
+};
+
+export type LiveSlotModelChange = {
+  kind: EffectId;
+  wire: WireIdentity;
+};
+
+function isLiveNotify(midi: Uint8Array, size: number, command: number): boolean {
+  return (
+    midi[0] === 0xf0 &&
+    midi[3] === 0 &&
+    midi[4] === 1 &&
+    midi[8] === size &&
+    midi[9] === 1 &&
+    midi[10] === 2 &&
+    midi[11] === 4 &&
+    midi[12] === command
+  );
+}
+
+/**
+ * Pedal→app live control (Bluetooth). Identity-family, size `0x0E`, command `08`,
+ * path `01 02 04`. Kind at byte 14 (`DUMP_MODULE_IDS`), control index at 22,
+ * float32 LE nibble-expanded in the eight bytes before `F7`. Not a SET.
+ */
+export function decodeLiveSlotControl(bytes: Uint8Array): LiveSlotControlChange | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 38 || midi[midi.length - 1] !== 0xf7) {
+    return null;
+  }
+  if (!isLiveNotify(midi, 0x0e, 0x08)) {
+    return null;
+  }
+  const raw = midi[14];
+  if (raw < 0 || raw > 9) {
+    return null;
+  }
+  const index = midi[22];
+  if (index < 0 || index > 255) {
+    return null;
+  }
+  const value = readFloat32Le(midi, midi.length - 9);
+  if (value === null) {
+    return null;
+  }
+  return { kind: DUMP_MODULE_IDS[raw], index, value };
+}
+
+/**
+ * Pedal→app live model (Bluetooth). Identity-family, size `0x0A`, command `07`,
+ * path `01 02 04`. Kind at byte 14, 4-byte wire identity nibble-expanded in the
+ * eight bytes before `F7`. Not a SET (path `01 01 04` / family `1147`).
+ */
+export function decodeLiveSlotModel(bytes: Uint8Array): LiveSlotModelChange | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 30 || midi[midi.length - 1] !== 0xf7) {
+    return null;
+  }
+  if (!isLiveNotify(midi, 0x0a, 0x07)) {
+    return null;
+  }
+  const raw = midi[14];
+  if (raw < 0 || raw > 9) {
+    return null;
+  }
+  const wire = readWireIdentity(midi, midi.length - 9);
+  if (!wire) {
+    return null;
+  }
+  return { kind: DUMP_MODULE_IDS[raw], wire };
+}
+
 function bitOn(data: Uint8Array, offset: number, bit: number): boolean {
   if (offset >= data.length) {
     return false;
@@ -740,6 +816,52 @@ function assertPresetDumpFixtures(): void {
   const unknownAmp = skipped?.find((slot) => slot.id === "amp");
   if (unknownAmp?.modelId !== undefined || unknownAmp?.values !== undefined) {
     throw new Error("Unknown AMP identity must stay unwritable");
+  }
+
+  const liveGain = new Uint8Array(38);
+  liveGain[0] = 0xf0;
+  liveGain[3] = 0;
+  liveGain[4] = 1;
+  liveGain[8] = 0x0e;
+  liveGain[9] = 1;
+  liveGain[10] = 2;
+  liveGain[11] = 4;
+  liveGain[12] = 0x08;
+  liveGain[14] = DUMP_MODULE_IDS.indexOf("amp");
+  liveGain[22] = 0;
+  writeNibbleBytes(liveGain, 29, float32Le(45));
+  liveGain[37] = 0xf7;
+  const liveControl = decodeLiveSlotControl(liveGain);
+  if (
+    liveControl?.kind !== "amp" ||
+    liveControl.index !== 0 ||
+    Math.abs(liveControl.value - 45) > 0.01
+  ) {
+    throw new Error("Live AMP Gain notify fixture did not decode 45");
+  }
+  if (decodeLiveSlotControl(liveGain.slice(0, 20))) {
+    throw new Error("Short SysEx must not decode as a live control");
+  }
+
+  const liveModel = new Uint8Array(30);
+  liveModel[0] = 0xf0;
+  liveModel[3] = 0;
+  liveModel[4] = 1;
+  liveModel[8] = 0x0a;
+  liveModel[9] = 1;
+  liveModel[10] = 2;
+  liveModel[11] = 4;
+  liveModel[12] = 0x07;
+  liveModel[14] = DUMP_MODULE_IDS.indexOf("amp");
+  writeNibbleBytes(liveModel, 21, Uint8Array.from([0x03, 0x00, 0x00, 0x07]));
+  liveModel[29] = 0xf7;
+  const liveAmp = decodeLiveSlotModel(liveModel);
+  if (
+    liveAmp?.kind !== "amp" ||
+    liveAmp.wire[0] !== 0x03 ||
+    liveAmp.wire[3] !== 0x07
+  ) {
+    throw new Error("Live AMP model notify fixture did not decode Bellman identity");
   }
 }
 

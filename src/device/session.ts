@@ -8,8 +8,10 @@ import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
   defaultValuesFor,
   modelById,
+  modelByWire,
   modelsForKind,
   snapControlValue,
+  type WireIdentity,
 } from "@/device/catalog";
 import {
   defaultChain,
@@ -22,6 +24,8 @@ import {
   ChainDecoder,
   decodeLiveChainOrder,
   decodeLiveOnOffChanges,
+  decodeLiveSlotControl,
+  decodeLiveSlotModel,
 } from "@/device/chain-codec";
 import {
   encodeChainOrder,
@@ -545,7 +549,13 @@ export class DeviceSession {
     for (const message of this.sysex.push(bytes)) {
       const liveOnOff = this.applyLiveModule(message);
       const liveOrder = this.applyLiveChainOrder(message);
-      if (!liveOnOff && !liveOrder && this.snapshot.status === "connected") {
+      const liveSlot = this.applyLiveSlot(message);
+      if (
+        !liveOnOff &&
+        !liveOrder &&
+        !liveSlot &&
+        this.snapshot.status === "connected"
+      ) {
         this.applyIdentity(this.identity.push(message));
       }
       if (this.snapshot.status === "connected") {
@@ -666,6 +676,97 @@ export class DeviceSession {
     this.snapshot = { ...this.snapshot, chain };
     this.emitSnapshot();
     return true;
+  }
+
+  private applyLiveSlot(message: Uint8Array): boolean {
+    if (this.snapshot.status !== "connected") {
+      return false;
+    }
+    const modelChange = decodeLiveSlotModel(message);
+    if (modelChange) {
+      if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+        return true;
+      }
+      this.applyLiveSlotModel(modelChange.kind, modelChange.wire);
+      return true;
+    }
+    const controlChange = decodeLiveSlotControl(message);
+    if (!controlChange) {
+      return false;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return true;
+    }
+    this.applyLiveSlotControl(controlChange.kind, controlChange.index, controlChange.value);
+    return true;
+  }
+
+  private applyLiveSlotModel(kind: EffectId, wire: WireIdentity): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    let model = modelByWire(kind, wire);
+    if (!model) {
+      const sole = modelsForKind(kind, this.snapshot.model);
+      if (sole.length !== 1) {
+        return;
+      }
+      model = sole[0];
+    }
+    if (!model.devices.has(this.snapshot.model)) {
+      return;
+    }
+    this.clearControlWritesForKind(kind);
+    const values = defaultValuesFor(model);
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
+  }
+
+  private applyLiveSlotControl(kind: EffectId, controlIndex: number, value: number): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
+    if (index < 0) {
+      return;
+    }
+    const slot = this.snapshot.chain[index];
+    if (slot.modelId === undefined || slot.values === undefined) {
+      return;
+    }
+    const model = modelById(slot.modelId);
+    if (!model || model.kind !== kind) {
+      return;
+    }
+    const control = model.controls.find((entry) => entry.index === controlIndex);
+    if (!control || controlIndex >= slot.values.length) {
+      return;
+    }
+    const nextValue = snapControlValue(control, value);
+    this.dropControlWrite(controlWriteKey(kind, controlIndex), nextValue);
+    if (slot.values[controlIndex] === nextValue) {
+      return;
+    }
+    const values = slot.values.slice();
+    values[controlIndex] = nextValue;
+    const chain = this.snapshot.chain.map((entry, slotIndex) =>
+      slotIndex === index ? { ...entry, values } : entry,
+    );
+    this.snapshot = { ...this.snapshot, chain };
+    this.emitSnapshot();
   }
 
   private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
@@ -836,6 +937,17 @@ export class DeviceSession {
     for (const packet of packets) {
       await this.sendBytes(packet);
     }
+  }
+
+  private dropControlWrite(key: string, sentValue: number): void {
+    const timer = this.controlWriteTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.controlWriteTimers.delete(key);
+    }
+    this.pendingControlWrites.delete(key);
+    this.lastControlWriteAt.delete(key);
+    this.lastControlSentValue.set(key, sentValue);
   }
 
   private clearControlWritesForKind(kind: EffectId): void {
