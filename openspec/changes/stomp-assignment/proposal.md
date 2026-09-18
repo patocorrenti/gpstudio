@@ -1,3 +1,5 @@
+**Status: paused 2026-09-18.** Decode of GP-50 assignment from the current-preset dump is locked; every SET candidate (W1–W3, nine Controller spike rows, H7 CRC-8 param `0D`) was ignored by the pedal. Product UI and temporary write-spike controls were rolled back. Lab and resume notes: `spike-assignment-write.md`. Bluetooth Stomp footswitch follow stays in product (`stomp-footswitch-chain`).
+
 ## Why
 
 Controller already follows Stomp-mode footswitches (on/off of NR…NS). Users still cannot see or change **which modules** each stomp controls. That assignment is per patch; GP-5 has one stomp and GP-50 has two. The current-preset dump already arrives at connect and patch change (`docs/architecture.md`), but Patone only decodes order + on/off — assignment bytes are ignored.

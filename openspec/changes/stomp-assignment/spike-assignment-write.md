@@ -1,8 +1,8 @@
 # Spike: stomp assignment write
 
-Lab notebook for the write SysEx. Decode is locked. Do not copy third-party payloads (`docs/protocol-references.md`). One candidate per run. USB first (no BLE-MIDI wrap). Test vector: assign/unassign DST on GP-50 stomp 1 (known bit `04`).
+**Paused 2026-09-18.** Product code (Controller assignment chips, Write spike panel, snapshot `stomps`, assignment encoder) was rolled back so `feature/react-to-stomp` can ship Bluetooth footswitch follow. This folder is the lab. Resume here; do not rediscover dump offsets or retry the failed SET frames below.
 
-Encoder in `src/device/encode.ts` still emits the last failed candidate so Controller keeps a send path; the pedal ignores it. Replace that function only after a candidate is accepted.
+Lab notebook for the write SysEx. Decode is locked. Do not copy third-party payloads (`docs/protocol-references.md`). One candidate per run. USB first (no BLE-MIDI wrap). Test vector: assign/unassign DST on GP-50 stomp 1 (known bit `04`).
 
 ## Locked (read)
 
@@ -14,7 +14,7 @@ GP-50 current-preset dump (merged payload, same patch, assignment changed on the
 - Enable DST at dump offset 227 also flipped in that pair — side effect of the pedal UI, not the assignment field.
 - GP-5 stomp 1 assumed at **920** (same 86-byte shift as enable/order). Not QA’d on hardware.
 
-Controller decode of those dumps matches the pedal. Snapshot `stomps` fills from that dump. No extra dump is requested on edit.
+Decode of those dumps matched the pedal while the assignment UI existed. Product decode was rolled back on pause; re-apply from this notebook on resume. No extra dump is requested on edit.
 
 ## Locked (live notify, pedal → app)
 
@@ -68,6 +68,16 @@ Temporary **Write spike** on Controller. USB and/or Bluetooth as tested by the o
 
 H1 ignored ⇒ live `0D` is notify-only (checksum included still does nothing). H2 (checksum-only on that envelope) is dead. H4 (mode then H1) is dead. Offset poke without dump wire format is dead.
 
+## H7 (2026-09-18) — failed, do not retry as-is
+
+Patone-owned per-effect SET (not a copied payload): CRC-8 ATM / CCITT poly `0x07` init 0 of the packed body, then nibble-expand (each nibble a MIDI byte `00`–`0F`). Host envelope size `05`, path `01 01 04`, command `0D`, then stomp index / effect index / 0|1. Temporary encoder lived in `src/device/stomp-write-spike.ts` (deleted on pause). USB Log showed DST Stomp 1 on as:
+
+```
+F0 08 06 00 01 00 00 00 05 01 01 04 0D 00 00 00 02 00 01 F7
+```
+
+Operator: **did not move the pedal** (same as W1–W3 and the nine panel rows), USB and Bluetooth. H7 as-is is dead. The CRC-8 + nibble family may still be right if the **address / path / command / body layout** is wrong — do not guess another layout without capturing an app→pedal frame the pedal accepted.
+
 ## Behavioral note (third-party editor, no payload copy)
 
 [GP-50 web editor](https://rvalladares.com/gp5/gp50editor/) is a behavioral reference only (`docs/protocol-references.md`). Do **not** copy its JavaScript or SysEx into Patone.
@@ -79,7 +89,7 @@ Observed from the public UI + function names (not used as a source drop):
 - The same send path as other parameter knobs: BLE-MIDI prefix, SysEx, a **CRC-8 verifier**, then **nibble-expand** (each hex digit becomes a `0x0n` MIDI byte — the same 0–F packing as inbound dumps). `Save` is a **file export** of dump bytes, not that live CTL path. Patch/Stomp mode is a different parameter send (`sendFootChange`).
 - Inbound, they also treat a 36-byte frame as GP-5 footswitch-mode change.
 
-Starting point for the next Patone-owned candidate: stop echoing `0D`. Treat SET as a **checksummed, nibble-packed, per-effect parameter write** (stomp index + effect index + 0/1), same wire family as the dump, using a CRC-8 we own and addresses filled from a Patone or official-app capture — never a copied hex template.
+H7 guessed that family without an official address capture and was ignored. Resume needs a capture of bytes the pedal **accepted**, not another guessed envelope.
 
 ## Open
 
@@ -93,19 +103,15 @@ The pedal accepts some app→pedal assignment SET. We have not captured that dir
 | H4 | SET only while Patch/Stomp mode is Stomp (CC 28) | CC 28 then H1 ignored | **failed** |
 | H5 | SET needs a session/edit preamble we do not send | Official-tool capture of bytes before the assignment frame | open |
 | H6 | Send path is dropping SysEx | USB MIDI monitor / BLE sniffer while clicking a chip | low |
-| H7 | SET is a CRC-8 + nibble-expand **per-effect** parameter write (stomp, effect, 0/1), same family as other preset knobs | Patone-owned encoder of that shape; confirm with dump 1006/1014 | **next** |
+| H7 | SET is a CRC-8 + nibble-expand **per-effect** parameter write (stomp, effect, 0/1), same family as other preset knobs | Patone-owned encoder of that shape; confirm with dump 1006/1014 | **failed** (guessed size `05` / path `01 01 04` / cmd `0D` / DST Stomp 1 body; USB frame above) |
 
 ## Procedure
 
-1. One new family at a time (now H7). Leave dump decode alone. Do not retry W1–W3 or the nine panel rows.
-2. USB, GP-50, Log open. Assign DST on Stomp 1, then unassign. Look at the pedal.
-3. Record pass/fail in the table **before** the next candidate.
-4. If accepted: dump and confirm offsets 1006/1014; then Bluetooth; then GP-5 920.
-5. Do not copy third-party SysEx. Official Valeton app → USB MIDI monitor is a valid Patone capture of app→pedal.
+1. Do **not** retry W1–W3, the nine panel rows, or H7 as-is. Leave dump decode alone.
+2. Next SET needs an **accepted** app→pedal capture (official Valeton app or MIDI monitor), then a Patone-owned encoder of that shape. USB first.
+3. Record pass/fail **before** the next candidate. If accepted: dump-confirm offsets 1006/1014; then Bluetooth; then GP-5 920.
+4. Do not copy third-party SysEx (`010005114d…` or any hex from the public editors).
 
-## Next
+## Resume (after pause)
 
-**H7 on Controller (top card, 2026-09-17).** Per-effect write: CRC-8 ATM (poly `0x07`) of packed body, nibble-expand, size `05`, path `01 01 04`, command `0D`, then stomp / effect / 0|1. DST Stomp 1 on/off. Previous nine rows are folded under “Previous candidates”.
-
-- Pedal follows → lock this encoder, dump-confirm 1006/1014, then Bluetooth / GP-5.
-- Ignored → stop tomorrow; need an official-app address capture, not more live `0D`.
+Product has no assignment UI. Re-apply decode from this notebook into `chain-codec` (GP-50 1006/1014 enable-style nibbles; GP-5 920 unverified), snapshot `stomps`, Controller chips (NR…NS, never EXP), and a write encoder **only after** a captured SET. Specs stay in this change folder. Bluetooth footswitch follow is already shipping (`stomp-footswitch-chain`); do not regress it.

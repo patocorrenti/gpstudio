@@ -1,5 +1,4 @@
 import { Ban, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import iconAmp from "@/assets/img/icon-AMP.png";
 import iconCab from "@/assets/img/icon-CAB.png";
 import iconDly from "@/assets/img/icon-DLY.png";
@@ -20,9 +19,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  EFFECT_IDS,
-  STOMP_WRITE_SPIKES,
-  assignmentToggle,
   chainSlotBypassed,
   chainSlotLabel,
   formatPatch,
@@ -30,9 +26,6 @@ import {
   PATCH_COUNT,
   type AudioChain,
   type AudioChainSlot,
-  type EffectId,
-  type StompAssignment,
-  type StompWriteSpikeId,
   type ChainSlotId,
 } from "@/device/session";
 import {
@@ -237,200 +230,11 @@ function AudioChainRow({
   );
 }
 
-function emptyLike(stomps: StompAssignment): StompAssignment {
-  return stomps.map(() => []);
-}
-
-function StompAssignmentRow({
-  index,
-  assigned,
-  disabled,
-  onChange,
-}: {
-  index: number;
-  assigned: EffectId[];
-  disabled: boolean;
-  onChange: (index: number, next: EffectId[]) => void;
-}) {
-  const selected = new Set(assigned);
-  const label = `Stomp ${index + 1}`;
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
-      <ul
-        aria-label={label}
-        className="flex flex-wrap items-center justify-center gap-1.5"
-      >
-        {EFFECT_IDS.map((id) => {
-          const on = selected.has(id);
-          const moduleLabel = chainSlotLabel(id);
-          return (
-            <li key={id}>
-              <Button
-                type="button"
-                size="xs"
-                variant={on ? "default" : "outline"}
-                disabled={disabled}
-                aria-pressed={on}
-                aria-label={`${label} ${moduleLabel} ${on ? "on" : "off"}`}
-                onClick={() => {
-                  const next = on
-                    ? assigned.filter((item) => item !== id)
-                    : [...assigned, id];
-                  onChange(index, next);
-                }}
-              >
-                {moduleLabel}
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function StompAssignmentSection({
-  stomps,
-  disabled,
-}: {
-  stomps: StompAssignment;
-  disabled: boolean;
-}) {
-  const session = useDeviceSession();
-  return (
-    <div className="mt-8 flex w-full flex-col items-center gap-6">
-      {stomps.map((assigned, index) => (
-        <StompAssignmentRow
-          key={index}
-          index={index}
-          assigned={assigned}
-          disabled={disabled}
-          onChange={(stompIndex, next) => {
-            void session.setStompAssignment(stompIndex, next);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function SpikeBlock({
-  spike,
-  assigned,
-  disabled,
-  onAssigned,
-}: {
-  spike: (typeof STOMP_WRITE_SPIKES)[number];
-  assigned: StompAssignment;
-  disabled: boolean;
-  onAssigned: (id: StompWriteSpikeId, next: StompAssignment) => void;
-}) {
-  const session = useDeviceSession();
-  return (
-    <div className="rounded-lg border border-border px-3 py-3">
-      <p className="text-center text-sm font-medium">{spike.title}</p>
-      <p className="mt-0.5 text-center text-xs text-muted-foreground">{spike.hint}</p>
-      <div className="mt-3 flex flex-col items-center gap-4">
-        {assigned.map((stomp, index) => (
-          <StompAssignmentRow
-            key={index}
-            index={index}
-            assigned={stomp}
-            disabled={disabled}
-            onChange={(stompIndex, next) => {
-              const previous = assigned[stompIndex] ?? [];
-              const nextStomps = assigned.map((current, currentIndex) =>
-                currentIndex === stompIndex ? next : current,
-              );
-              onAssigned(spike.id, nextStomps);
-              const toggle = assignmentToggle(previous, next);
-              void session.spikeStompWrite(
-                spike.id,
-                nextStomps,
-                stompIndex,
-                toggle?.id,
-                toggle?.enabled,
-              );
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StompWriteSpikePanel({
-  stomps,
-  disabled,
-}: {
-  stomps: StompAssignment;
-  disabled: boolean;
-}) {
-  const dumpKey = JSON.stringify(stomps);
-  const [byId, setById] = useState<Partial<Record<StompWriteSpikeId, StompAssignment>>>(
-    {},
-  );
-
-  useEffect(() => {
-    setById({});
-  }, [dumpKey]);
-
-  const current = STOMP_WRITE_SPIKES.filter((spike) => !spike.retired);
-  const retired = STOMP_WRITE_SPIKES.filter((spike) => spike.retired);
-
-  return (
-    <div className="mt-10 w-full max-w-3xl border-t border-dashed border-border pt-6">
-      <h2 className="text-center text-sm font-semibold">Write spike</h2>
-      <p className="mx-auto mt-1 max-w-xl text-center text-xs text-muted-foreground">
-        This round is H7 (top). Assign then unassign DST on Stomp 1. Chips here do
-        not change the dump row above.
-      </p>
-      <div className="mt-4 flex flex-col gap-5">
-        {current.map((spike) => (
-          <SpikeBlock
-            key={spike.id}
-            spike={spike}
-            assigned={byId[spike.id] ?? emptyLike(stomps)}
-            disabled={disabled}
-            onAssigned={(id, next) => {
-              setById((currentMap) => ({ ...currentMap, [id]: next }));
-            }}
-          />
-        ))}
-      </div>
-      {retired.length > 0 ? (
-        <details className="mt-6">
-          <summary className="cursor-pointer text-center text-xs text-muted-foreground">
-            Previous candidates (ignored)
-          </summary>
-          <div className="mt-4 flex flex-col gap-5">
-            {retired.map((spike) => (
-              <SpikeBlock
-                key={spike.id}
-                spike={spike}
-                assigned={byId[spike.id] ?? emptyLike(stomps)}
-                disabled={disabled}
-                onAssigned={(id, next) => {
-                  setById((currentMap) => ({ ...currentMap, [id]: next }));
-                }}
-              />
-            ))}
-          </div>
-        </details>
-      ) : null}
-    </div>
-  );
-}
-
 function PatchBody({
   chain,
-  stomps,
   busy,
 }: {
   chain: AudioChain;
-  stomps: StompAssignment;
   busy: boolean;
 }) {
   return (
@@ -440,8 +244,6 @@ function PatchBody({
         aria-hidden={busy}
       >
         <AudioChainRow chain={chain} disabled={busy} />
-        <StompAssignmentSection stomps={stomps} disabled={busy} />
-        <StompWriteSpikePanel stomps={stomps} disabled={busy} />
       </div>
       {busy ? (
         <div
@@ -478,7 +280,6 @@ function ConnectedController() {
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
       <PatchBody
         chain={snapshot.chain}
-        stomps={snapshot.stomps}
         busy={snapshot.chainSync === "syncing"}
       />
     </section>

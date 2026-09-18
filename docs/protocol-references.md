@@ -19,11 +19,6 @@ Useful observations (not a protocol spec):
 - USB uses Web MIDI with SysEx enabled. Some live global/footswitch changes are not notified over USB.
 - Bluetooth uses the BLE-MIDI GATT service and the same SysEx conversation, wrapped in BLE-MIDI packets.
 
-Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off + stomp assignment) from that class of dump. Assignment write is in scope; the SET frame is not locked yet. Full preset parameters, IRs, and NAM stay out.
+Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off) from that class of dump. Full preset parameters, IRs, and NAM stay out.
 
-Patone captures for stomp assignment (not a third-party drop):
-
-- GP-50 dump: stomp 1 mask at merged offset 1006, stomp 2 at 1014 (enable-style nibbles). Decode matches Controller. GP-5 offset 920 is the 86-byte shift, unverified on hardware.
-- Assigning DST on the pedal over Bluetooth emits a 30-byte live SysEx, command `0D`, size `0x0A`, **without** host marker `02`. Stomp 1 DST sets byte 14 to `04`; stomp 2 sets byte 22 to `04`. Bytes 1–2 vary (checksum, unsolved). USB does not show that notify.
-- Echoing live `0D` (with or without captured checksum), host `0D`/`04`/`05`/`0E`, stomp-index, dump offset poke, and CC 28 then `0D` were all ignored on the pedal (USB and Bluetooth). Lab: `openspec/changes/stomp-assignment/spike-assignment-write.md`.
-- Behavioral only, [GP-50 editor](https://rvalladares.com/gp5/gp50editor/): Patch Settings footswitch checkboxes send a **per-module** parameter write (CRC-8 + nibble-expand, BLE-MIDI wrap), not live `0D`. Save is a file export. Do not copy that source or those payloads. Next SET candidate follows that *shape* from Patone-owned packing.
+Stomp **assignment** (which modules each footswitch toggles) is a paused lab, not product: decode from the current-preset dump is locked for GP-50; every Patone-owned SET candidate was ignored. Do not copy those editors’ assignment SysEx. Resume notes: `openspec/changes/stomp-assignment/spike-assignment-write.md`.

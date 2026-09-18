@@ -6,20 +6,12 @@ import type {
 } from "@/bluetooth/types";
 import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
-  EFFECT_IDS,
   defaultChain,
-  emptyStomps,
   type AudioChain,
   type ChainSlotId,
-  type EffectId,
-  type StompAssignment,
 } from "@/device/chain";
-import { ChainDecoder, decodeLiveOnOffChanges, type PresetDump } from "@/device/chain-codec";
-import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch, encodeStompAssignment } from "@/device/encode";
-import {
-  encodeStompWriteSpike,
-  type StompWriteSpikeId,
-} from "@/device/stomp-write-spike";
+import { ChainDecoder, decodeLiveOnOffChanges } from "@/device/chain-codec";
+import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
   emptyPatchNames,
@@ -40,22 +32,13 @@ export type { InboundMidiEvent } from "@/device/midi-log";
 export type { LinkEndpoint } from "@/device/endpoint";
 export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
 export {
-  EFFECT_IDS,
   chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
-  emptyStomps,
   type AudioChain,
   type AudioChainSlot,
   type ChainSlotId,
-  type EffectId,
-  type StompAssignment,
 } from "@/device/chain";
-export {
-  STOMP_WRITE_SPIKES,
-  assignmentToggle,
-  type StompWriteSpikeId,
-} from "@/device/stomp-write-spike";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
@@ -72,7 +55,6 @@ export type SessionSnapshot =
       patch: number;
       patchNames: (string | null)[];
       chain: AudioChain;
-      stomps: StompAssignment;
       chainSync: ChainSync;
       sync: SessionSync;
       linkMode: LinkMode;
@@ -204,7 +186,6 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         chain: defaultChain(model),
-        stomps: emptyStomps(model),
         chainSync: "idle",
         sync: "syncing",
         linkMode: "bluetooth",
@@ -218,7 +199,6 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         chain: defaultChain(model),
-        stomps: emptyStomps(model),
         chainSync: "idle",
         sync: "syncing",
         linkMode: "usb",
@@ -297,58 +277,6 @@ export class DeviceSession {
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
   }
 
-  async setStompAssignment(index: number, ids: readonly EffectId[]): Promise<void> {
-    if (this.snapshot.status !== "connected") {
-      throw new Error("No pedal is connected.");
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
-      throw new Error("Stomp assignment is not available on this link.");
-    }
-    if (index < 0 || index >= this.snapshot.stomps.length) {
-      return;
-    }
-    const assigned = EFFECT_IDS.filter((id) => ids.includes(id));
-    const stomps = this.snapshot.stomps.map((stomp, stompIndex) =>
-      stompIndex === index ? assigned : stomp,
-    );
-    this.snapshot = { ...this.snapshot, stomps };
-    this.emitSnapshot();
-    await this.sendBytes(encodeStompAssignment(this.snapshot.linkMode, stomps));
-  }
-
-  /** Temporary write-spike send. Does not update snapshot assignment. */
-  async spikeStompWrite(
-    id: StompWriteSpikeId,
-    stomps: StompAssignment,
-    changedIndex: number,
-    changedEffect?: EffectId,
-    enabled?: boolean,
-  ): Promise<void> {
-    if (this.snapshot.status !== "connected") {
-      throw new Error("No pedal is connected.");
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
-      throw new Error("Stomp assignment is not available on this link.");
-    }
-    await this.sendBytes(
-      encodeStompWriteSpike(id, {
-        linkMode: this.snapshot.linkMode,
-        model: this.snapshot.model,
-        stomps,
-        changedIndex,
-        ...(changedEffect
-          ? { changedEffect, enabled: enabled === true }
-          : {}),
-      }),
-    );
-  }
-
   private async runIdentitySync(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
@@ -411,18 +339,15 @@ export class DeviceSession {
     await this.sendBytes(encodeChainRequest(this.snapshot.linkMode));
   }
 
-  private async sendBytes(bytes: Uint8Array | readonly Uint8Array[]): Promise<void> {
+  private async sendBytes(bytes: Uint8Array): Promise<void> {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    const packets = bytes instanceof Uint8Array ? [bytes] : bytes;
     try {
-      for (const packet of packets) {
-        if (this.snapshot.linkMode === "bluetooth") {
-          await this.bluetooth.send(packet);
-        } else {
-          await this.transport.send(packet);
-        }
+      if (this.snapshot.linkMode === "bluetooth") {
+        await this.bluetooth.send(bytes);
+      } else {
+        await this.transport.send(bytes);
       }
     } catch {
       await this.dropLink();
@@ -511,15 +436,14 @@ export class DeviceSession {
     void this.sendChainRequest(this.syncGeneration);
   }
 
-  private applyChain(dump: PresetDump | null): void {
-    if (!dump || this.snapshot.status !== "connected") {
+  private applyChain(chain: AudioChain | null): void {
+    if (!chain || this.snapshot.status !== "connected") {
       return;
     }
     this.clearChainRefreshTimer();
     this.snapshot = {
       ...this.snapshot,
-      chain: preserveExpEnabled(this.snapshot.chain, dump.chain),
-      stomps: dump.stomps,
+      chain: preserveExpEnabled(this.snapshot.chain, chain),
       chainSync: "idle",
     };
     this.emitSnapshot();

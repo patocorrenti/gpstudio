@@ -33,7 +33,7 @@ See `proposal.md` for why. The current-preset dump already runs after identity a
 
 **Alternative:** Write the whole preset blob. Rejected; out of scope and easy to clobber unrelated fields.
 
-**Fill-in (2026-09-17):** Dump offsets are locked (GP-50 1006/1014). Pedal→app live command `0D` is locked as an assignment **notify**. Three SET candidates (host `05`, live `0D` with checksum `00 00`, host `0D`) were ignored on the pedal, including USB, so BLE-MIDI size is not the only cause. Lab log and next experiment: `spike-assignment-write.md`. Encoder still sends the last failed host-`0D` frame until a candidate is accepted.
+**Fill-in (paused 2026-09-18):** Dump offsets are locked (GP-50 1006/1014). Pedal→app live command `0D` is locked as an assignment **notify**. SET candidates W1–W3, nine Controller spike rows, and H7 (CRC-8 ATM + nibble-expand, guessed size `05` / path `01 01 04` / cmd `0D`) were all ignored on USB and Bluetooth. Product encode/UI for assignment was rolled back. Lab: `spike-assignment-write.md`. Resume needs an accepted app→pedal capture, not another guessed envelope.
 
 ### 3. Optimistic edit, no chain overlay
 
@@ -68,7 +68,7 @@ See `proposal.md` for why. The current-preset dump already runs after identity a
 ## Risks / Trade-offs
 
 - [Assignment bits sit in the dump but we guess the wrong offset] → Mitigated: GP-50 dump diff locked 1006/1014. GP-5 920 still QA.
-- [Inbound live `0D` is not a SET] → Confirmed: exact notify echo, host `0D`, XOR-CS, CC 28+H1 all ignored. Next is H7 (CRC-8 + nibble-expand per effect), not more live envelopes.
+- [Inbound live `0D` is not a SET] → Confirmed: exact notify echo, host `0D`, XOR-CS, CC 28+H1, and H7 guessed param write all ignored. Next is an official-app or MIDI-monitor capture of an accepted SET, not more live envelopes.
 - [Write clobbers order or on/off] → Encode only assignment fields; verify a round-trip dump still matches chain order/on/off.
 - [One module on both GP-50 stomps] → Allow it unless a capture shows the pedal forbids it; do not invent exclusivity.
 - [User is in Patch mode and the footswitch still changes patches] → Out of scope; assignment still stored on the patch.

@@ -1,12 +1,4 @@
-import {
-  EFFECT_IDS,
-  emptyStomps,
-  type AudioChain,
-  type AudioChainSlot,
-  type ChainSlotId,
-  type EffectId,
-  type StompAssignment,
-} from "@/device/chain";
+import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 
 /**
@@ -44,27 +36,6 @@ type EnableBit = readonly [offset: number, bit: number];
 type PresetLayout = {
   enable: Record<EffectId, EnableBit>;
   orderAt: number;
-  /** Base offsets of each stomp's 4-byte enable-style mask. Stride 8. */
-  stompsAt: readonly number[];
-};
-
-/**
- * Stomp assignment uses the same nibble packing as module enable:
- * byte0 CAB/EQ/MOD/DLY, byte1 NR/PRE/DST/AMP, byte3 RVB/NS.
- * GP-50 Patone dump: stomp 1 at 1006, stomp 2 at 1014. GP-5 is the same
- * 86-byte shift as enable/order (one stomp).
- */
-const STOMP_BITS: Record<EffectId, EnableBit> = {
-  cab: [0, 0],
-  eq: [0, 1],
-  mod: [0, 2],
-  dly: [0, 3],
-  nr: [1, 0],
-  pre: [1, 1],
-  dst: [1, 2],
-  amp: [1, 3],
-  rvb: [3, 0],
-  ns: [3, 1],
 };
 
 const GP50_LAYOUT: PresetLayout = {
@@ -81,7 +52,6 @@ const GP50_LAYOUT: PresetLayout = {
     ns: [229, 1],
   },
   orderAt: 243,
-  stompsAt: [1006, 1014],
 };
 
 const GP5_LAYOUT: PresetLayout = {
@@ -98,7 +68,6 @@ const GP5_LAYOUT: PresetLayout = {
     ns: [143, 1],
   },
   orderAt: 157,
-  stompsAt: [920],
 };
 
 type DumpClass = "gp5" | "gp50";
@@ -374,26 +343,7 @@ function bitOn(data: Uint8Array, offset: number, bit: number): boolean {
   return (data[offset] & (1 << bit)) !== 0;
 }
 
-export type PresetDump = {
-  chain: AudioChain;
-  stomps: StompAssignment;
-};
-
-function parseStomp(data: Uint8Array, at: number): EffectId[] {
-  if (at + 3 >= data.length) {
-    return [];
-  }
-  return EFFECT_IDS.filter((id) => {
-    const [offset, bit] = STOMP_BITS[id];
-    return bitOn(data, at + offset, bit);
-  });
-}
-
-function parsePresetDump(
-  data: Uint8Array,
-  layout: PresetLayout,
-  model: DeviceModel,
-): PresetDump | null {
+function parsePresetDump(data: Uint8Array, layout: PresetLayout, model: DeviceModel): AudioChain | null {
   const lastOrder = layout.orderAt + 18;
   if (data.length <= lastOrder) {
     return null;
@@ -426,39 +376,7 @@ function parsePresetDump(
     slots.push({ id: "exp", enabled: false });
   }
 
-  const stomps = layout.stompsAt.map((at) => parseStomp(data, at));
-  if (stomps.length === 0) {
-    return { chain: slots, stomps: emptyStomps(model) };
-  }
-
-  return { chain: slots, stomps };
-}
-
-/** Pack one stomp's modules into the dump's 4-byte enable-style mask. */
-export function packStompMask(ids: readonly EffectId[]): Uint8Array {
-  const bytes = new Uint8Array(4);
-  for (const id of ids) {
-    const bits = STOMP_BITS[id];
-    if (!bits) {
-      continue;
-    }
-    const [offset, bit] = bits;
-    bytes[offset] |= 1 << bit;
-  }
-  return bytes;
-}
-
-/**
- * Live command 0D payload bytes for one stomp (Patone capture).
- * Low: NR…DLY as 0E-style byte (cab/eq/mod/dly in the high nibble).
- * High: RVB/NS. DST-only captures used low=0x04 at stomp 1 (byte 14) or stomp 2 (byte 22).
- */
-export function packStompLiveBytes(ids: readonly EffectId[]): { low: number; high: number } {
-  const mask = packStompMask(ids);
-  return {
-    low: ((mask[0] & 0x0f) << 4) | (mask[1] & 0x0f),
-    high: mask[3] & 0x0f,
-  };
+  return slots;
 }
 
 export class ChainDecoder {
@@ -470,7 +388,7 @@ export class ChainDecoder {
     this.dumpClass = null;
   }
 
-  private finish(model: DeviceModel): PresetDump | null {
+  private finish(model: DeviceModel): AudioChain | null {
     if (!this.dumpClass) {
       return null;
     }
@@ -491,14 +409,14 @@ export class ChainDecoder {
       cursor += part.length;
     }
     const layout = this.dumpClass === "gp50" ? GP50_LAYOUT : GP5_LAYOUT;
-    const dump = parsePresetDump(merged, layout, model);
-    if (dump) {
+    const chain = parsePresetDump(merged, layout, model);
+    if (chain) {
       this.reset();
     }
-    return dump;
+    return chain;
   }
 
-  push(bytes: Uint8Array, model: DeviceModel): PresetDump | null {
+  push(bytes: Uint8Array, model: DeviceModel): AudioChain | null {
     const midi = midiPayload(bytes);
     if (midi.length < 8 || midi[0] !== 0xf0) {
       return null;
