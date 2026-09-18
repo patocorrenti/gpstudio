@@ -421,8 +421,15 @@ function SlotControlPanel({
       className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
       aria-label={`${kindLabel} controls`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold tracking-wide">{kindLabel}</h2>
+      <div className="flex items-center gap-3">
+        <h2 className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-semibold tracking-wide">
+          <img
+            src={CHAIN_SLOT_ICONS[slot.id]}
+            alt=""
+            className="size-7 object-contain"
+          />
+          {kindLabel}
+        </h2>
         {options.length > 1 ? (
           <Select
             value={model.id}
@@ -434,7 +441,7 @@ function SlotControlPanel({
             <SelectTrigger
               aria-label={`${kindLabel} model`}
               size="sm"
-              className="min-w-40"
+              className="h-8 w-full min-w-52 flex-1"
             >
               <SelectValue>{model.label}</SelectValue>
             </SelectTrigger>
@@ -447,7 +454,9 @@ function SlotControlPanel({
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-sm text-muted-foreground">{model.label}</p>
+          <p className="min-w-0 flex-1 text-right text-sm text-muted-foreground">
+            {model.label}
+          </p>
         )}
       </div>
       <div className="flex flex-col gap-3">
