@@ -27,6 +27,6 @@
 ## 6. Write spike (USB first, one candidate per run)
 
 - [x] 6.1 Record dump offsets, live `0D` notifies, and failed SET candidates W1–W3 in `spike-assignment-write.md` (do not retry those frames as-is)
-- [ ] 6.2 H1: USB, send the exact captured DST-stomp1-on `0D` (checksum `01 0D`) and the unassign capture (`05 01`). Log pass/fail in the spike file before any new envelope
-- [ ] 6.3 If H1 is ignored, stop echoing `0D` and capture app→pedal SET (official tool + USB MIDI monitor, or the next cheapest H3/H5). Do not copy third-party SysEx
-- [ ] 6.4 If a candidate is accepted, confirm dump 1006/1014 still match, then Bluetooth, then GP-5 offset 920; only then close 3.2
+- [x] 6.2 Parallel candidates on Controller **Write spike**: DST on/off Stomp 1 in each block. Operator: **none moved the pedal**. Recorded in `spike-assignment-write.md` (H1–H4 and the nine rows are dead).
+- [ ] 6.3 H7: Patone-owned per-effect SET (CRC-8 + nibble-expand, stomp index + effect index + 0/1) on the Write spike top card. Operator tests DST Stomp 1.
+- [ ] 6.4 If a candidate is accepted, confirm dump 1006/1014 still match, then Bluetooth, then GP-5 offset 920; only then close 3.2. Remove the Write spike panel.

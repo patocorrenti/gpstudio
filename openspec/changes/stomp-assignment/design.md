@@ -68,7 +68,7 @@ See `proposal.md` for why. The current-preset dump already runs after identity a
 ## Risks / Trade-offs
 
 - [Assignment bits sit in the dump but we guess the wrong offset] → Mitigated: GP-50 dump diff locked 1006/1014. GP-5 920 still QA.
-- [Inbound live `0D` is not a SET] → Three write candidates ignored, USB included. Spike `H1` sends the exact captured notify (checksum included) before inventing another envelope.
+- [Inbound live `0D` is not a SET] → Confirmed: exact notify echo, host `0D`, XOR-CS, CC 28+H1 all ignored. Next is H7 (CRC-8 + nibble-expand per effect), not more live envelopes.
 - [Write clobbers order or on/off] → Encode only assignment fields; verify a round-trip dump still matches chain order/on/off.
 - [One module on both GP-50 stomps] → Allow it unless a capture shows the pedal forbids it; do not invent exclusivity.
 - [User is in Patch mode and the footswitch still changes patches] → Out of scope; assignment still stored on the patch.
@@ -80,4 +80,4 @@ Additive snapshot field and dump parse. Disconnect drops it. Rollback is reverti
 
 ## Open Questions
 
-Dump offsets are filled in. The assignment **SET** SysEx is not. That does not fork the specs (write stays in scope); it blocks task 3.2 until `spike-assignment-write.md` lands an accepted candidate. Do not apply inbound `0D` until that write works.
+Dump offsets are filled in. Live `0D` is notify-only (exact captures ignored). The assignment **SET** is likely a checksummed nibble-packed per-effect parameter write (behavioral note from the public GP-50 editor UI; no payload copy). That does not fork the specs. See `spike-assignment-write.md` H7. Do not apply inbound `0D` until that write works.

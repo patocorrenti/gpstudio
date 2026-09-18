@@ -50,30 +50,62 @@ W3 rules out “BLE-MIDI MTU truncated the 32-byte packet” as the only cause: 
 
 Working SysEx we already send (for contrast) is short host requests: `F0 00 SIZE 00 01 00 00 00 02 01 02 04 CMD F7` (name-list `0E`/`00`, current-patch `07`/`03`, current-preset `09`/`01`). Live module on/off is official CC, not a host `09`.
 
+## Controller panel (2026-09-17) — all ignored
+
+Temporary **Write spike** on Controller. USB and/or Bluetooth as tested by the operator. DST on/off Stomp 1 in every block: **none moved the pedal.** Do not retry these as-is.
+
+| Title | Candidate | Result |
+| --- | --- | --- |
+| H1 live 0D exact CS | Exact DST captures (checksum included) | ignored |
+| Live 0D XOR checksum | Live envelope, nibble-packed XOR of bytes 3–28 | ignored |
+| Host short 0D | Host `02`, command `0D`, 18 bytes | ignored |
+| Host size 09 cmd 0D | Preset-class size, command `0D`, 30-byte live map | ignored |
+| Host cmd 04 | Host 30-byte live map, command `04` | ignored |
+| Host cmd 0E | Host 30-byte live map, command `0E` | ignored |
+| Host 0D + stomp index | Byte 13 = stomp index, 14–15 = that stomp | ignored |
+| Dump offset poke | Host size `09` cmd `02`, nibble offset + dump mask | ignored |
+| CC 28 Stomp + H1 | CC 28 = 127, then exact H1 DST frame | ignored |
+
+H1 ignored ⇒ live `0D` is notify-only (checksum included still does nothing). H2 (checksum-only on that envelope) is dead. H4 (mode then H1) is dead. Offset poke without dump wire format is dead.
+
+## Behavioral note (third-party editor, no payload copy)
+
+[GP-50 web editor](https://rvalladares.com/gp5/gp50editor/) is a behavioral reference only (`docs/protocol-references.md`). Do **not** copy its JavaScript or SysEx into Patone.
+
+Observed from the public UI + function names (not used as a source drop):
+
+- **Patch Settings** has Footswitch A / Footswitch B checkboxes (NR…RVB; NS as N>S). `data-footswitch` is `0` or `1`. `data-effect` is `0`=NR … `8`=RVB, **`9`=NS** (not dump order).
+- A checkbox click calls a **per-module** send (`sendCTL(footswitch, effect, 0|1)`), not a 30-byte live `0D` mask. That matches “the function moves the pedal but works badly”: one bit at a time, easy to desync.
+- The same send path as other parameter knobs: BLE-MIDI prefix, SysEx, a **CRC-8 verifier**, then **nibble-expand** (each hex digit becomes a `0x0n` MIDI byte — the same 0–F packing as inbound dumps). `Save` is a **file export** of dump bytes, not that live CTL path. Patch/Stomp mode is a different parameter send (`sendFootChange`).
+- Inbound, they also treat a 36-byte frame as GP-5 footswitch-mode change.
+
+Starting point for the next Patone-owned candidate: stop echoing `0D`. Treat SET as a **checksummed, nibble-packed, per-effect parameter write** (stomp index + effect index + 0/1), same wire family as the dump, using a CRC-8 we own and addresses filled from a Patone or official-app capture — never a copied hex template.
+
 ## Open
 
 The pedal accepts some app→pedal assignment SET. We have not captured that direction. Hypotheses, cheapest first:
 
 | ID | Hypothesis | How to falsify | Status |
 | --- | --- | --- | --- |
-| H1 | Live `0D` is notify-only; echoing it (W2/W3) cannot SET | Send the **exact** captured DST-stomp1-on frame, checksum included, over USB. If still ignored, `0D` is not SET. | next |
-| H2 | Checksum is required and `00 00` is rejected | Same as H1; if the exact frame works, solve CS from more notifies before inventing a new envelope | blocked on H1 |
-| H3 | SET is a host preset-field write (dump mask at 1006/1014), not live `0D`. W1 guessed command `05` | Capture **app→pedal** while an official tool assigns DST, or watch behavior (timing, extra dumps) without copying third-party bytes | open |
-| H4 | SET only while Patch/Stomp mode is Stomp (CC 28) | Put the pedal in Stomp mode, retry a candidate that is otherwise identical | open |
-| H5 | SET needs a session/edit preamble we do not send | Official-tool capture of the bytes **before** the assignment frame | open |
-| H6 | Send path is dropping SysEx | USB MIDI monitor / BLE sniffer while clicking a chip; CC on/off still works as control | low (CC and dumps work; session did not drop) |
+| H1 | Live `0D` is notify-only; echoing it (W2/W3) cannot SET | Exact DST captures including checksum | **failed** (panel) |
+| H2 | Checksum is required and `00 00` is rejected | Blocked on H1; XOR-CS variant also ignored | **failed** on live `0D` |
+| H3 | SET is a host preset-field write (dump mask at 1006/1014), not live `0D` | Offset-poke panel row ignored | **failed** as raw host `02`+offset |
+| H4 | SET only while Patch/Stomp mode is Stomp (CC 28) | CC 28 then H1 ignored | **failed** |
+| H5 | SET needs a session/edit preamble we do not send | Official-tool capture of bytes before the assignment frame | open |
+| H6 | Send path is dropping SysEx | USB MIDI monitor / BLE sniffer while clicking a chip | low |
+| H7 | SET is a CRC-8 + nibble-expand **per-effect** parameter write (stomp, effect, 0/1), same family as other preset knobs | Patone-owned encoder of that shape; confirm with dump 1006/1014 | **next** |
 
 ## Procedure
 
-1. Pick one row (H1 first). Change only `encodeStompAssignment` (or a throwaway USB send). Leave dump decode alone.
-2. USB, GP-50, Log open. Assign DST on Stomp 1, then unassign. Look at the pedal, not only the UI.
-3. Record pass/fail, link, and any inbound SysEx in the table above **before** the next candidate.
-4. If a candidate is accepted: dump the current preset and confirm offsets 1006/1014 (and the other stomp) still match; then Bluetooth; then GP-5 offset 920.
+1. One new family at a time (now H7). Leave dump decode alone. Do not retry W1–W3 or the nine panel rows.
+2. USB, GP-50, Log open. Assign DST on Stomp 1, then unassign. Look at the pedal.
+3. Record pass/fail in the table **before** the next candidate.
+4. If accepted: dump and confirm offsets 1006/1014; then Bluetooth; then GP-5 920.
 5. Do not copy third-party SysEx. Official Valeton app → USB MIDI monitor is a valid Patone capture of app→pedal.
 
 ## Next
 
-**H1 on USB.** Build the exact 30-byte DST-stomp1-on capture (checksum `01 0D`) and send it raw. Same for the unassign capture (`05 01`) on the off click.
+**H7 on Controller (top card, 2026-09-17).** Per-effect write: CRC-8 ATM (poly `0x07`) of packed body, nibble-expand, size `05`, path `01 01 04`, command `0D`, then stomp / effect / 0|1. DST Stomp 1 on/off. Previous nine rows are folded under “Previous candidates”.
 
-- Ignored again → stop echoing `0D`. Need an app→pedal SET capture (H3/H5), not more live envelopes.
-- Pedal follows → checksum/live envelope was the gap; solve CS from more pedal-side assigns (H2) and keep write-first before applying inbound `0D`.
+- Pedal follows → lock this encoder, dump-confirm 1006/1014, then Bluetooth / GP-5.
+- Ignored → stop tomorrow; need an official-app address capture, not more live `0D`.

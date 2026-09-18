@@ -16,6 +16,10 @@ import {
 } from "@/device/chain";
 import { ChainDecoder, decodeLiveOnOffChanges, type PresetDump } from "@/device/chain-codec";
 import { encodeChainRequest, encodeIdentity, encodeModule, encodePatch, encodeStompAssignment } from "@/device/encode";
+import {
+  encodeStompWriteSpike,
+  type StompWriteSpikeId,
+} from "@/device/stomp-write-spike";
 import type { LinkEndpoint } from "@/device/endpoint";
 import {
   emptyPatchNames,
@@ -47,6 +51,11 @@ export {
   type EffectId,
   type StompAssignment,
 } from "@/device/chain";
+export {
+  STOMP_WRITE_SPIKES,
+  assignmentToggle,
+  type StompWriteSpikeId,
+} from "@/device/stomp-write-spike";
 
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
@@ -308,6 +317,36 @@ export class DeviceSession {
     this.snapshot = { ...this.snapshot, stomps };
     this.emitSnapshot();
     await this.sendBytes(encodeStompAssignment(this.snapshot.linkMode, stomps));
+  }
+
+  /** Temporary write-spike send. Does not update snapshot assignment. */
+  async spikeStompWrite(
+    id: StompWriteSpikeId,
+    stomps: StompAssignment,
+    changedIndex: number,
+    changedEffect?: EffectId,
+    enabled?: boolean,
+  ): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Stomp assignment is not available on this link.");
+    }
+    await this.sendBytes(
+      encodeStompWriteSpike(id, {
+        linkMode: this.snapshot.linkMode,
+        model: this.snapshot.model,
+        stomps,
+        changedIndex,
+        ...(changedEffect
+          ? { changedEffect, enabled: enabled === true }
+          : {}),
+      }),
+    );
   }
 
   private async runIdentitySync(generation: number): Promise<void> {
