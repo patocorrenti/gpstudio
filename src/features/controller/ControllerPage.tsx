@@ -82,9 +82,11 @@ const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 function PatchBar({
   patch,
   patchNames,
+  busy,
 }: {
   patch: number;
   patchNames: (string | null)[];
+  busy: boolean;
 }) {
   const session = useDeviceSession();
   const currentName = patchNames[patch];
@@ -96,6 +98,7 @@ function PatchBar({
         variant="ghost"
         size="icon-lg"
         aria-label="Previous patch"
+        disabled={busy}
         className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(-1)}
       >
@@ -133,6 +136,7 @@ function PatchBar({
         variant="ghost"
         size="icon-lg"
         aria-label="Next patch"
+        disabled={busy}
         className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(1)}
       >
@@ -545,7 +549,11 @@ function ConnectedController() {
 
   return (
     <section className="flex flex-1 flex-col items-center">
-      <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
+      <PatchBar
+        patch={snapshot.patch}
+        patchNames={snapshot.patchNames}
+        busy={snapshot.chainSync === "syncing"}
+      />
       <PatchBody
         chain={snapshot.chain}
         pedal={snapshot.model}

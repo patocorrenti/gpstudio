@@ -260,7 +260,9 @@ export class DeviceSession {
       throw new Error("Patch control is not available on this link.");
     }
     const next = clampPatch(patch);
-    this.snapshot = { ...this.snapshot, patch: next };
+    const chainSync =
+      this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
+    this.snapshot = { ...this.snapshot, patch: next, chainSync };
     this.emitSnapshot();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
@@ -270,6 +272,9 @@ export class DeviceSession {
   async stepPatch(delta: -1 | 1): Promise<void> {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
     }
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
   }
