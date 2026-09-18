@@ -192,7 +192,8 @@ function AudioChainSlotView({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/25",
+          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/25 transition-opacity",
+          isDragging && "opacity-0",
           isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
           isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
         )}
