@@ -35,6 +35,9 @@ import {
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { cn } from "@/lib/utils";
 
+/** Distance from the top of each slot to the cable. py-3 + half of size-14 + 1px. */
+const CHAIN_CABLE_TOP = "calc(2.5rem + 1px)";
+
 const CHAIN_SLOT_ICONS: Partial<Record<ChainSlotId, string>> = {
   nr: iconNr,
   pre: iconPre,
@@ -122,10 +125,14 @@ function AudioChainSlotView({
   slot,
   chain,
   disabled,
+  isFirst,
+  isLast,
 }: {
   slot: AudioChainSlot;
   chain: AudioChain;
   disabled: boolean;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
@@ -135,7 +142,16 @@ function AudioChainSlotView({
 
   return (
     <div className={slotClassName(slot.enabled)}>
-      <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute z-0 h-0.5 bg-muted-foreground/25",
+          isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
+          isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
+        )}
+        style={{ top: CHAIN_CABLE_TOP }}
+      />
+      <div className="relative z-10 flex min-h-6 w-full flex-col items-center justify-center gap-1">
         <div className="relative">
           {icon ? (
             <img
@@ -166,7 +182,10 @@ function AudioChainSlotView({
         size="sm"
         checked={slot.enabled}
         disabled={disabled}
-        className="data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground"
+        className={cn(
+          "relative z-10",
+          "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground",
+        )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
         onClick={(event) => {
           event.stopPropagation();
@@ -192,11 +211,17 @@ function AudioChainRow({
   return (
     <ol
       aria-label="Audio chain"
-      className="flex flex-wrap items-center justify-center gap-2"
+      className="flex flex-wrap items-center justify-center gap-2 overflow-visible"
     >
       {chain.map((slot, index) => (
-        <li key={`${slot.id}-${index}`}>
-          <AudioChainSlotView slot={slot} chain={chain} disabled={disabled} />
+        <li key={`${slot.id}-${index}`} className="overflow-visible">
+          <AudioChainSlotView
+            slot={slot}
+            chain={chain}
+            disabled={disabled}
+            isFirst={index === 0}
+            isLast={index === chain.length - 1}
+          />
         </li>
       ))}
     </ol>
