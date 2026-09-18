@@ -1,5 +1,15 @@
 import { Ban, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import iconAmp from "@/assets/img/icon-AMP.png";
+import iconCab from "@/assets/img/icon-CAB.png";
+import iconDly from "@/assets/img/icon-DLY.png";
+import iconDst from "@/assets/img/icon-DST.png";
+import iconEq from "@/assets/img/icon-EQ.png";
+import iconMod from "@/assets/img/icon-MOD.png";
+import iconNr from "@/assets/img/icon-NR.png";
+import iconNs from "@/assets/img/icon-NS.png";
+import iconPre from "@/assets/img/icon-PRE.png";
+import iconRvb from "@/assets/img/icon-RVB.png";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,6 +33,7 @@ import {
   type EffectId,
   type StompAssignment,
   type StompWriteSpikeId,
+  type ChainSlotId,
 } from "@/device/session";
 import {
   useDeviceSession,
@@ -30,6 +41,22 @@ import {
 } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { cn } from "@/lib/utils";
+
+/** Distance from the top of each slot to the cable. py-3 + half of size-14 + 1px. */
+const CHAIN_CABLE_TOP = "calc(2.5rem + 1px)";
+
+const CHAIN_SLOT_ICONS: Partial<Record<ChainSlotId, string>> = {
+  nr: iconNr,
+  pre: iconPre,
+  dst: iconDst,
+  ns: iconNs,
+  amp: iconAmp,
+  cab: iconCab,
+  eq: iconEq,
+  mod: iconMod,
+  dly: iconDly,
+  rvb: iconRvb,
+};
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -44,15 +71,16 @@ function PatchBar({
   const currentName = patchNames[patch];
 
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex items-center justify-center gap-1">
       <Button
         type="button"
         variant="ghost"
         size="icon-lg"
         aria-label="Previous patch"
+        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(-1)}
       >
-        <ChevronLeft />
+        <ChevronLeft className="size-6" />
       </Button>
       <Select
         value={String(patch)}
@@ -63,13 +91,13 @@ function PatchBar({
         <SelectTrigger
           aria-label="Select patch"
           size="default"
-          className="h-auto min-w-40 justify-center py-2.5 text-2xl font-semibold tabular-nums"
+          className="h-12 min-h-12 w-72 min-w-72 justify-center border-transparent bg-muted py-0 text-xl font-semibold tabular-nums data-[size=default]:h-12 dark:border-transparent dark:bg-muted/40 dark:hover:bg-muted/50"
         >
           <SelectValue>
             {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72 min-w-40">
+        <SelectContent position="popper" className="max-h-72 min-w-72">
           {patchOptions.map((option) => (
             <SelectItem
               key={option}
@@ -86,9 +114,10 @@ function PatchBar({
         variant="ghost"
         size="icon-lg"
         aria-label="Next patch"
+        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
         onClick={() => void session.stepPatch(1)}
       >
-        <ChevronRight />
+        <ChevronRight className="size-6" />
       </Button>
     </div>
   );
@@ -96,10 +125,8 @@ function PatchBar({
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg border px-4 py-3 text-center",
-    enabled
-      ? "border-foreground/20 bg-muted text-foreground"
-      : "border-border text-muted-foreground",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-3 py-3 text-center",
+    enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
   );
 }
 
@@ -107,41 +134,67 @@ function AudioChainSlotView({
   slot,
   chain,
   disabled,
+  isFirst,
+  isLast,
 }: {
   slot: AudioChainSlot;
   chain: AudioChain;
   disabled: boolean;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
+  const icon = CHAIN_SLOT_ICONS[slot.id];
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
 
   return (
     <div className={slotClassName(slot.enabled)}>
-      <div className="relative flex min-h-6 w-full items-center justify-center">
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute z-0 h-0.5 bg-muted-foreground/25",
+          isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
+          isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
+        )}
+        style={{ top: CHAIN_CABLE_TOP }}
+      />
+      <div className="relative z-10 flex min-h-6 w-full flex-col items-center justify-center gap-1">
+        <div className="relative">
+          {icon ? (
+            <img
+              src={icon}
+              alt=""
+              className={cn("size-14 object-contain", !slot.enabled && "opacity-50")}
+            />
+          ) : null}
+          {bypassed ? (
+            <span
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <Ban className="size-11 text-destructive drop-shadow-sm" strokeWidth={2.5} />
+            </span>
+          ) : null}
+        </div>
         <span
           className={cn(
-            "text-sm font-semibold tracking-wide",
+            "text-xs font-semibold tracking-wide",
             !slot.enabled && "opacity-50",
           )}
         >
           {label}
         </span>
-        {bypassed ? (
-          <span
-            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-            aria-hidden="true"
-          >
-            <Ban className="size-8 text-destructive drop-shadow-sm" strokeWidth={2.5} />
-          </span>
-        ) : null}
       </div>
       <Switch
         size="sm"
         checked={slot.enabled}
         disabled={disabled}
-        className={cn(!slot.enabled && "opacity-50")}
+        className={cn(
+          "relative z-10",
+          "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground",
+        )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
         onClick={(event) => {
           event.stopPropagation();
@@ -167,11 +220,17 @@ function AudioChainRow({
   return (
     <ol
       aria-label="Audio chain"
-      className="flex flex-wrap items-center justify-center gap-2"
+      className="flex flex-wrap items-center justify-center gap-2 overflow-visible"
     >
       {chain.map((slot, index) => (
-        <li key={`${slot.id}-${index}`}>
-          <AudioChainSlotView slot={slot} chain={chain} disabled={disabled} />
+        <li key={`${slot.id}-${index}`} className="overflow-visible">
+          <AudioChainSlotView
+            slot={slot}
+            chain={chain}
+            disabled={disabled}
+            isFirst={index === 0}
+            isLast={index === chain.length - 1}
+          />
         </li>
       ))}
     </ol>
@@ -375,7 +434,7 @@ function PatchBody({
   busy: boolean;
 }) {
   return (
-    <div className="relative mt-10 flex min-h-40 w-full flex-1 flex-col items-center">
+    <div className="relative mt-4 flex min-h-40 w-full flex-1 flex-col items-center">
       <div
         className={cn("flex w-full flex-col items-center", busy && "invisible")}
         aria-hidden={busy}

@@ -7,6 +7,7 @@ import {
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
+import { cn } from "@/lib/utils";
 
 function MenuLink({
   to,
@@ -25,7 +26,10 @@ function MenuLink({
       <NavigationMenuLink
         asChild
         active={Boolean(match)}
-        className={navigationMenuTriggerStyle()}
+        className={cn(
+          navigationMenuTriggerStyle(),
+          "bg-muted data-active:bg-muted dark:bg-muted/40 dark:data-active:bg-muted/40",
+        )}
       >
         <NavLink to={to} end={end}>
           {children}
@@ -38,7 +42,7 @@ function MenuLink({
 export default function MainMenu() {
   return (
     <NavigationMenu viewport={false}>
-      <NavigationMenuList>
+      <NavigationMenuList className="gap-1.5">
         <MenuLink to="/" end>
           Controller
         </MenuLink>
