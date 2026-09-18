@@ -405,7 +405,7 @@ Changing the selected model or a control value MUST go through the device sessio
 
 After the patch bar is shown, Controller SHALL let the user Save the current working patch onto the current slot, rename that patch, duplicate it onto another 00–99 slot, and download it to the PC, all through the device session. Labels MUST be in English. The same controls MUST be used on USB and Bluetooth.
 
-Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a local file of the current patch. If the current-preset dump is missing, download MUST NOT invent a file. Controller MUST NOT send raw MIDI.
+Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a Valeton `.prst` of the current patch for the connected pedal (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the patch to the other model. If the current-preset dump is missing, download MUST NOT invent a file. Controller MUST NOT send raw MIDI.
 
 While the current patch is syncing, Save, rename, duplicate, download, previous, and next MUST NOT be usable. Disconnecting MUST hide those controls with the patch bar.
 
@@ -431,10 +431,16 @@ While the current patch is syncing, Save, rename, duplicate, download, previous,
 - **THEN** Controller asks the user to confirm overwrite
 - **AND** no store write is sent until the user confirms
 
-#### Scenario: User downloads the current patch
-- **WHEN** the session is ready, the current patch is synced with a current-preset dump, and the user activates download
-- **THEN** a local file of that current patch is produced through the device session
+#### Scenario: User downloads a GP-50 preset file
+- **WHEN** a GP-50 session is ready, the current patch is `60` named `TOB` and synced with a current-preset dump, and the user activates download
+- **THEN** a Valeton `.prst` for GP-50 is produced through the device session
+- **AND** the filename identifies GP-50, slot `60`, and `TOB`
 - **AND** no extra patch recall is sent solely because download ran
+
+#### Scenario: User downloads a GP-5 preset file
+- **WHEN** a GP-5 session is ready, the current patch is synced with a current-preset dump, and the user activates download
+- **THEN** a Valeton `.prst` for GP-5 is produced through the device session
+- **AND** the filename identifies GP-5 and that slot and name
 
 #### Scenario: Download is unavailable without a dump
 - **WHEN** the session is ready without a current-preset dump

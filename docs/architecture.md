@@ -220,5 +220,5 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `chain-reorder`: drag-and-drop de módulos móviles (NR, PRE, MOD, DLY, RVB); write SET `01 01 04` + CRC-8 (USB y Bluetooth); Bluetooth aplica inbound live chain-order `01 02 04`; USB ignora esos reportes
 - [x] Change `chain-slot-controls`: catálogo de fábrica, dump de modelo + knobs de los diez efectos, paneles en Controller, SET `1147`/`1148`
 - [x] Change `patch-save`: Save / rename / duplicate del patch actual (SET `114a`) y descarga del dump (USB y Bluetooth)
-- [ ] Change `prst-download`: esa descarga escribe un `.prst` Valeton del pedal conectado (GP-50 → GP-50, GP-5 → GP-5; sin conversión cruzada)
+- [x] Change `prst-download`: esa descarga escribe un `.prst` Valeton del pedal conectado (GP-50 → GP-50, GP-5 → GP-5; sin conversión cruzada)
 - [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`

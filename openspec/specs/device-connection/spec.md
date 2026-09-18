@@ -369,7 +369,7 @@ After a USB or Bluetooth session is ready and the current patch is not syncing, 
 
 Those store writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because Save, rename, or duplicate ran. While the current patch is syncing, Save, rename, and duplicate MUST leave the snapshot unchanged and MUST NOT send a store write.
 
-Download MUST produce a local file of the current patch from the current-preset dump the session already holds or re-requests. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file. Disconnect MUST drop working store state.
+Download MUST produce a Valeton `.prst` of the current patch for the connected pedal from the current-preset dump the session already holds or re-requests (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the dump to the other model's `.prst`. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file. Disconnect MUST drop working store state.
 
 #### Scenario: USB Save stores the current slot
 - **WHEN** a USB session is ready, the current patch is `42` and synced, and the user Saves
@@ -400,9 +400,14 @@ Download MUST produce a local file of the current patch from the current-preset 
 - **THEN** the snapshot does not change
 - **AND** no store write is sent
 
-#### Scenario: Download writes a local file
-- **WHEN** a session is ready, the current patch is synced with a current-preset dump, and the user downloads
-- **THEN** a local file of that current patch is produced
+#### Scenario: GP-50 download writes a GP-50 preset file
+- **WHEN** a GP-50 session is ready, the current patch is synced with a current-preset dump, and the user downloads
+- **THEN** a Valeton `.prst` for GP-50 is produced
+- **AND** no extra patch recall is sent solely because download ran
+
+#### Scenario: GP-5 download writes a GP-5 preset file
+- **WHEN** a GP-5 session is ready, the current patch is synced with a current-preset dump, and the user downloads
+- **THEN** a Valeton `.prst` for GP-5 is produced
 - **AND** no extra patch recall is sent solely because download ran
 
 #### Scenario: Missing dump does not invent a download
