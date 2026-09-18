@@ -1,4 +1,4 @@
-import type { AudioChain, AudioChainSlot, EffectId } from "@/device/chain";
+import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 
 /**
@@ -212,6 +212,11 @@ export type LiveModuleChange = {
   enabled: boolean;
 };
 
+export type LiveOnOffChange = {
+  id: ChainSlotId;
+  enabled: boolean;
+};
+
 /**
  * GP-50 Bluetooth EXP on/off (Patone capture). Identity-family template
  * (01 02 04), size 0x07, command 0x02. Enable is the last data byte (0 off, 1 on).
@@ -273,6 +278,62 @@ export function decodeLiveModule(bytes: Uint8Array): LiveModuleChange | null {
     return null;
   }
   return { id: DUMP_MODULE_IDS[raw], enabled: midi[22] !== 0 };
+}
+
+/**
+ * Bluetooth Stomp footswitch (Patone GP-50 capture). Identity-family
+ * template (01 02 04), size 0x06, command 0x0E, 22 bytes. Two packed bytes
+ * at offsets 13 and 15 are the current on/off mask for all ten effects:
+ * low byte bit0=NR … bit7=DLY, high byte bit0=RVB bit1=NS. Extra high bits
+ * (seen when NS turns off) are ignored. One press may flip several modules.
+ * GP-5 has one stomp and GP-50 has two; both send this same status mask,
+ * not a footswitch index. EXP is not in the mask: the pedal does not stomp EXP.
+ */
+export function decodeLiveStompMask(bytes: Uint8Array): LiveOnOffChange[] | null {
+  const midi = midiPayload(bytes);
+  if (midi.length !== 22 || midi[0] !== 0xf0) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== 1) {
+    return null;
+  }
+  if (
+    midi[8] !== 0x06 ||
+    midi[9] !== 1 ||
+    midi[10] !== 2 ||
+    midi[11] !== 4 ||
+    midi[12] !== 0x0e
+  ) {
+    return null;
+  }
+  const low = nibble(midi, 13);
+  const high = nibble(midi, 15);
+  const changes: LiveOnOffChange[] = [];
+  for (let bit = 0; bit < DUMP_MODULE_IDS.length; bit += 1) {
+    const packed = bit < 8 ? low : high;
+    const localBit = bit < 8 ? bit : bit - 8;
+    changes.push({
+      id: DUMP_MODULE_IDS[bit],
+      enabled: (packed & (1 << localBit)) !== 0,
+    });
+  }
+  return changes;
+}
+
+/**
+ * Every module/EXP on/off carried by one live or Stomp notify.
+ * Command 09 / 02 are one slot; command 0E is the ten-module stomp mask.
+ */
+export function decodeLiveOnOffChanges(bytes: Uint8Array): LiveOnOffChange[] {
+  const expEnabled = decodeLiveExp(bytes);
+  if (expEnabled !== null) {
+    return [{ id: "exp", enabled: expEnabled }];
+  }
+  const fromSysex = decodeLiveModule(bytes);
+  if (fromSysex) {
+    return [fromSysex];
+  }
+  return decodeLiveStompMask(bytes) ?? [];
 }
 
 function bitOn(data: Uint8Array, offset: number, bit: number): boolean {

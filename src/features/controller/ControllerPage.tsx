@@ -240,7 +240,7 @@ function PatchBody({
   return (
     <div className="relative mt-4 flex min-h-40 w-full flex-1 flex-col items-center">
       <div
-        className={cn("flex w-full justify-center", busy && "invisible")}
+        className={cn("flex w-full flex-col items-center", busy && "invisible")}
         aria-hidden={busy}
       >
         <AudioChainRow chain={chain} disabled={busy} />
@@ -278,7 +278,10 @@ function ConnectedController() {
   return (
     <section className="flex flex-1 flex-col items-center">
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
-      <PatchBody chain={snapshot.chain} busy={snapshot.chainSync === "syncing"} />
+      <PatchBody
+        chain={snapshot.chain}
+        busy={snapshot.chainSync === "syncing"}
+      />
     </section>
   );
 }

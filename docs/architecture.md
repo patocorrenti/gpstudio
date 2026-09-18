@@ -89,7 +89,7 @@ La UI nunca llama MIDI crudo. `DeviceSession` conoce el modelo (GP-5 vs GP-50), 
 
 USB es one-way y super fast para knobs y módulos: la app manda CC (patch y on/off de módulos); el pedal no telemetra esos controles. Sí puede responder dumps SysEx pedidos (y al cargar un patch). Eso no convierte USB en duplex de live controls.
 
-Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI), on/off de módulos (CC 48–57) y las peticiones de identidad y de cadena en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. Referencias de comportamiento: `docs/protocol-references.md`. El Log muestra MIDI inbound de USB y Bluetooth (framing BLE-MIDI unwrappeado) solo mientras esa pantalla está abierta y no aplica tráfico. `DeviceSession` sí aplica identidad de patch (índice y nombres) y la cadena actual (orden + on/off) al snapshot. En Bluetooth también aplica inbound de on/off de módulos (SysEx live, comando 09) mientras el patch no cambia. Volumen y el live-from-pedal de otros knobs siguen después. USB no aplica esos reportes inbound.
+Bluetooth es two-way y más lento. El pedal anuncia el servicio BLE-MIDI MMA y Patone escribe recall de patch (CC 0 envuelto en paquete BLE-MIDI), on/off de módulos (CC 48–57) y las peticiones de identidad y de cadena en esa característica I/O. Sigue siendo otro backend (`BluetoothLink`, no el tubo USB-MIDI), no un fork de `DeviceSession`. Controller, Editor y Library siguen en una sola sesión; `linkMode` (`usb` | `bluetooth`) es una máscara de capacidades (`liveFromPedal`, `commandToPedal`). Connect escanea y abre GATT. El encoder corre en `DeviceSession` y `BluetoothLink.send` escribe esos bytes; **no copiar** SysEx reverse-engineered de terceros. Referencias de comportamiento: `docs/protocol-references.md`. El Log muestra MIDI inbound de USB y Bluetooth (framing BLE-MIDI unwrappeado) solo mientras esa pantalla está abierta y no aplica tráfico. `DeviceSession` sí aplica identidad de patch (índice y nombres) y la cadena actual (orden + on/off) al snapshot. En Bluetooth (`liveFromPedal`) también aplica inbound de on/off de módulos: SysEx live (comando 09), EXP (comando 02) y el mismo origen cuando un footswitch en modo Stomp cambia módulos. Eso no es un cambio de patch. Volumen, tuner, control Patch/Stomp y el live-from-pedal de otros knobs siguen después. USB no aplica esos reportes inbound.
 
 `MidiTransport` no es “listar puertos Web MIDI”. Es discovery + tubo USB-MIDI:
 
@@ -183,7 +183,7 @@ Modal de conexión: tabs USB y Bluetooth. USB pide permiso MIDI, lista endpoints
 
 Pantalla Controller: al conectar puede mostrar loading mientras sincroniza identidad y la cadena de audio; luego selector de patch 00–99 (con nombres si llegaron) y la cadena del patch actual (10 slots en GP-5, 11 en GP-50 con EXP al final; los diez efectos se encienden/apagan por CC 48–57; EXP en GP-50 por CC 13 en Bluetooth y por SysEx capturado en USB). Si NS (SnapTone) está on, AMP y CAB se marcan como bypassed con un overlay de prohibido; no se reescribe su on/off. Volumen, tuner, reorder y extras GP-50 vienen después.
 
-Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot. La sesión puede aplicar identidad de patch, dumps de cadena y, en Bluetooth, SysEx live de on/off de módulos por separado.
+Pantalla Log: MIDI inbound de USB o Bluetooth solo mientras está abierta. No aplica ese tráfico al snapshot. La sesión puede aplicar identidad de patch, dumps de cadena y, en Bluetooth, SysEx live de on/off de módulos (incluido un footswitch Stomp) por separado.
 
 Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrome/Edge (localhost o HTTPS). Mobile queda fuera de estos cambios; la abstracción MIDI ya lo deja preparado.
 
@@ -192,10 +192,13 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - App mobile Tauri
 - Lectura/escritura de parámetros de preset, rename, reorder (la cadena actual — orden + on/off — sí se lee; on/off de los diez efectos se escribe por CC 48–57)
 - Upload de IR / SnapTone / NAM
-- Aplicar inbound de volumen, tuner u otros CCs que no sean el SysEx live de módulos al snapshot (`liveFromPedal` de knobs) mientras el patch no cambia
+- Aplicar inbound de volumen, tuner u otros CCs que no sean on/off de módulos al snapshot (`liveFromPedal` de knobs) mientras el patch no cambia. Bluetooth live-module / Stomp footswitch sí está en alcance
+- Control o display de modo Patch/Stomp (CC 28)
 - Reordenar módulos desde la UI (drag-and-drop)
-- Tratar USB como duplex de live controls
+- Tratar USB como duplex de live controls, ni aplicar inbound USB de live-module / Stomp
 - Volumen, tuner y extras GP-50 por Bluetooth
+- Copiar SysEx reverse-engineered de editores de terceros
+- Editar la asignación de stomps (qué módulos controla cada footswitch). Decode GP-50 está resuelto; el write no fue aceptado por el pedal. Change `stomp-assignment` está pausado; laboratorio en `openspec/changes/stomp-assignment/`
 
 
 
@@ -212,4 +215,6 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `inbound-log`: Log inbound USB + Bluetooth solo con la página Log abierta
 - [x] Change `patch-sync`: identidad inicial (patch actual + nombres) USB y Bluetooth
 - [x] Change `audio-chain`: dump de cadena del patch actual (orden + on/off) y dibujo en Controller
-- [ ] Change `chain-on-off`: on/off de módulos (CC 48–57); Bluetooth aplica inbound; USB solo envía
+- [x] Change `chain-on-off`: on/off de módulos (CC 48–57); Bluetooth aplica inbound; USB solo envía
+- [x] Change `stomp-footswitch-chain`: footswitch Stomp sigue on/off en Bluetooth (`liveFromPedal`); USB ignora esos reportes
+- [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`
