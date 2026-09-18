@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  EFFECT_IDS,
   chainSlotBypassed,
   chainSlotLabel,
   formatPatch,
@@ -16,6 +17,8 @@ import {
   PATCH_COUNT,
   type AudioChain,
   type AudioChainSlot,
+  type EffectId,
+  type StompAssignment,
 } from "@/device/session";
 import {
   useDeviceSession,
@@ -171,20 +174,93 @@ function AudioChainRow({
   );
 }
 
+function StompAssignmentRow({
+  index,
+  assigned,
+  disabled,
+}: {
+  index: number;
+  assigned: EffectId[];
+  disabled: boolean;
+}) {
+  const session = useDeviceSession();
+  const selected = new Set(assigned);
+  const label = `Stomp ${index + 1}`;
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
+      <ul
+        aria-label={label}
+        className="flex flex-wrap items-center justify-center gap-1.5"
+      >
+        {EFFECT_IDS.map((id) => {
+          const on = selected.has(id);
+          const moduleLabel = chainSlotLabel(id);
+          return (
+            <li key={id}>
+              <Button
+                type="button"
+                size="xs"
+                variant={on ? "default" : "outline"}
+                disabled={disabled}
+                aria-pressed={on}
+                aria-label={`${label} ${moduleLabel} ${on ? "on" : "off"}`}
+                onClick={() => {
+                  const next = on
+                    ? assigned.filter((item) => item !== id)
+                    : [...assigned, id];
+                  void session.setStompAssignment(index, next);
+                }}
+              >
+                {moduleLabel}
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function StompAssignmentSection({
+  stomps,
+  disabled,
+}: {
+  stomps: StompAssignment;
+  disabled: boolean;
+}) {
+  return (
+    <div className="mt-8 flex w-full flex-col items-center gap-6">
+      {stomps.map((assigned, index) => (
+        <StompAssignmentRow
+          key={index}
+          index={index}
+          assigned={assigned}
+          disabled={disabled}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PatchBody({
   chain,
+  stomps,
   busy,
 }: {
   chain: AudioChain;
+  stomps: StompAssignment;
   busy: boolean;
 }) {
   return (
     <div className="relative mt-10 flex min-h-40 w-full flex-1 flex-col items-center">
       <div
-        className={cn("flex w-full justify-center", busy && "invisible")}
+        className={cn("flex w-full flex-col items-center", busy && "invisible")}
         aria-hidden={busy}
       >
         <AudioChainRow chain={chain} disabled={busy} />
+        <StompAssignmentSection stomps={stomps} disabled={busy} />
       </div>
       {busy ? (
         <div
@@ -219,7 +295,11 @@ function ConnectedController() {
   return (
     <section className="flex flex-1 flex-col items-center">
       <PatchBar patch={snapshot.patch} patchNames={snapshot.patchNames} />
-      <PatchBody chain={snapshot.chain} busy={snapshot.chainSync === "syncing"} />
+      <PatchBody
+        chain={snapshot.chain}
+        stomps={snapshot.stomps}
+        busy={snapshot.chainSync === "syncing"}
+      />
     </section>
   );
 }

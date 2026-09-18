@@ -19,4 +19,4 @@ Useful observations (not a protocol spec):
 - USB uses Web MIDI with SysEx enabled. Some live global/footswitch changes are not notified over USB.
 - Bluetooth uses the BLE-MIDI GATT service and the same SysEx conversation, wrapped in BLE-MIDI packets.
 
-Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off) from that class of dump. Full preset parameters, IRs, and NAM stay out.
+Patone’s in-scope subset is current patch index, onboard names, and the current preset’s audio chain (module order + on/off + stomp assignment) from that class of dump. Assignment write is in scope. Full preset parameters, IRs, and NAM stay out.

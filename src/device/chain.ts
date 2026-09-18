@@ -23,6 +23,9 @@ export type AudioChainSlot = {
 
 export type AudioChain = AudioChainSlot[];
 
+/** Per-patch stomp assignment. Length 1 on GP-5, 2 on GP-50. EXP is never included. */
+export type StompAssignment = EffectId[][];
+
 export const CHAIN_LABELS: Record<ChainSlotId, string> = {
   nr: "NR",
   pre: "PRE",
@@ -75,4 +78,8 @@ export function defaultChain(model: DeviceModel): AudioChain {
     slots.push({ id: "exp", enabled: false });
   }
   return slots;
+}
+
+export function emptyStomps(model: DeviceModel): StompAssignment {
+  return model === "gp50" ? [[], []] : [[]];
 }

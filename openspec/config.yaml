@@ -4,9 +4,11 @@ schema: spec-driven
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
   Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
-  Patch recall and module on/off (CC 48–57) use official MIDI CC. A Patone-owned SysEx subset
-  (current patch index + onboard names, plus current-patch chain order + on/off)
+  Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
+  (current patch index + onboard names, plus current-patch chain order + on/off
+  + stomp assignment: 1 stomp GP-5, 2 GP-50; NR…NS, not EXP)
   is requested after connect and when the patch changes.
+  Assignment write is in scope on USB and Bluetooth.
   Full SysEx preset editor (parameters), library, and IRs/NAM come in later phases.
 
   Tech stack:
@@ -19,7 +21,7 @@ context: |
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
     GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
-    (CC 0, module CC 48–57, identity, or chain SysEx wrapped as BLE-MIDI). Still a separate backend — not another
+    (CC 0, module CC 48–57, identity, chain, or stomp-assignment SysEx wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
     - Phase 1 USB-MIDI backends of that USB contract:
@@ -44,7 +46,7 @@ context: |
   - UI never calls raw MIDI. DeviceSession owns the device model (GP-5 vs GP-50),
     translates actions to CC/SysEx, and the transport only sends/receives bytes.
   - Keep three axes separate: model (GP-5 vs GP-50), protocol (CC recall, identity
-    SysEx, current-patch chain SysEx, editor SysEx later), link (USB vs Bluetooth; different capabilities, one DeviceSession).
+    SysEx, current-patch chain SysEx including stomp assignment, editor SysEx later), link (USB vs Bluetooth; different capabilities, one DeviceSession).
   - MidiTransport API: discover() -> endpoints; open(id); send(bytes); onMessage; close.
     Do not leak MIDIPort or Web MIDI types above the transport. Phase 1 MIDI endpoints
     are all kind usb-midi. Bluetooth is BluetoothLink (discover/open/send/subscribe/close),
@@ -52,7 +54,9 @@ context: |
     over GATT is in scope (DeviceSession encodes; BluetoothLink.send writes bytes).
     Bluetooth inbound Log is in scope (same Log page, capture only while visible).
     Applying inbound patch identity (index + names) and current-patch chain
-    (order + on/off) to the snapshot is in scope.
+    (order + on/off + stomp assignment from that dump) to the snapshot is in scope.
+    Stomp assignment write is in scope on USB and Bluetooth.
+    USB must not apply unsolicited inbound assignment reports.
     Applying inbound live-module SysEx (identity-family command 09) and
     Stomp-mode footswitch module on/off (same liveFromPedal class) to the
     snapshot is in scope on Bluetooth. USB must not apply those reports.
@@ -91,9 +95,10 @@ context: |
     mode are defined in device-connection.
   - Controller: patch 00–99 (names when synced), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
-    CC 48–57; GP-50 EXP via CC 13). When NS is on, AMP and CAB are marked
+    CC 48–57; GP-50 EXP via CC 13). After the chain, stomp assignment
+    (1 stomp GP-5, 2 GP-50; NR…NS only, not EXP). When NS is on, AMP and CAB are marked
     bypassed (prohibition overlay) without rewriting their enabled state.
-    Volume, tuner, drag-and-drop later.
+    Volume, tuner, Patch/Stomp mode UI, drag-and-drop later.
   - GP-50 also: master volume and Patch/Stomp mode
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
@@ -108,8 +113,8 @@ context: |
   - GP-50 Patch/Stomp mode control or display
   - Drag-and-drop reorder
   - Volume, tuner over Bluetooth
-  - Applying USB inbound live-module or Stomp footswitch reports
-    (USB is not duplex for those controls)
+  - Applying USB inbound live-module, Stomp footswitch, or unsolicited
+    assignment reports (USB is not duplex for those controls)
   Do not copy reverse-engineered SysEx from third-party editors.
 
   Spec domains for phase 1: midi-transport, device-connection, live-controller, bluetooth-link, inbound-log.
@@ -127,7 +132,7 @@ context: |
   Hard constraints:
   - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
   - Patch identity SysEx (current index + names) and current-patch chain SysEx
-    (order + on/off) are Patone-owned codecs; still no third-party source drop.
+    (order + on/off + stomp assignment; assignment write) are Patone-owned codecs; still no third-party source drop.
   - Patch recall uses MIDI CC published in the official manuals.
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
@@ -179,7 +184,9 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off) is in scope; Bluetooth inbound
+      current-patch chain (order + on/off + stomp assignment from the dump) is in
+      scope; stomp assignment write is in scope on USB and Bluetooth; USB must
+      not apply unsolicited assignment reports; Bluetooth inbound
       live-module SysEx and Stomp-originated chain on/off are in scope; USB
       must not apply those reports; Patch/Stomp control is later; do not
       apply liveFromPedal volume/tuner/other knobs to the snapshot while the

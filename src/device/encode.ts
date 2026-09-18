@@ -4,7 +4,7 @@ import {
   gp5Cc,
   MODULE_CC,
 } from "@/device/cc";
-import type { ChainSlotId } from "@/device/chain";
+import type { ChainSlotId, StompAssignment } from "@/device/chain";
 import { encodeCurrentChainRequest } from "@/device/chain-codec";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -54,4 +54,16 @@ export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): U
 
 export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
   return encodeLinkMidi(linkMode, encodeCurrentChainRequest());
+}
+
+/**
+ * Assignment write SysEx. Packed dump masks are known; the outbound
+ * command is filled in from a Patone write capture. Null until then so a
+ * missing dump never invents a write.
+ */
+export function encodeStompAssignment(
+  _linkMode: LinkMode,
+  _stomps: StompAssignment,
+): Uint8Array | null {
+  return null;
 }
