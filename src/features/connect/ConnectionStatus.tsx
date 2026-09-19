@@ -345,11 +345,11 @@ export function ConnectionStatus() {
                 }}
                 className="gap-4"
               >
-                <TabsList className="grid h-12 w-full grid-cols-2 group-data-horizontal/tabs:h-12">
+                <TabsList className="grid h-12 w-full grid-cols-2 mt-8 group-data-horizontal/tabs:h-12">
                   <TabsTrigger value="usb" className="gap-1.5 px-2">
                     <Usb />
                     USB
-                    <span className="ml-1 rounded-sm bg-blue-500/15 px-1 text-[9px] font-medium text-blue-700 dark:text-blue-400">
+                    <span className="absolute left-50% bottom-9 ml-1 rounded-sm bg-sky-600 dark:bg-sky-800 px-2 py-0.5 text-[11px] font-light text-white">
                       Recommended
                     </span>
                   </TabsTrigger>
