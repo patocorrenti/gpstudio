@@ -64,7 +64,7 @@ function ModeNotes({
   notes: { icon: typeof Zap; text: ReactNode }[];
 }) {
   return (
-    <ul className="flex flex-col gap-1.5 px-4 py-3 text-sm text-muted-foreground">
+    <ul className="flex flex-col gap-1.5 px-1 py-3 text-sm text-muted-foreground">
       {notes.map(({ icon: Icon, text }, index) => (
         <li key={index} className="flex gap-2">
           <Icon
@@ -364,15 +364,15 @@ export function ConnectionStatus() {
                       {
                         icon: Zap,
                         text: (
-                          <>
-                            Fast, stable connection —{" "}
-                            <span className="font-bold">Super responsive</span>.
-                          </>
+                          <span className="text-black dark:text-white">
+                            <span className="font-bold">Super responsive</span>
+                            {" "}—{" "}Fast, stable connection.
+                          </span>
                         ),
                       },
                       {
                         icon: ArrowRight,
-                        text: "The computer talks to the pedal.",
+                        text: "Only the computer can talk to the pedal.",
                       },
                     ]}
                   />
@@ -433,7 +433,12 @@ export function ConnectionStatus() {
                     notes={[
                       {
                         icon: ArrowLeftRight,
-                        text: "The computer talks to the pedal and the pedal talks to the computer.",
+                        text: (
+                          <span className="text-black dark:text-white">
+                            <span className="font-bold">Fully interactive</span>
+                            {" "}—{" "}Pedal and computer talk to each other.
+                          </span>
+                        ),
                       },
                       {
                         icon: Turtle,
