@@ -1,11 +1,13 @@
 import { Outlet } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
+import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
 import MainMenu from "@/components/main-menu";
 
 export function AppShell() {
   return (
-    <div className="relative flex min-h-svh flex-col bg-background text-foreground">
+    <ConnectDialogProvider>
+      <div className="relative flex min-h-svh flex-col bg-background text-foreground">
       <header className="flex items-center gap-4 border-b px-6 py-3">
         <div className="flex items-center gap-3">
           <p className="text-lg font-semibold tracking-tight">
@@ -34,5 +36,6 @@ export function AppShell() {
         </div>
       </div>
     </div>
+    </ConnectDialogProvider>
   );
 }

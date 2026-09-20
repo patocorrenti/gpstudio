@@ -12,13 +12,14 @@ import {
   useDeviceSession,
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
+import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
 import { ScanPanel } from "@/features/connect/ScanPanel";
 import { SelectModelPanel } from "@/features/connect/SelectModelPanel";
 
 export function ConnectionStatus() {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen } = useConnectDialog();
   const [linkTab, setLinkTab] = useState<LinkMode>("usb");
   const [usbEndpoints, setUsbEndpoints] = useState<MidiEndpoint[]>([]);
   const [bleEndpoints, setBleEndpoints] = useState<BluetoothEndpoint[]>([]);
