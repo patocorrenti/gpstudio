@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { decodePrstFile } from "@/device/patch-store";
 import {
@@ -24,7 +30,7 @@ import {
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -32,6 +38,29 @@ const patchChipClass =
   "rounded-[4px] bg-muted dark:bg-muted/40 dark:hover:bg-muted/50";
 const patchActionClass = `${patchChipClass} px-3`;
 const patchActionIconClass = "size-3 text-muted-foreground";
+
+const unsavedPatchHint = "Unsaved changes will be lost";
+
+function PatchNavTooltip({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactElement;
+}) {
+  if (!enabled) {
+    return children;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom">
+        <TriangleAlert className="size-3 text-amber-600 dark:text-amber-400" aria-hidden />
+        {unsavedPatchHint}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function triggerPatchDownload(filename: string, bytes: Uint8Array): void {
   const copy = new Uint8Array(bytes.byteLength);
@@ -146,55 +175,67 @@ export function PatchBar({
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Previous patch"
-        disabled={busy}
-        className={patchChipClass}
-        onClick={() => void session.stepPatch(-1)}
-      >
-        <ChevronLeft />
-      </Button>
-      <Select
-        value={String(patch)}
-        onValueChange={(value) => {
-          void session.setPatch(Number.parseInt(value, 10));
-        }}
-      >
-        <SelectTrigger
-          aria-label="Select patch"
-          size="default"
-          className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-        >
-          <SelectValue>
-            {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72 min-w-72">
-          {patchOptions.map((option) => (
-            <SelectItem
-              key={option}
-              value={String(option)}
-              className="font-medium tabular-nums"
+      <TooltipProvider delayDuration={0}>
+        <PatchNavTooltip enabled={modified}>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Previous patch"
+              disabled={busy}
+              className={patchChipClass}
+              onClick={() => void session.stepPatch(-1)}
             >
-              {formatPatchOption(option, patchNames[option])}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Next patch"
-        disabled={busy}
-        className={patchChipClass}
-        onClick={() => void session.stepPatch(1)}
-      >
-        <ChevronRight />
-      </Button>
+              <ChevronLeft />
+            </Button>
+          </span>
+        </PatchNavTooltip>
+        <Select
+          value={String(patch)}
+          onValueChange={(value) => {
+            void session.setPatch(Number.parseInt(value, 10));
+          }}
+        >
+          <PatchNavTooltip enabled={modified}>
+            <SelectTrigger
+              aria-label="Select patch"
+              size="default"
+              className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+            >
+              <SelectValue>
+                {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
+              </SelectValue>
+            </SelectTrigger>
+          </PatchNavTooltip>
+          <SelectContent position="popper" className="max-h-72 min-w-72">
+            {patchOptions.map((option) => (
+              <SelectItem
+                key={option}
+                value={String(option)}
+                className="font-medium tabular-nums"
+              >
+                {formatPatchOption(option, patchNames[option])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <PatchNavTooltip enabled={modified}>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Next patch"
+              disabled={busy}
+              className={patchChipClass}
+              onClick={() => void session.stepPatch(1)}
+            >
+              <ChevronRight />
+            </Button>
+          </span>
+        </PatchNavTooltip>
+      </TooltipProvider>
       <div className="ml-2 flex items-center gap-1">
         <Button
           type="button"

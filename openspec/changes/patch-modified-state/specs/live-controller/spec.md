@@ -2,7 +2,7 @@
 
 ### Requirement: Controller Save follows the working modified state
 
-After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be usable when the current working patch is not modified, and MUST NOT be usable while the current patch is syncing. When the working patch is modified and synced, Save MUST be usable and MUST use an emerald style distinct from the other patch-bar actions. Controller MUST NOT show a separate Modified label. The same presentation MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be usable when the current working patch is not modified, and MUST NOT be usable while the current patch is syncing. When the working patch is modified and synced, Save MUST be usable and MUST use an emerald style distinct from the other patch-bar actions. Hovering previous, next, or the patch selector MUST show an English tooltip that unsaved changes will be lost. That tooltip MUST NOT block choosing or stepping to another patch. Controller MUST NOT show a separate Modified label. The same presentation MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Loaded patch cannot Save
 - **WHEN** the session is ready, a current-preset dump for the selected patch has landed, and the user has not changed the working chain
@@ -47,6 +47,15 @@ After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be u
 - **WHEN** Save is usable and the user disconnects
 - **THEN** Save is hidden
 - **AND** the screen states that no pedals are connected
+
+#### Scenario: Unsaved-edit tooltip warns without blocking
+- **WHEN** Save is usable and the user hovers previous, next, or the patch selector
+- **THEN** Controller shows an English tooltip that unsaved changes will be lost
+- **AND** previous, next, and the selector can still change patch
+
+#### Scenario: Clean patch has no unsaved-edit tooltip
+- **WHEN** the session is ready with a dumped current patch that matches the baseline
+- **THEN** hovering previous, next, or the patch selector does not show an unsaved-changes tooltip
 
 #### Scenario: USB and Bluetooth share Save
 - **WHEN** a Bluetooth session is ready with a dumped current patch and the user turns DST off
