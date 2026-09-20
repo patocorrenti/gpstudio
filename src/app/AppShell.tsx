@@ -23,14 +23,14 @@ export function AppShell() {
       </main>
       <footer className="px-10 py-3 text-center text-[11px] border-t leading-none text-muted-foreground/60 ">
         <span className="font-bold">Patone</span>
-        {" · Unoficial controller for Valeton GP5/50 · Alpha Testing"}
+        {" · Unoficial controller for Valeton GP5/50 · Version 0.1.0 [ Beta Testing ]"}
       </footer>
       <div
         aria-hidden
         className="pointer-events-none absolute right-0 bottom-0 z-20 size-20 overflow-hidden"
       >
         <div className="absolute bottom-3.5 -right-6 w-28 rotate-[-45deg] bg-amber-400/70 py-px text-center text-[8px] font-bold tracking-[0.22em] text-black/80">
-          ALPHA
+          BETA
         </div>
       </div>
     </div>
