@@ -14,6 +14,9 @@ context: |
   current-patch store SETs of that family (114a: Save / rename / duplicate
   onto another slot), current-patch file export of the dump we already request
   (Valeton .prst for the connected model; not Library import, not cross-model conversion),
+  current-patch .prst import onto the selected slot (working-buffer writes;
+  Save / rename / duplicate remain store 114a;
+  GP-50 file → GP-50 session, GP-5 file → GP-5 session; not Library import, not conversion),
   Bluetooth live model (command 07) and live control (command 08) follow,
   and Controller drag-and-drop of movable modules are
   in scope on USB and Bluetooth. Library SysEx (browse / import / reorder),
@@ -71,7 +74,8 @@ context: |
     and live control (command 08) SysEx is in scope on Bluetooth.
     USB must not apply those reports.
     Sending a chain-order SET, slot model/control SETs, a current-patch store
-    SET (Save / rename / duplicate), current-patch file export, and Controller drag are in scope.
+    SET (Save / rename / duplicate), current-patch file export, current-patch
+    .prst import onto the selected slot, and Controller drag are in scope.
     Read reference/ for SysEx shape; do not paste that JavaScript into src/.
     Applying inbound volume, tuner, or Patch/Stomp mode
     while the patch stays the same is not.
@@ -114,7 +118,7 @@ context: |
     Connected label and link
     mode are defined in device-connection.
   - Controller: patch bar (previous / 00–99 select / next, plus Save, rename,
-    duplicate, and download of the current patch; Save/rename/duplicate/download
+    duplicate, download, and upload of the current patch; Save/rename/duplicate/download/upload
     and previous/next wait while chainSync is syncing; the selector may stay
     usable), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
@@ -140,7 +144,8 @@ context: |
   - Mobile Tauri app
   - Full preset library read/write, import, library reorder, Library .prst
     import (current-patch store / rename / duplicate / connected-model .prst
-    export are in scope; not the Library route and not GP-5/GP-50 conversion)
+    export and current-patch .prst import onto the selected slot are in scope;
+    not the Library route and not GP-5/GP-50 conversion)
   - IR / SnapTone / NAM upload
   - Applying liveFromPedal inbound volume/tuner to the snapshot
     while the patch stays the same (Bluetooth live-module SysEx, Stomp
@@ -177,7 +182,9 @@ context: |
     and current-patch store SET 114a)
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
     Current-patch download encodes a Valeton .prst for the connected model
-    from that dump; do not paste reference/ builders or convert across models.
+    from that dump; current-patch upload is the inverse into the working patch
+    (owned writes, not a dump SET and not store 114a). Do not paste reference/
+    builders or convert across models.
   - Patch recall uses MIDI CC published in the official manuals.
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
@@ -212,7 +219,7 @@ rules:
     - Do not propose copied SysEx, Library browse/import/reorder, Library .prst
       import, IRs, or mobile packaging in phase 1 changes
     - Current-patch store SET of the existing parameter-write family and
-      current-patch .prst export for the connected model are allowed; they are
+      current-patch .prst export/import for the connected model are allowed; they are
       not the Library route and not cross-model conversion
     - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
     - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
@@ -238,13 +245,13 @@ rules:
       and live model/control (commands 07 / 08)
       are in scope; USB must not apply those reports; chain-order SET writes,
       slot model/control SETs, current-patch store SETs (114a), current-patch
-      file export, and
+      file export, current-patch .prst load into the working patch, and
       Controller drag-and-drop of movable modules are in scope; read
       reference/ for SysEx (do not paste it into src/); Patch/Stomp
       control is later; do not apply liveFromPedal volume/tuner
       to the snapshot while the patch stays the same; Library import/reorder
       of .prst stay later (current-patch .prst export of the connected model
-      is in scope; no GP-5/GP-50 conversion)
+      and load into the working patch are in scope; no GP-5/GP-50 conversion)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - NS on bypasses AMP/CAB visually (prohibition overlay); do not rewrite

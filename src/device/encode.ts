@@ -11,7 +11,7 @@ import {
   encodeSlotControlSysex,
   encodeSlotModelSysex,
 } from "@/device/chain-codec";
-import { encodePatchStoreSysex } from "@/device/patch-store";
+import { encodePatchStoreSysex, encodePatchVolumeSysex, encodePatchBpmSysex } from "@/device/patch-store";
 import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -122,6 +122,24 @@ export function encodePatchStore(
   return encodeLinkMidiPackets(linkMode, midi);
 }
 
+/** Parameter-write patch volume SET (family `1142`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodePatchVolume(linkMode: LinkMode, volume: number): Uint8Array[] | null {
+  const midi = encodePatchVolumeSysex(volume);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+/** Parameter-write patch BPM SET (family `1142`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodePatchBpm(linkMode: LinkMode, bpm: number): Uint8Array[] | null {
+  const midi = encodePatchBpmSysex(bpm);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
     return false;
@@ -152,10 +170,13 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
   const usbStore = encodePatchStore("usb", 5, "Flow");
   const bleStore = encodePatchStore("bluetooth", 5, "Flow");
+  const usbVol = encodePatchVolume("usb", 50);
+  const bleVol = encodePatchVolume("bluetooth", 50);
   const bleModelMidi = bleModel && bleModel.length === 1 ? unwrapBlePacket(bleModel[0]) : null;
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
+  const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
   if (
     !usbModel ||
     !bleModel ||
@@ -163,12 +184,16 @@ function assertUsbBluetoothWrapOnly(): void {
     !bleControl ||
     !usbStore ||
     !bleStore ||
+    !usbVol ||
+    !bleVol ||
     !bleModelMidi ||
     !bleControlMidi ||
     !bleStoreMidi ||
+    !bleVolMidi ||
     !sameBytes(usbModel[0], bleModelMidi) ||
     !sameBytes(usbControl[0], bleControlMidi) ||
-    !sameBytes(usbStore[0], bleStoreMidi)
+    !sameBytes(usbStore[0], bleStoreMidi) ||
+    !sameBytes(usbVol[0], bleVolMidi)
   ) {
     throw new Error("USB and Bluetooth slot writes must differ only by one BLE-MIDI wrap");
   }

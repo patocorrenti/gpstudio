@@ -15,6 +15,7 @@ import {
 } from "@/device/catalog";
 import {
   defaultChain,
+  isEffectSlot,
   reorderChain,
   type AudioChain,
   type ChainSlotId,
@@ -26,6 +27,7 @@ import {
   decodeLiveOnOffChanges,
   decodeLiveSlotControl,
   decodeLiveSlotModel,
+  decodePresetDump,
   type ChainDumpResult,
 } from "@/device/chain-codec";
 import {
@@ -34,7 +36,9 @@ import {
   encodeIdentity,
   encodeModule,
   encodePatch,
+  encodePatchBpm,
   encodePatchStore,
+  encodePatchVolume,
   encodeSlotControl,
   encodeSlotModel,
 } from "@/device/encode";
@@ -51,9 +55,11 @@ import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import {
   currentPatchFilename,
+  decodePrstFile,
   encodePrstFile,
   sanitizePatchName,
 } from "@/device/patch-store";
+import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
@@ -78,6 +84,19 @@ const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
 /** Coalesce slider SETs so BLE-MIDI is not flooded. Toggles flush immediately. */
 const CONTROL_WRITE_THROTTLE_MS = 80;
+/**
+ * Upload paces SETs. USB `output.send` and BLE `writeValueWithoutResponse`
+ * both return before the pedal has applied the previous SysEx; a burst drops
+ * trailing writes (often store `114a`). Gaps are apply-only, not the slider throttle.
+ */
+const UPLOAD_WRITE_GAP_MS = { usb: 20, bluetooth: 40 } as const;
+const UPLOAD_MODEL_GAP_MS = { usb: 50, bluetooth: 80 } as const;
+const UPLOAD_COMMIT_GAP_MS = { usb: 80, bluetooth: 120 } as const;
+
+type UploadApplyStep = {
+  kind: "model" | "control" | "order" | "module" | "global";
+  bytes: Uint8Array;
+};
 
 function controlWriteKey(kind: EffectId, index: number): string {
   return `${kind}:${index}`;
@@ -85,6 +104,9 @@ function controlWriteKey(kind: EffectId, index: number): string {
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
+export type UploadPatchResult =
+  | { ok: true }
+  | { ok: false; reason: "invalid" | "wrong-model" | "busy" | "disconnected" };
 
 export type SessionSnapshot =
   | { status: "disconnected" }
@@ -411,6 +433,70 @@ export class DeviceSession {
       filename: currentPatchFilename(this.snapshot.model, this.snapshot.patch, name),
       bytes,
     };
+  }
+
+  async uploadCurrentPatch(bytes: Uint8Array): Promise<UploadPatchResult> {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return { ok: false, reason: "busy" };
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      return { ok: false, reason: "disconnected" };
+    }
+    const parsed = decodePrstFile(bytes);
+    if (!parsed) {
+      return { ok: false, reason: "invalid" };
+    }
+    if (parsed.model !== this.snapshot.model) {
+      return { ok: false, reason: "wrong-model" };
+    }
+    const chain = decodePresetDump(parsed.dump, parsed.model, parsed.model);
+    if (!chain) {
+      return { ok: false, reason: "invalid" };
+    }
+    const previousExport = this.snapshot.canExportPatch;
+    this.snapshot = {
+      ...this.snapshot,
+      chainSync: "syncing",
+      canExportPatch: false,
+    };
+    this.emitSnapshot();
+    const steps = this.encodeUploadedPatchWrites(chain, parsed.volume, parsed.bpm);
+    if (!steps) {
+      if (this.snapshot.status === "connected") {
+        this.snapshot = {
+          ...this.snapshot,
+          chainSync: "idle",
+          canExportPatch: previousExport,
+        };
+        this.emitSnapshot();
+      }
+      return { ok: false, reason: "invalid" };
+    }
+    this.clearControlWrites();
+    const linkMode = this.snapshot.linkMode;
+    for (let index = 0; index < steps.length; index += 1) {
+      if (this.snapshot.status !== "connected") {
+        return { ok: false, reason: "disconnected" };
+      }
+      const step = steps[index];
+      await this.sendBytes(step.bytes);
+      const next = steps[index + 1];
+      if (!next) {
+        await this.delay(UPLOAD_COMMIT_GAP_MS[linkMode]);
+        break;
+      }
+      await this.delay(
+        step.kind === "model" ? UPLOAD_MODEL_GAP_MS[linkMode] : UPLOAD_WRITE_GAP_MS[linkMode],
+      );
+    }
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    this.refreshChain();
+    return { ok: true };
   }
 
   async toggleChainSlot(id: ChainSlotId): Promise<void> {
@@ -1017,6 +1103,83 @@ export class DeviceSession {
     this.currentPatchDump = null;
   }
 
+  private encodeUploadedPatchWrites(
+    chain: AudioChain,
+    volume: number | null,
+    bpm: number | null,
+  ): UploadApplyStep[] | null {
+    if (this.snapshot.status !== "connected") {
+      return null;
+    }
+    const linkMode = this.snapshot.linkMode;
+    const steps: UploadApplyStep[] = [];
+    for (const slot of chain) {
+      if (!isEffectSlot(slot.id) || slot.modelId === undefined || slot.values === undefined) {
+        continue;
+      }
+      const model = modelById(slot.modelId);
+      if (!model || model.kind !== slot.id || !model.devices.has(this.snapshot.model)) {
+        continue;
+      }
+      const modelPackets = encodeSlotModel(linkMode, slot.id, model.wire);
+      if (!modelPackets) {
+        continue;
+      }
+      for (const bytes of modelPackets) {
+        steps.push({ kind: "model", bytes });
+      }
+      for (const control of model.controls) {
+        const value = slot.values[control.index];
+        if (value === undefined) {
+          continue;
+        }
+        const controlPackets = encodeSlotControl(linkMode, slot.id, control.index, value);
+        if (!controlPackets) {
+          continue;
+        }
+        for (const bytes of controlPackets) {
+          steps.push({ kind: "control", bytes });
+        }
+      }
+    }
+    const orderPackets = encodeChainOrder(linkMode, chain);
+    if (!orderPackets) {
+      return null;
+    }
+    for (const bytes of orderPackets) {
+      steps.push({ kind: "order", bytes });
+    }
+    for (const slot of chain) {
+      if (!isEffectSlot(slot.id)) {
+        continue;
+      }
+      steps.push({ kind: "module", bytes: encodeModule(linkMode, slot.id, slot.enabled) });
+    }
+    if (volume !== null) {
+      const volumePackets = encodePatchVolume(linkMode, volume);
+      if (volumePackets) {
+        for (const bytes of volumePackets) {
+          steps.push({ kind: "global", bytes });
+        }
+      }
+    }
+    if (bpm !== null) {
+      const bpmPackets = encodePatchBpm(linkMode, bpm);
+      if (bpmPackets) {
+        for (const bytes of bpmPackets) {
+          steps.push({ kind: "global", bytes });
+        }
+      }
+    }
+    return steps;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
   private async storePatch(dest: number, name: string): Promise<void> {
     if (this.snapshot.status !== "connected") {
       return;
@@ -1161,3 +1324,120 @@ export class DeviceSession {
     }
   }
 }
+
+function bytesFromHex(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function assertUploadSessionFixtures(): void {
+  const gp50 = bytesFromHex(GP50_TOB_PRST_HEX);
+  const gp5 = bytesFromHex(GP5_TOB_PRST_HEX);
+  const decoded = decodePrstFile(gp50);
+  if (!decoded) {
+    throw new Error("GP-50 TOB must decode for upload");
+  }
+  const chain = decodePresetDump(decoded.dump, "gp50", "gp50");
+  if (!chain) {
+    throw new Error("GP-50 TOB dump must decode as a chain");
+  }
+  const order = encodeChainOrder("usb", chain);
+  const store = encodePatchStore("usb", 5, decoded.name);
+  const recall = encodePatch("usb", 5);
+  if (!order || !store) {
+    throw new Error("Upload apply must encode chain-order and store 114a");
+  }
+  if (recall[0] !== 0xb0 || recall[1] !== 0x00) {
+    throw new Error("Patch recall fixture must be CC 0");
+  }
+  for (const packet of [...order, ...store]) {
+    if (packet[0] === 0xb0 && packet[1] === 0x00) {
+      throw new Error("Upload writes must not include extra patch recall");
+    }
+  }
+  if (decodePrstFile(gp5)?.model === "gp50") {
+    throw new Error("A GP-5 file must not classify as GP-50");
+  }
+}
+
+assertUploadSessionFixtures();
+
+function recordingUsb(): {
+  sent: Uint8Array[];
+  transport: MidiTransport;
+} {
+  const sent: Uint8Array[] = [];
+  let open = false;
+  return {
+    sent,
+    transport: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes) => {
+        sent.push(Uint8Array.from(bytes));
+      },
+      subscribe: () => () => undefined,
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      close: async () => {
+        open = false;
+      },
+      sysexEnabled: () => false,
+    },
+  };
+}
+
+function stubBluetooth(): BluetoothLink {
+  let open = false;
+  return {
+    discover: async () => [],
+    open: async () => {
+      open = true;
+    },
+    send: async () => undefined,
+    subscribe: () => () => undefined,
+    subscribeDisconnect: () => () => undefined,
+    isOpen: () => open,
+    resetInbound: () => undefined,
+    close: async () => {
+      open = false;
+    },
+  };
+}
+
+async function assertUploadRejectsWithoutMidi(): Promise<void> {
+  const usb = recordingUsb();
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  await session.connect(
+    { id: "usb-1", label: "GP-50", kind: "usb-midi" },
+    "gp50",
+  );
+  const sentAfterConnect = usb.sent.length;
+  const invalid = await session.uploadCurrentPatch(new Uint8Array([0x00, 0x01, 0x02]));
+  const wrong = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
+  const disconnected = await new DeviceSession(
+    recordingUsb().transport,
+    stubBluetooth(),
+  ).uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (invalid.ok || invalid.reason !== "invalid") {
+    throw new Error("Invalid bytes must return without sending MIDI");
+  }
+  if (wrong.ok || wrong.reason !== "wrong-model") {
+    throw new Error("Wrong-model bytes must return without sending MIDI");
+  }
+  if (disconnected.ok || disconnected.reason !== "disconnected") {
+    throw new Error("Disconnected upload must no-op");
+  }
+  if (usb.sent.length !== sentAfterConnect) {
+    throw new Error("Rejected upload must not send MIDI");
+  }
+}
+
+void assertUploadRejectsWithoutMidi();
+
+

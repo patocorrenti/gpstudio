@@ -5,6 +5,10 @@ import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /** Packed SET header: size `0x10`, path `01 01 04`, family `114a` (store). */
 const STORE_SET_PREFIX = [0x01, 0x00, 0x10, 0x11, 0x4a] as const;
+/** Packed SET header: size `0x0A`, family `1142` (patch volume / BPM). */
+const PATCH_GLOBAL_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x42] as const;
+const PATCH_VOL_KIND = [0x01, 0x20, 0x00, 0x00] as const;
+const PATCH_BPM_KIND = [0x02, 0x20, 0x04, 0x00] as const;
 const PATCH_NAME_LENGTH = 10;
 const PRST_HEADER_LENGTH = 20;
 const PRST_SPACER = Uint8Array.from([0xff, 0xff, 0xff, 0xff]);
@@ -201,6 +205,86 @@ function writeU32Le(bytes: Uint8Array, offset: number, value: number): void {
   bytes[offset + 3] = (value >> 24) & 0xff;
 }
 
+function readU32Le(bytes: Uint8Array, offset: number): number | null {
+  if (offset + 3 >= bytes.length) {
+    return null;
+  }
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  );
+}
+
+function decodeNulName(bytes: Uint8Array): string {
+  let name = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    const code = bytes[index];
+    name += String.fromCharCode(code === 0 ? 0x20 : code);
+  }
+  return name.trim();
+}
+
+function parsePrstHeader(bytes: Uint8Array): DeviceModel | null {
+  if (bytes.length < PRST_HEADER_LENGTH) {
+    return null;
+  }
+  if (bytes[18] !== 0x01 || bytes[19] !== 0x00) {
+    return null;
+  }
+  if (asciiPrefix(bytes, 5) === "GP-50") {
+    return "gp50";
+  }
+  if (asciiPrefix(bytes, 4) === "GP-5") {
+    return "gp5";
+  }
+  return null;
+}
+
+function expectedPrstLength(model: DeviceModel): number {
+  const descriptor = model === "gp50" ? GP50_DESCRIPTOR : GP5_DESCRIPTOR;
+  const layout = prstLayout(model);
+  return (
+    PRST_HEADER_LENGTH +
+    1 +
+    PRST_SPACER.length +
+    PATCH_NAME_LENGTH +
+    descriptor.length +
+    layout.bodyLength
+  );
+}
+
+function encodePatchGlobalSysex(kind: readonly number[], value: number): Uint8Array | null {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    return null;
+  }
+  const packed = Uint8Array.from([...PATCH_GLOBAL_SET_PREFIX, ...kind, value, 0x00, 0x00, 0x00]);
+  return framePackedSet(packed);
+}
+
+/**
+ * App→pedal patch volume SET (family `1142`). Packed body locked from the
+ * reference black-box `sendPatchVol`, not a Patone accept capture.
+ */
+export function encodePatchVolumeSysex(volume: number): Uint8Array | null {
+  if (!Number.isInteger(volume) || volume < 0 || volume > PATCH_VOL_MAX) {
+    return null;
+  }
+  return encodePatchGlobalSysex(PATCH_VOL_KIND, volume);
+}
+
+/**
+ * App→pedal patch BPM SET (family `1142`). Packed body locked from the
+ * reference black-box `sendBPM`. One-byte values only (40–255).
+ */
+export function encodePatchBpmSysex(bpm: number): Uint8Array | null {
+  if (!Number.isInteger(bpm) || bpm < PATCH_BPM_MIN || bpm > 255) {
+    return null;
+  }
+  return encodePatchGlobalSysex(PATCH_BPM_KIND, bpm);
+}
+
 function prstDescriptor(model: DeviceModel, dump: Uint8Array): Uint8Array {
   const descriptor = Uint8Array.from(model === "gp50" ? GP50_DESCRIPTOR : GP5_DESCRIPTOR);
   const layout = prstLayout(model);
@@ -253,6 +337,81 @@ export function encodePrstFile(options: {
   file[header.length] = crc8Atm(rest);
   file.set(rest, header.length + 1);
   return file;
+}
+
+export type DecodedPrstFile = {
+  model: DeviceModel;
+  name: string;
+  dump: Uint8Array;
+  volume: number | null;
+  bpm: number | null;
+};
+
+function descriptorVolume(model: DeviceModel, descriptor: Uint8Array): number | null {
+  if (model === "gp50") {
+    if (GP50_DESC_VOL_AT >= descriptor.length) {
+      return null;
+    }
+    return descriptor[GP50_DESC_VOL_AT];
+  }
+  return readU32Le(descriptor, GP5_DESC_VOL_AT);
+}
+
+function descriptorBpm(model: DeviceModel, descriptor: Uint8Array): number | null {
+  return readU32Le(
+    descriptor,
+    model === "gp50" ? GP50_DESC_BPM_AT : GP5_DESC_BPM_AT,
+  );
+}
+
+/**
+ * Inverse of `encodePrstFile`. Accepts only the connected-model layout locked
+ * from the TOB captures. Short files, bad CRC, unknown headers, and the other
+ * model's length return null. Does not convert across models.
+ */
+export function decodePrstFile(bytes: Uint8Array): DecodedPrstFile | null {
+  const model = parsePrstHeader(bytes);
+  if (!model || bytes.length !== expectedPrstLength(model)) {
+    return null;
+  }
+  const descriptorLength = (model === "gp50" ? GP50_DESCRIPTOR : GP5_DESCRIPTOR).length;
+  const rest = bytes.subarray(PRST_HEADER_LENGTH + 1);
+  if (crc8Atm(rest) !== bytes[PRST_HEADER_LENGTH]) {
+    return null;
+  }
+  if (!sameBytes(rest.subarray(0, PRST_SPACER.length), PRST_SPACER)) {
+    return null;
+  }
+  const nameAt = PRST_SPACER.length;
+  const descriptorAt = nameAt + PATCH_NAME_LENGTH;
+  const bodyAt = descriptorAt + descriptorLength;
+  const layout = prstLayout(model);
+  const body = rest.subarray(bodyAt);
+  if (body.length !== layout.bodyLength) {
+    return null;
+  }
+  const descriptor = rest.subarray(descriptorAt, bodyAt);
+  const dumpLength = layout.bodyAt + layout.bodyLength * 2;
+  const dump = expandPackedBody(body, layout.bodyAt, dumpLength);
+  const volume = descriptorVolume(model, descriptor);
+  const bpm = descriptorBpm(model, descriptor);
+  const volumeOk =
+    volume !== null && volume >= 0 && volume <= PATCH_VOL_MAX ? volume : null;
+  const bpmOk =
+    bpm !== null && bpm >= PATCH_BPM_MIN && bpm <= PATCH_BPM_MAX ? bpm : null;
+  if (volumeOk !== null) {
+    writePackedWord(dump, layout.volAt, volumeOk);
+  }
+  if (bpmOk !== null) {
+    writePackedWord(dump, layout.bpmAt, bpmOk);
+  }
+  return {
+    model,
+    name: decodeNulName(rest.subarray(nameAt, descriptorAt)),
+    dump,
+    volume: volumeOk,
+    bpm: bpmOk,
+  };
 }
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
@@ -395,6 +554,80 @@ function assertPatchStoreFixtures(): void {
   );
   if (sameBytes(GP50_DESCRIPTOR.subarray(0, htmlDescriptor.length), htmlDescriptor)) {
     throw new Error("GP-50 descriptor must follow the capture, not the truncated HTML constant");
+  }
+
+  const decodedGp50 = decodePrstFile(gp50Capture);
+  const decodedGp5 = decodePrstFile(gp5Capture);
+  if (!decodedGp50 || !decodedGp5) {
+    throw new Error("TOB captures must decode");
+  }
+  if (decodedGp50.model !== "gp50" || decodedGp50.name !== "TOB") {
+    throw new Error("GP-50 TOB decode must yield GP-50 named TOB");
+  }
+  if (decodedGp5.model !== "gp5" || decodedGp5.name !== "TOB") {
+    throw new Error("GP-5 TOB decode must yield GP-5 named TOB");
+  }
+  const roundTripGp50 = encodePrstFile({
+    model: decodedGp50.model,
+    name: decodedGp50.name,
+    dump: decodedGp50.dump,
+  });
+  const roundTripGp5 = encodePrstFile({
+    model: decodedGp5.model,
+    name: decodedGp5.name,
+    dump: decodedGp5.dump,
+  });
+  if (
+    !roundTripGp50 ||
+    !roundTripGp5 ||
+    !sameBytes(roundTripGp50, gp50Capture) ||
+    !sameBytes(roundTripGp5, gp5Capture)
+  ) {
+    throw new Error("TOB decode must round-trip through encode to the capture bytes");
+  }
+  if (
+    packedWord(decodedGp50.dump, GP50_DUMP_VOL_AT) !== decodedGp50.volume ||
+    packedWord(decodedGp50.dump, GP50_DUMP_BPM_AT) !== decodedGp50.bpm ||
+    packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT) !== decodedGp5.volume ||
+    packedWord(decodedGp5.dump, GP50_DUMP_BPM_AT - GP5_DUMP_SHIFT) !== decodedGp5.bpm
+  ) {
+    throw new Error("TOB decode must copy descriptor volume/BPM into dump word slots");
+  }
+  if (decodePrstFile(gp50Capture)?.model === "gp5") {
+    throw new Error("A GP-50 capture must not decode as GP-5");
+  }
+  if (decodePrstFile(gp50Capture.subarray(0, gp5Capture.length))) {
+    throw new Error("The other model's length must not decode");
+  }
+  if (decodePrstFile(gp50Capture.subarray(0, 40))) {
+    throw new Error("A truncated buffer must not invent a dump");
+  }
+  const badCrc = Uint8Array.from(gp50Capture);
+  badCrc[21] ^= 0x01;
+  if (decodePrstFile(badCrc)) {
+    throw new Error("Bad CRC must not decode");
+  }
+  const unknownHeader = Uint8Array.from(gp50Capture);
+  unknownHeader[0] = 0x00;
+  if (decodePrstFile(unknownHeader)) {
+    throw new Error("Unknown headers must not decode");
+  }
+
+  const vol = encodePatchVolumeSysex(50);
+  const bpm = encodePatchBpmSysex(120);
+  if (!vol || !bpm || vol[0] !== 0xf0 || bpm[bpm.length - 1] !== 0xf7) {
+    throw new Error("Patch volume/BPM SET must be framed SysEx");
+  }
+  if (
+    vol[9] !== 0x01 ||
+    vol[10] !== 0x01 ||
+    vol[11] !== 0x04 ||
+    vol[12] !== 0x02
+  ) {
+    throw new Error("Patch volume SET must nibble-expand packed family 1142");
+  }
+  if (encodePatchVolumeSysex(101) || encodePatchBpmSysex(39)) {
+    throw new Error("Patch volume/BPM SET must reject out-of-range values");
   }
 }
 

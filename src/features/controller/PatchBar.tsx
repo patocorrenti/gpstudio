@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,13 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { displayModelName, type DeviceModel } from "@/device/models";
+import { decodePrstFile } from "@/device/patch-store";
 import {
   formatPatch,
   formatPatchOption,
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -48,19 +50,24 @@ export function PatchBar({
   patchNames,
   busy,
   canExportPatch,
+  model,
 }: {
   patch: number;
   patchNames: (string | null)[];
   busy: boolean;
   canExportPatch: boolean;
+  model: DeviceModel;
 }) {
   const session = useDeviceSession();
   const currentName = patchNames[patch];
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateDest, setDuplicateDest] = useState(String((patch + 1) % PATCH_COUNT));
   const [overwriteOpen, setOverwriteOpen] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState<Uint8Array | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const destIndex = Number.parseInt(duplicateDest, 10);
   const destName =
     Number.isInteger(destIndex) && destIndex !== patch ? patchNames[destIndex] : null;
@@ -101,6 +108,38 @@ export function PatchBar({
       return;
     }
     triggerPatchDownload(file.filename, file.bytes);
+  }
+
+  async function onPickUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const decoded = decodePrstFile(bytes);
+    if (!decoded) {
+      setPendingUpload(null);
+      setUploadError("This file is not a valid Valeton preset.");
+      return;
+    }
+    if (decoded.model !== model) {
+      setPendingUpload(null);
+      setUploadError(
+        `This preset is for ${displayModelName(decoded.model)}. Connect a ${displayModelName(decoded.model)} to upload it.`,
+      );
+      return;
+    }
+    setUploadError(null);
+    setPendingUpload(bytes);
+  }
+
+  function confirmUpload() {
+    if (!pendingUpload) {
+      return;
+    }
+    void session.uploadCurrentPatch(pendingUpload);
+    setPendingUpload(null);
   }
 
   return (
@@ -198,6 +237,30 @@ export function PatchBar({
           <Download className={patchActionIconClass} />
           Download
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className={patchActionClass}
+          aria-label="Upload patch"
+          onClick={() => {
+            fileInputRef.current?.click();
+          }}
+        >
+          <Upload className={patchActionIconClass} />
+          Upload
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".prst"
+          className="hidden"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(event) => {
+            void onPickUpload(event);
+          }}
+        />
       </div>
       <Dialog
         open={renameOpen}
@@ -306,6 +369,66 @@ export function PatchBar({
             </Button>
             <Button type="button" onClick={confirmDuplicate}>
               {overwriteOpen ? "Overwrite" : "Duplicate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={pendingUpload !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingUpload(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Load file into current patch?</DialogTitle>
+            <DialogDescription>
+              <span className="block">
+                This will load the file into patch{" "}
+                {formatPatchOption(patch, currentName)}.
+              </span>
+              <span className="mt-2 block">It will overwrite any unsaved changes.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPendingUpload(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmUpload}>
+              Accept
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={uploadError !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUploadError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cannot upload patch</DialogTitle>
+            <DialogDescription>{uploadError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => {
+                setUploadError(null);
+              }}
+            >
+              OK
             </Button>
           </DialogFooter>
         </DialogContent>

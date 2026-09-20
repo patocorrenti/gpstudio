@@ -59,6 +59,7 @@ function ConnectedController() {
         patchNames={snapshot.patchNames}
         busy={snapshot.chainSync === "syncing"}
         canExportPatch={snapshot.canExportPatch}
+        model={snapshot.model}
       />
       <PatchBody
         chain={snapshot.chain}
