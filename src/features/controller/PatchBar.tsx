@@ -25,12 +25,14 @@ import {
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { decodePrstFile } from "@/device/patch-store";
 import {
+  type DeviceSession,
   formatPatch,
   formatPatchOption,
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import { toast } from "sonner";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -40,6 +42,63 @@ const patchActionClass = `${patchChipClass} px-3`;
 const patchActionIconClass = "size-3 text-muted-foreground";
 
 const unsavedPatchHint = "Unsaved changes will be lost";
+
+function toastError(fallback: string) {
+  return (cause: unknown) => (cause instanceof Error ? cause.message : fallback);
+}
+
+async function runWhileConnected(
+  session: DeviceSession,
+  action: () => Promise<void>,
+): Promise<void> {
+  await action();
+  if (session.getSnapshot().status !== "connected") {
+    throw new Error("Pedal disconnected.");
+  }
+}
+
+function waitUntilChainIdle(session: DeviceSession): Promise<void> {
+  const snapshot = session.getSnapshot();
+  if (snapshot.status !== "connected") {
+    return Promise.reject(new Error("Pedal disconnected."));
+  }
+  if (snapshot.chainSync !== "syncing") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const unsubscribe = session.subscribe(() => {
+      const next = session.getSnapshot();
+      if (next.status !== "connected") {
+        unsubscribe();
+        reject(new Error("Pedal disconnected."));
+        return;
+      }
+      if (next.chainSync !== "syncing") {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
+function savePatchWithToast(
+  session: DeviceSession,
+  before?: () => Promise<void>,
+) {
+  return toast.promise(
+    runWhileConnected(session, async () => {
+      if (before) {
+        await before();
+      }
+      await session.savePatch();
+    }),
+    {
+      loading: "Saving patch…",
+      success: "Patch saved",
+      error: toastError("Could not save patch."),
+    },
+  );
+}
 
 function PatchNavTooltip({
   enabled,
@@ -116,8 +175,16 @@ export function PatchBar({
   }
 
   function confirmRename() {
-    void session.renamePatch(renameValue);
+    const name = renameValue;
     setRenameOpen(false);
+    void toast.promise(
+      runWhileConnected(session, () => session.renamePatch(name)),
+      {
+        loading: "Renaming patch…",
+        success: "Patch renamed",
+        error: toastError("Could not rename patch."),
+      },
+    );
   }
 
   function confirmDuplicate() {
@@ -128,9 +195,17 @@ export function PatchBar({
       setOverwriteOpen(true);
       return;
     }
-    void session.duplicatePatch(destIndex);
+    const slot = destIndex;
     setDuplicateOpen(false);
     setOverwriteOpen(false);
+    void toast.promise(
+      runWhileConnected(session, () => session.duplicatePatch(slot)),
+      {
+        loading: "Duplicating patch…",
+        success: "Patch duplicated",
+        error: toastError("Could not duplicate patch."),
+      },
+    );
   }
 
   async function downloadPatch() {
@@ -169,8 +244,40 @@ export function PatchBar({
     if (!pendingUpload) {
       return;
     }
-    void session.uploadCurrentPatch(pendingUpload);
+    const bytes = pendingUpload;
     setPendingUpload(null);
+    void toast.promise(
+      (async () => {
+        const result = await session.uploadCurrentPatch(bytes);
+        if (!result.ok) {
+          throw new Error(
+            result.reason === "disconnected"
+              ? "Pedal disconnected."
+              : result.reason === "busy"
+                ? "The patch is still syncing."
+                : result.reason === "wrong-model"
+                  ? "This preset is for a different pedal."
+                  : "This file is not a valid Valeton preset.",
+          );
+        }
+        if (session.getSnapshot().status !== "connected") {
+          throw new Error("Pedal disconnected.");
+        }
+      })(),
+      {
+        loading: "Uploading patch…",
+        success: () => ({
+          message: "Patch loaded into the working slot",
+          action: {
+            label: "Save",
+            onClick: () => {
+              void savePatchWithToast(session, () => waitUntilChainIdle(session));
+            },
+          },
+        }),
+        error: toastError("Could not upload patch."),
+      },
+    );
   }
 
   return (
@@ -247,7 +354,9 @@ export function PatchBar({
               : patchActionClass
           }
           aria-label="Save patch"
-          onClick={() => void session.savePatch()}
+          onClick={() => {
+            void savePatchWithToast(session);
+          }}
         >
           <Save className={modified && !busy ? "size-3" : patchActionIconClass} />
           Save

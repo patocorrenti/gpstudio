@@ -110,6 +110,10 @@ context: |
   Phase 1 visible UI:
   - Shell chrome always visible: Patone name, connection-status control on the left,
     Controller / Editor / Library nav and theme toggle on the right.
+    The shell hosts global English toasts (shadcn Sonner promise: spinner then
+    success/error) for connect, disconnect, and patch Save / rename / duplicate /
+    confirmed upload. Upload success may offer Save. Disconnect closes the Connect
+    modal. Toasts are not a route.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
   - Disconnected control label: Connect. Activating it opens a modal with USB
     and Bluetooth tabs (default USB). USB: MIDI permission, endpoints, connect,

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bluetooth, Usb } from "lucide-react";
+import { toast } from "sonner";
 import type { BluetoothEndpoint } from "@/bluetooth/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -28,6 +29,19 @@ export function ConnectionStatus() {
   const [busy, setBusy] = useState(false);
   const connected = snapshot.status === "connected";
   const askingModel = pending !== null && !connected;
+  const previousStatus = useRef(snapshot.status);
+
+  useEffect(() => {
+    const previous = previousStatus.current;
+    previousStatus.current = snapshot.status;
+    if (previous !== "connected" || snapshot.status !== "disconnected") {
+      return;
+    }
+    setOpen(false);
+    setPending(null);
+    setError(null);
+    toast("Pedal disconnected");
+  }, [snapshot.status, setOpen]);
 
   async function scanUsb() {
     setBusy(true);
@@ -101,7 +115,14 @@ export function ConnectionStatus() {
     setBusy(true);
     setError(null);
     try {
-      await session.connect(endpoint, model);
+      await toast
+        .promise(session.connect(endpoint, model), {
+          loading: "Connecting…",
+          success: `Connected to ${endpoint.label}`,
+          error: (cause) =>
+            cause instanceof Error ? cause.message : "Could not connect.",
+        })
+        .unwrap();
       setPending(null);
       setOpen(false);
     } catch (cause) {
@@ -126,7 +147,6 @@ export function ConnectionStatus() {
       await session.disconnect();
       setPending(null);
       setLinkTab("usb");
-      await scanUsb();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not disconnect.",

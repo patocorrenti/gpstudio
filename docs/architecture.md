@@ -105,7 +105,7 @@ Web MIDI y `midir` son los dos backends USB. Web Bluetooth y `btleplug` son los 
 
 Patch recall por Bluetooth ya es CC 0 envuelto en paquete BLE-MIDI. On/off de módulos es CC 48–57 envuelto igual. El write de orden, de modelo, de un control y del store del patch actual es SysEx Patone envuelto igual (un GATT write `80 80` + `F0`…`F7`; no partir SET de esa familia en paquetes de 20). Si un comando futuro no habla CC, el gancho sigue siendo el encoder (CC vs SysEx), el mismo que necesita el editor USB.
 
-Connect no es una pantalla: es estado de sesión global. El chrome lo muestra siempre (sin pedal: Connect) y el flujo de conexión ocurre en un modal. Controller es la home.
+Connect no es una pantalla: es estado de sesión global. El chrome lo muestra siempre (sin pedal: Connect) y el flujo de conexión ocurre en un modal. Controller es la home. El shell monta toasts globales en English (shadcn Sonner, `toast.promise`: spinner y luego éxito o error) para conectar, desconectar, y Save / rename / duplicate / upload del patch actual. El toast de upload exitoso puede ofrecer Save; no guarda solo. Al desconectar (botón o link perdido) el modal de Connect se cierra.
 
 ## Estructura de repo
 
@@ -229,4 +229,5 @@ Empaquetado Windows: `tauri build` → instalador NSIS/MSI. Web: `vite` en Chrom
 - [x] Change `prst-download`: esa descarga escribe un `.prst` Valeton del pedal conectado (GP-50 → GP-50, GP-5 → GP-5; sin conversión cruzada)
 - [x] Change `prst-upload`: precargar un `.prst` del modelo conectado en el patch de trabajo (GP-50 → GP-50, GP-5 → GP-5; writes; Save es el store `114a`; sin recall extra ni conversión cruzada)
 - [x] Change `patch-modified-state`: `modified` en el snapshot; Save disabled hasta que el patch de trabajo difiere del baseline, entonces esmeralda (limpia al Save / rename / restaurar / cambiar de patch / desconectar)
+- [x] Change `toast-feedback`: toasts globales English (Sonner promise) para connect/disconnect y Save/rename/duplicate/upload; el toast de upload ofrece Save; desconectar cierra el modal
 - [ ] Change `stomp-assignment` (**pausado 2026-09-18**): leer/editar qué módulos asigna cada stomp. Decode GP-50 locked; SET no aceptado. Lab: `openspec/changes/stomp-assignment/`
