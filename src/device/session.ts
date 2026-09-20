@@ -122,6 +122,36 @@ function preserveExpEnabled(previous: AudioChain, next: AudioChain): AudioChain 
   );
 }
 
+function chainSlotsEqual(left: AudioChain, right: AudioChain): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index];
+    const b = right[index];
+    if (a.id !== b.id || a.enabled !== b.enabled || a.modelId !== b.modelId) {
+      return false;
+    }
+    const aValues = a.values;
+    const bValues = b.values;
+    if (aValues === undefined || bValues === undefined) {
+      if (aValues !== bValues) {
+        return false;
+      }
+      continue;
+    }
+    if (aValues.length !== bValues.length) {
+      return false;
+    }
+    for (let valueIndex = 0; valueIndex < aValues.length; valueIndex += 1) {
+      if (aValues[valueIndex] !== bValues[valueIndex]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
 const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
@@ -144,6 +174,10 @@ export class DeviceSession {
   private patchWaiters = new Set<() => void>();
   private chainWaiters = new Set<() => void>();
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
+  private pendingPatchLoad: number | null = null;
+  /** While true, a dump that matches the already-shown chain is the previous patch. */
+  private ignoreStaleChainDump = false;
   private dropping = false;
   private readonly pendingControlWrites = new Map<
     string,
@@ -292,6 +326,11 @@ export class DeviceSession {
       throw new Error("Patch control is not available on this link.");
     }
     const next = clampPatch(patch);
+    if (next === this.snapshot.patch && this.snapshot.chainSync !== "syncing") {
+      return;
+    }
+    this.pendingPatchLoad = next;
+    this.ignoreStaleChainDump = true;
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
     this.snapshot = { ...this.snapshot, patch: next, chainSync };
@@ -665,11 +704,17 @@ export class DeviceSession {
     }
     if (event.type === "current-patch") {
       const next = clampPatch(event.patch);
+      if (this.pendingPatchLoad !== null && next !== this.pendingPatchLoad) {
+        this.releaseWaiters(this.patchWaiters);
+        return;
+      }
       const changed = next !== this.snapshot.patch;
       this.snapshot = { ...this.snapshot, patch: next };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
       if (changed) {
+        this.pendingPatchLoad = next;
+        this.ignoreStaleChainDump = true;
         this.refreshChain();
       }
       return;
@@ -677,7 +722,10 @@ export class DeviceSession {
     if (event.type === "patch-changed") {
       if (this.snapshot.sync === "ready") {
         void this.sendIdentity("current-patch", this.syncGeneration);
-        this.refreshChain();
+        if (this.snapshot.chainSync !== "syncing") {
+          this.ignoreStaleChainDump = true;
+          this.refreshChain();
+        }
       }
     }
   }
@@ -696,11 +744,17 @@ export class DeviceSession {
     if (!result || this.snapshot.status !== "connected") {
       return;
     }
+    const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
+    if (this.ignoreStaleChainDump && chainSlotsEqual(this.snapshot.chain, chain)) {
+      return;
+    }
+    this.ignoreStaleChainDump = false;
+    this.pendingPatchLoad = null;
     this.clearChainRefreshTimer();
     this.currentPatchDump = result.dump;
     this.snapshot = {
       ...this.snapshot,
-      chain: preserveExpEnabled(this.snapshot.chain, result.chain),
+      chain,
       chainSync: "idle",
       canExportPatch: true,
     };
@@ -720,6 +774,9 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
       return true;
     }
+    if (this.snapshot.chainSync === "syncing") {
+      return true;
+    }
     for (const report of reports) {
       this.setChainSlotEnabled(report.id, report.enabled);
     }
@@ -735,6 +792,9 @@ export class DeviceSession {
       return false;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return true;
+    }
+    if (this.snapshot.chainSync === "syncing") {
       return true;
     }
     const previousById = new Map(this.snapshot.chain.map((slot) => [slot.id, slot] as const));
@@ -947,6 +1007,8 @@ export class DeviceSession {
 
   private beginGeneration(): void {
     this.syncGeneration += 1;
+    this.pendingPatchLoad = null;
+    this.ignoreStaleChainDump = false;
     this.clearChainRefreshTimer();
     this.clearControlWrites();
     this.dropPatchDump();
