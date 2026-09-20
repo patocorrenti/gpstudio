@@ -51,7 +51,7 @@ function SlotControl({
   if (control.display === "toggle") {
     return (
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm">{control.label}</span>
+        <span className="text-sm text-foreground/70">{control.label}</span>
         <Switch
           size="sm"
           checked={value >= 1}
@@ -70,8 +70,8 @@ function SlotControl({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span>{control.label}</span>
-        <span className="tabular-nums text-muted-foreground">
+        <span className="text-foreground/70">{control.label}</span>
+        <span className="font-medium tabular-nums">
           {formatControlValue(control, value)}
         </span>
       </div>
@@ -123,12 +123,12 @@ function SlotControlPanel({
       className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
       aria-label={`${kindLabel} controls`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 pb-2">
         <h2 className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-semibold tracking-wide">
           <img
             src={CHAIN_SLOT_ICONS[slot.id]}
             alt=""
-            className="size-7 object-contain"
+            className="size-6 object-contain"
           />
           {kindLabel}
         </h2>
@@ -209,7 +209,7 @@ export function SlotControlPanels({
   }
 
   return (
-    <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-3 px-2 pb-6 md:grid-cols-2">
+    <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-2 px-2 pb-6 md:grid-cols-2 lg:grid-cols-3">
       {panels.map((slot) => (
         <SlotControlPanel
           key={slot.id}
