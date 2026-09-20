@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` for why. Live edits already mutate the pedal’s working buffer and the connected snapshot chain (`AudioChain`: 10 effect slots, plus EXP on GP-50). Save / rename store that buffer into a 00–99 slot (`114a`); recalling another patch drops it (`docs/architecture.md`). `DeviceSession` already compares two chains in `chainSlotsEqual` (stale-dump guard). UI never sends raw MIDI. Specs: `live-controller` (Modified mark) and `device-connection` (baseline + `modified` on the snapshot).
+See `proposal.md` for why. Live edits already mutate the pedal’s working buffer and the connected snapshot chain (`AudioChain`: 10 effect slots, plus EXP on GP-50). Save / rename store that buffer into a 00–99 slot (`114a`); recalling another patch drops it (`docs/architecture.md`). `DeviceSession` already compares two chains in `chainSlotsEqual` (stale-dump guard). UI never sends raw MIDI. Specs: `live-controller` (Save follows `modified`) and `device-connection` (baseline + `modified` on the snapshot).
 
 ## Goals / Non-Goals
 
@@ -39,11 +39,11 @@ While `chainSync === "syncing"`, or `baseline === null`, `modified` is false. Pa
 
 ### 3. Snapshot boolean, not a React-only derivation
 
-**Choice:** Add `modified: boolean` to the connected `SessionSnapshot`. Every existing `this.snapshot = { ...this.snapshot, chain }` path (and live follow) goes through one helper that writes chain + `modified`. `PatchBar` reads `snapshot.modified` and shows the English label **Modified** next to the patch actions. Save stays enabled whenever the patch is synced.
+**Choice:** Add `modified: boolean` to the connected `SessionSnapshot`. Every existing `this.snapshot = { ...this.snapshot, chain }` path (and live follow) goes through one helper that writes chain + `modified`. `PatchBar` reads `snapshot.modified`: Save sits before Rename, is disabled when clean, and uses an emerald style when modified. There is no separate Modified label.
 
-**Why:** Bluetooth live follow mutates the chain without a Controller click. Deriving dirty in React from “last user gesture” would miss stomp/knob reports and would fork USB vs Bluetooth.
+**Why:** Bluetooth live follow mutates the chain without a Controller click. Deriving dirty in React from “last user gesture” would miss stomp/knob reports and would fork USB vs Bluetooth. Save as the only chrome keeps `modified` on the snapshot for later controls.
 
-**Alternative:** Session event `onDirty`. Rejected; the snapshot is already the UI contract. **Alternative:** Disable Save when clean. Rejected in the proposal (dirty-only Save is a non-goal).
+**Alternative:** Session event `onDirty`. Rejected; the snapshot is already the UI contract. **Alternative:** Keep Save always enabled. Rejected; the user asked for dirty-only Save.
 
 ### 4. Compared fields are the in-scope chain
 

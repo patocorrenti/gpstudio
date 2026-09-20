@@ -118,7 +118,10 @@ context: |
     Connected label and link
     mode are defined in device-connection.
   - Controller: patch bar (previous / 00–99 select / next, plus Save, rename,
-    duplicate, download, and upload of the current patch; Save/rename/duplicate/download/upload
+    duplicate, download, and upload of the current patch; Save before rename;
+    Save disabled until the working chain differs from the last loaded or stored
+    baseline, then emerald; snapshot `modified` stays available to other
+    controls; no Modified label and no confirm-on-navigate; Save/rename/duplicate/download/upload
     and previous/next wait while chainSync is syncing; the selector may stay
     usable), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via

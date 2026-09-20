@@ -50,12 +50,14 @@ export function PatchBar({
   patchNames,
   busy,
   canExportPatch,
+  modified,
   model,
 }: {
   patch: number;
   patchNames: (string | null)[];
   busy: boolean;
   canExportPatch: boolean;
+  modified: boolean;
   model: DeviceModel;
 }) {
   const session = useDeviceSession();
@@ -197,6 +199,21 @@ export function PatchBar({
         <Button
           type="button"
           variant="ghost"
+          disabled={busy || !modified}
+          className={
+            modified && !busy
+              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
+              : patchActionClass
+          }
+          aria-label="Save patch"
+          onClick={() => void session.savePatch()}
+        >
+          <Save className={modified && !busy ? "size-3" : patchActionIconClass} />
+          Save
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
           disabled={busy}
           className={patchActionClass}
           aria-label="Rename patch"
@@ -204,16 +221,6 @@ export function PatchBar({
         >
           <Pencil className={patchActionIconClass} />
           Rename
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className={patchActionClass}
-          onClick={() => void session.savePatch()}
-        >
-          <Save className={patchActionIconClass} />
-          Save
         </Button>
         <Button
           type="button"
