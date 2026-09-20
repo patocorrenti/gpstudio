@@ -18,7 +18,7 @@ function PatchBody({
   busy: boolean;
 }) {
   return (
-    <div className="relative mt-4 flex min-h-40 w-full flex-1 flex-col items-center">
+    <div className="relative mt-6 flex min-h-40 w-full flex-1 flex-col items-center">
       <div
         className={cn("flex w-full flex-col items-center", busy && "invisible")}
         aria-hidden={busy}

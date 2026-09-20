@@ -25,12 +25,12 @@ import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
 import { cn } from "@/lib/utils";
 
-/** Cable through the icon: pt-2 + grip h-3 + gap-2 + half of size-14. */
-const CHAIN_CABLE_TOP = "calc(3.5rem + 1px)";
+/** Cable through the icon: pt-1.5 + grip h-3 + gap-2 + half of size-14. */
+const CHAIN_CABLE_TOP = "calc(3.375rem + 1px)";
 
 function slotClassName(enabled: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-3 pt-2 pb-3 text-center",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-2 pt-1.5 pb-2 text-center",
     enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
   );
 }
@@ -87,7 +87,7 @@ function AudioChainSlotView({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/25 transition-opacity",
+          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/15 transition-opacity",
           isDragging && "opacity-0",
           isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
           isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
