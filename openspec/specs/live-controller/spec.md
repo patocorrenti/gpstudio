@@ -8,7 +8,7 @@ Shows Controller as the live home: an empty state with no pedal, a loading state
 
 ### Requirement: Disconnected Controller shows an empty state
 
-When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Save, rename, duplicate, download, a syncing state, or an audio chain.
+When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Save, rename, duplicate, download, upload, a syncing state, or an audio chain.
 
 #### Scenario: Open Controller with no pedal
 - **WHEN** the user opens Controller while disconnected
@@ -48,11 +48,11 @@ After a pedal session becomes connected, Controller SHALL show an English loadin
 
 ### Requirement: Connected Controller selects patches 00-99 after sync
 
-Once initial sync completes or times out, Controller SHALL show a patch bar: previous, the current patch as a two-digit selectable label (`00`–`99`), next, and English controls to Save, rename, duplicate, and download the current patch. The label MUST show the pedal's current patch when that index was received. If the index was not received, the label MUST stay at `00` and MUST NOT send patch `00` solely because sync ended. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session using official CC 0 (value 0–99). Previous from `00` MUST wrap to `99`. Next from `99` MUST wrap to `00`. Save, rename, duplicate, and download MUST go through the device session and MUST NOT send raw MIDI from React. Disconnecting MUST hide the patch bar and return to the empty state. Controller MUST NOT send raw MIDI.
+Once initial sync completes or times out, Controller SHALL show a patch bar: previous, the current patch as a two-digit selectable label (`00`–`99`), next, and English controls to Save, rename, duplicate, download, and upload the current patch. The label MUST show the pedal's current patch when that index was received. If the index was not received, the label MUST stay at `00` and MUST NOT send patch `00` solely because sync ended. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session using official CC 0 (value 0–99). Previous from `00` MUST wrap to `99`. Next from `99` MUST wrap to `00`. Save, rename, duplicate, download, and upload MUST go through the device session and MUST NOT send raw MIDI from React. Disconnecting MUST hide the patch bar and return to the empty state. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Patch bar appears with the pedal's patch
 - **WHEN** initial sync receives that the pedal is on patch `42`
-- **THEN** Controller shows previous, the current patch label, next, Save, rename, duplicate, and download
+- **THEN** Controller shows previous, the current patch label, next, Save, rename, duplicate, download, and upload
 - **AND** the label reads `42`
 - **AND** no patch recall is sent solely because sync completed
 
@@ -258,7 +258,7 @@ After initial sync, when the session is on Bluetooth and the pedal reports a cha
 
 ### Requirement: Patch changes refresh the audio chain
 
-After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Save, rename, duplicate, and download MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
+After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
 
 #### Scenario: User selects another patch
 - **WHEN** the user selects patch `42` after sync and a chain dump for that patch arrives
@@ -272,14 +272,14 @@ After initial sync, when the selected patch changes (user previous / select / ne
 
 #### Scenario: Patch bar waits for the new dump
 - **WHEN** the user selects another patch after sync and the new chain dump has not arrived yet
-- **THEN** previous, next, Save, rename, duplicate, and download cannot be used
+- **THEN** previous, next, Save, rename, duplicate, download, and upload cannot be used
 - **AND** the 00–99 selector may still change patch
 
 #### Scenario: Chain refresh overlay clears
 - **WHEN** a chain dump for the newly selected patch arrives
 - **THEN** the busy overlay is hidden
 - **AND** Controller shows that dump's module order and on/off states
-- **AND** previous, next, Save, rename, duplicate, and download are usable again
+- **AND** previous, next, Save, rename, duplicate, download, and upload are usable again
 
 #### Scenario: Pedal changes patch after sync
 - **WHEN** the pedal reports it moved to patch `17` after sync and a chain dump for that patch arrives
@@ -403,11 +403,13 @@ Changing the selected model or a control value MUST go through the device sessio
 
 ### Requirement: Controller saves, renames, duplicates, and downloads the current patch
 
-After the patch bar is shown, Controller SHALL let the user Save the current working patch onto the current slot, rename that patch, duplicate it onto another 00–99 slot, and download it to the PC, all through the device session. Labels MUST be in English. The same controls MUST be used on USB and Bluetooth.
+After the patch bar is shown, Controller SHALL let the user Save the current working patch onto the current slot, rename that patch, duplicate it onto another 00–99 slot, download it to the PC, and upload a Valeton `.prst` into the current working patch, all through the device session. Labels MUST be in English. The same controls MUST be used on USB and Bluetooth.
 
-Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a Valeton `.prst` of the current patch for the connected pedal (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the patch to the other model. If the current-preset dump is missing, download MUST NOT invent a file. Controller MUST NOT send raw MIDI.
+Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a Valeton `.prst` of the current patch for the connected pedal (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the patch to the other model. If the current-preset dump is missing, download MUST NOT invent a file.
 
-While the current patch is syncing, Save, rename, duplicate, download, previous, and next MUST NOT be usable. Disconnecting MUST hide those controls with the patch bar.
+Upload MUST let the user pick a `.prst` from the PC. After a file is chosen, Controller MUST ask the user to confirm that this will load into the current working patch. Cancel MUST NOT apply the file and MUST NOT send MIDI. Confirm MUST apply that file onto the currently selected patch through the device session and MUST NOT store it on the pedal. Save remains the control that stores the working patch. Upload MUST NOT change which patch is selected. Upload MUST NOT convert a GP-5 file for a GP-50 session or the reverse. A file whose model does not match the connected pedal, or that is not a valid Valeton `.prst`, MUST produce an English error and MUST NOT be applied. The slot number in the filename MUST be ignored. Controller MUST NOT send raw MIDI.
+
+While the current patch is syncing, Save, rename, duplicate, download, upload, previous, and next MUST NOT be usable. Disconnecting MUST hide those controls with the patch bar.
 
 #### Scenario: User saves the current patch
 - **WHEN** the session is ready, the current patch is synced, and the user activates Save
@@ -447,9 +449,43 @@ While the current patch is syncing, Save, rename, duplicate, download, previous,
 - **THEN** download cannot be used
 - **AND** no local patch file is produced
 
+#### Scenario: Upload asks before loading into the current patch
+- **WHEN** the session is ready, the current patch is `60` named `TOB` and synced, and the user picks a Valeton `.prst` to upload
+- **THEN** Controller asks the user to confirm that this will load into the current working patch
+- **AND** no upload write is sent until the user confirms
+
+#### Scenario: User cancels upload
+- **WHEN** Controller is asking to confirm an upload and the user cancels
+- **THEN** the current patch is not replaced
+- **AND** no upload write is sent
+
+#### Scenario: User uploads a GP-50 preset into the working patch
+- **WHEN** a GP-50 session is ready, the current patch is `05` named `Flow` and synced, and the user confirms upload of a valid GP-50 `.prst` named `TOB`
+- **THEN** that file is applied onto the working patch through the device session
+- **AND** no store write is sent solely because upload ran
+- **AND** the selected patch stays `05`
+- **AND** the selector lists patch `05` with name `Flow`
+- **AND** no extra patch recall is sent solely because upload ran
+
+#### Scenario: User uploads a GP-5 preset into the working patch
+- **WHEN** a GP-5 session is ready, the current patch is synced, and the user confirms upload of a valid GP-5 `.prst`
+- **THEN** that file is applied onto the working patch through the device session
+- **AND** no store write is sent solely because upload ran
+- **AND** the selected patch does not change
+
+#### Scenario: Wrong-model file is rejected
+- **WHEN** a GP-50 session is ready and the user picks a GP-5 `.prst`
+- **THEN** Controller shows an English error
+- **AND** no upload write is sent
+
+#### Scenario: Invalid file is rejected
+- **WHEN** the session is ready and the user picks a file that is not a valid Valeton `.prst`
+- **THEN** Controller shows an English error
+- **AND** no upload write is sent
+
 #### Scenario: Busy patch bar blocks store actions
 - **WHEN** the user has selected another patch after sync and the new chain dump has not arrived yet
-- **THEN** Save, rename, duplicate, and download cannot be used
+- **THEN** Save, rename, duplicate, download, and upload cannot be used
 - **AND** previous and next cannot be used
 
 #### Scenario: USB and Bluetooth share the patch bar actions

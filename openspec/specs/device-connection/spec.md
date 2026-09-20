@@ -369,7 +369,9 @@ After a USB or Bluetooth session is ready and the current patch is not syncing, 
 
 Those store writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because Save, rename, or duplicate ran. While the current patch is syncing, Save, rename, and duplicate MUST leave the snapshot unchanged and MUST NOT send a store write.
 
-Download MUST produce a Valeton `.prst` of the current patch for the connected pedal from the current-preset dump the session already holds or re-requests (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the dump to the other model's `.prst`. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file. Disconnect MUST drop working store state.
+Download MUST produce a Valeton `.prst` of the current patch for the connected pedal from the current-preset dump the session already holds or re-requests (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the dump to the other model's `.prst`. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file.
+
+Upload MUST apply a Valeton `.prst` of the connected pedal onto the current working patch through the open link (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Upload MUST NOT send a store write. Upload MUST NOT change the current patch index. Upload MUST NOT update the snapshot name list. Upload MUST NOT convert a file from the other model. A file whose model does not match the connected pedal, or that is not a valid Valeton `.prst`, MUST NOT send a write. Upload MUST NOT send extra patch recall solely because upload ran. After a successful upload, the session MUST refresh the current-preset dump for the current patch so the snapshot matches the working buffer. While the current patch is syncing, upload MUST leave the snapshot unchanged and MUST NOT send a write. Disconnect MUST drop working store state.
 
 #### Scenario: USB Save stores the current slot
 - **WHEN** a USB session is ready, the current patch is `42` and synced, and the user Saves
@@ -413,3 +415,32 @@ Download MUST produce a Valeton `.prst` of the current patch for the connected p
 #### Scenario: Missing dump does not invent a download
 - **WHEN** a session is ready without a current-preset dump and the user would download
 - **THEN** no local patch file is produced
+
+#### Scenario: GP-50 upload loads the working patch
+- **WHEN** a GP-50 session is ready, the current patch is `05` named `Flow` and synced, and the user uploads a valid GP-50 `.prst` named `TOB`
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** the snapshot name for `05` stays `Flow`
+- **AND** the snapshot current patch stays `05`
+- **AND** no extra patch recall is sent solely because upload ran
+
+#### Scenario: GP-5 upload loads the working patch
+- **WHEN** a GP-5 session is ready, the current patch is synced, and the user uploads a valid GP-5 `.prst`
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** the snapshot current patch does not change
+
+#### Scenario: Wrong-model upload does not write
+- **WHEN** a GP-50 session is ready and the user would upload a GP-5 `.prst`
+- **THEN** the snapshot does not change
+- **AND** no upload write is sent
+
+#### Scenario: Invalid upload does not write
+- **WHEN** a session is ready and the user would upload bytes that are not a valid Valeton `.prst`
+- **THEN** the snapshot does not change
+- **AND** no upload write is sent
+
+#### Scenario: Syncing blocks upload
+- **WHEN** the session is ready, the current patch is syncing, and the user would upload
+- **THEN** the snapshot does not change
+- **AND** no upload write is sent
