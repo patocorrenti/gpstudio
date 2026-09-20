@@ -81,14 +81,21 @@ context: |
   - Single app repo (not a monorepo). OpenSpec lives at the repo root next to src/.
   - Planned layout:
       src/app/                 React shell: layout, routing, theme (dark default)
-      src/features/connect     Connection status control + modal (not a page)
-      src/features/controller  Phase 1 live controller (home)
+      src/components/ui/       shadcn primitives only (Button, Dialog, Tabs, …)
+      src/components/          shell chrome only (main-menu, theme-toggle)
+      src/features/connect     Connection status control + modal (not a page); Connect UI lives here
+      src/features/controller  Phase 1 live controller (home); Controller UI lives here
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
       src/device/              models, profiles, official CC maps, identity/chain codecs, session
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir + btleplug
+    Feature UI stays under src/features/<feature>/ as sibling files.
+    Do not add src/components/connection/ or other domain folders under src/components/.
+    Extract when one module mixes an orchestrator with two or more screens, JSX is
+    pasted twice, or named inner functions already read as components.
+    Promote to src/components/ only when a second feature imports the widget.
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL

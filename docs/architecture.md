@@ -120,9 +120,13 @@ patone/
   .cursor/               # skills y commands OPSX (openspec init --tools cursor)
   src/
     app/                 # shell React: layout, routing, theme (dark default)
+    components/
+      ui/                # primitivos shadcn (Button, Dialog, Tabs, …)
+      main-menu.tsx      # chrome del shell; no dominio de pedal
+      theme-toggle.tsx
     features/
-      connect/           # estado global + modal (no es una página)
-      controller/        # home / fase 1
+      connect/           # estado global + modal (no es una página); UI de Connect acá
+      controller/        # home / fase 1; UI de Controller acá
       editor/            # fase 2 (stub)
       library/           # fase 3 (stub)
     device/
@@ -144,6 +148,8 @@ patone/
   reference/             # copia local del editor GP-50 (leer, no pegar en src/)
   package.json
 ```
+
+La UI de un feature vive en `src/features/<feature>/` (archivos hermanos; sin `src/components/connection/` ni otras carpetas de dominio bajo `src/components/`). Extraer cuando un módulo mezcla orquestación con dos o más pantallas, el mismo JSX está pegado dos veces, o funciones internas ya se leen como componentes y el padre es difícil de navegar. No extraer un botón suelto ni “por las dudas”. Subir un widget a `src/components/` solo cuando un segundo feature lo importa. Un split posterior de un archivo grande (Editor, Library) es carril Directo si la regla no cambia.
 
 Perfiles de dispositivo (fase 1, CC oficial):
 

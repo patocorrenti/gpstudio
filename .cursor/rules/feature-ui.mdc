@@ -1,0 +1,21 @@
+---
+description: Feature UI lives under src/features; do not add domain folders under src/components
+alwaysApply: true
+---
+
+# Feature UI placement
+
+- Feature UI stays in `src/features/<feature>/` as sibling files (Connect modal, Controller patch bar, later Editor/Library).
+- `src/components/ui/` is shadcn primitives only. `src/components/` is shell chrome (`main-menu`, `theme-toggle`).
+- Do **not** add `src/components/connection/` or other pedal/domain folders under `src/components/`.
+- Promote a widget to `src/components/` only when a second feature imports it.
+
+Extract when at least one is true: orchestrator plus two or more screens; the same JSX pasted twice; named inner functions already read as components and the parent is hard to navigate. Do not extract a lone button.
+
+```text
+# ❌ BAD
+src/components/connection/ScanPanel.tsx
+
+# ✅ GOOD
+src/features/connect/ScanPanel.tsx
+```
