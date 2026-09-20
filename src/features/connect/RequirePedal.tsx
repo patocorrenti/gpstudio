@@ -15,7 +15,12 @@ export function NoPedalsConnected() {
       onClick={openConnect}
     >
       <Unplug className="size-8" aria-hidden />
-      <span>No pedals connected</span>
+      <div>
+        <div>No pedals connected</div>
+        <div className="text-xs text-muted-foreground">
+          Connect a <span className="text-foreground">Valeton GP5 or GP50</span>
+        </div>
+      </div>
     </button>
   );
 }

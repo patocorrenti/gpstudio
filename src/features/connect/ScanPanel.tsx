@@ -77,14 +77,14 @@ export function ScanPanel({
         className="gap-4"
       >
         <TabsList className="grid h-12 w-full grid-cols-2 mt-8 group-data-horizontal/tabs:h-12">
-          <TabsTrigger value="usb" className="gap-1.5 px-2">
+          <TabsTrigger value="usb" className="gap-1.5 px-2 dark:data-active:bg-background">
             <Usb />
             USB
             <span className="absolute left-50% bottom-9 ml-1 rounded-sm bg-sky-600 dark:bg-sky-800 px-2 py-0.5 text-[11px] font-light text-white">
               Recommended
             </span>
           </TabsTrigger>
-          <TabsTrigger value="bluetooth" className="gap-1.5 px-2">
+          <TabsTrigger value="bluetooth" className="gap-1.5 px-2 dark:data-active:bg-background">
             <Bluetooth />
             Bluetooth
           </TabsTrigger>
