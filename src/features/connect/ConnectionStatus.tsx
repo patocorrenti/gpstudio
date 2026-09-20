@@ -136,7 +136,7 @@ export function ConnectionStatus() {
     }
   }
 
-  const label = connected ? snapshot.endpoint.label : "Connect";
+  const label = connected ? snapshot.endpoint.label : "Disconnected";
 
   return (
     <>

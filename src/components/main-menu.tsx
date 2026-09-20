@@ -28,7 +28,7 @@ function MenuLink({
         active={Boolean(match)}
         className={cn(
           navigationMenuTriggerStyle(),
-          "rounded-[4px] bg-muted data-active:bg-muted dark:bg-muted/40 dark:data-active:bg-muted/40",
+          "rounded-[4px] bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground data-active:bg-muted data-active:text-foreground dark:hover:bg-muted/40 dark:data-active:bg-muted/40",
         )}
       >
         <NavLink to={to} end={end}>
@@ -44,7 +44,7 @@ export default function MainMenu() {
     <NavigationMenu viewport={false}>
       <NavigationMenuList className="gap-1.5">
         <MenuLink to="/" end>
-          Controller
+          Pedal
         </MenuLink>
         <MenuLink to="/log">Log</MenuLink>
       </NavigationMenuList>

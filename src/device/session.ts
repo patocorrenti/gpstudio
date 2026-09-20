@@ -722,10 +722,6 @@ export class DeviceSession {
     if (event.type === "patch-changed") {
       if (this.snapshot.sync === "ready") {
         void this.sendIdentity("current-patch", this.syncGeneration);
-        if (this.snapshot.chainSync !== "syncing") {
-          this.ignoreStaleChainDump = true;
-          this.refreshChain();
-        }
       }
     }
   }

@@ -8,14 +8,12 @@ export function AppShell() {
   return (
     <ConnectDialogProvider>
       <div className="relative flex min-h-svh flex-col bg-background text-foreground">
-      <header className="flex items-center gap-4 border-b px-6 py-3">
-        <div className="flex items-center gap-3">
-          <p className="text-lg font-semibold tracking-tight">
-            Patone
-          </p>
-          <ConnectionStatus />
-        </div>
-        <div className="ml-auto flex items-center gap-3">
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
+        <p className="text-lg font-semibold tracking-tight">
+          Patone
+        </p>
+        <ConnectionStatus />
+        <div className="flex items-center justify-end gap-3">
           <MainMenu />
           <ThemeToggle />
         </div>
