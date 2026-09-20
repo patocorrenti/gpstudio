@@ -119,6 +119,7 @@ export type SessionSnapshot =
       chain: AudioChain;
       chainSync: ChainSync;
       canExportPatch: boolean;
+      modified: boolean;
       sync: SessionSync;
       linkMode: LinkMode;
     };
@@ -174,6 +175,13 @@ function chainSlotsEqual(left: AudioChain, right: AudioChain): boolean {
   return true;
 }
 
+function cloneChain(chain: AudioChain): AudioChain {
+  return chain.map((slot) => ({
+    ...slot,
+    values: slot.values ? slot.values.slice() : undefined,
+  }));
+}
+
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
 const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
@@ -200,6 +208,10 @@ export class DeviceSession {
   private pendingPatchLoad: number | null = null;
   /** While true, a dump that matches the already-shown chain is the previous patch. */
   private ignoreStaleChainDump = false;
+  /** Last loaded or stored working chain for the selected patch. */
+  private baseline: AudioChain | null = null;
+  /** Next current-preset dump of a newly selected patch becomes the baseline. */
+  private captureBaselineFromDump = false;
   private dropping = false;
   private readonly pendingControlWrites = new Map<
     string,
@@ -296,6 +308,7 @@ export class DeviceSession {
         chain: defaultChain(model),
         chainSync: "idle",
         canExportPatch: false,
+        modified: false,
         sync: "syncing",
         linkMode: "bluetooth",
       };
@@ -310,6 +323,7 @@ export class DeviceSession {
         chain: defaultChain(model),
         chainSync: "idle",
         canExportPatch: false,
+        modified: false,
         sync: "syncing",
         linkMode: "usb",
       };
@@ -351,15 +365,16 @@ export class DeviceSession {
     if (next === this.snapshot.patch && this.snapshot.chainSync !== "syncing") {
       return;
     }
+    this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
     this.ignoreStaleChainDump = true;
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
-    this.snapshot = { ...this.snapshot, patch: next, chainSync };
+    this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
     this.emitSnapshot();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
-    this.refreshChain();
+    this.refreshChain(true);
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -408,6 +423,7 @@ export class DeviceSession {
       return null;
     }
     const generation = this.syncGeneration;
+    this.captureBaselineFromDump = false;
     this.clearControlWrites();
     this.chainDump.reset();
     this.beginChainRefresh();
@@ -461,6 +477,7 @@ export class DeviceSession {
       ...this.snapshot,
       chainSync: "syncing",
       canExportPatch: false,
+      modified: false,
     };
     this.emitSnapshot();
     const steps = this.encodeUploadedPatchWrites(chain, parsed.volume, parsed.bpm);
@@ -470,6 +487,7 @@ export class DeviceSession {
           ...this.snapshot,
           chainSync: "idle",
           canExportPatch: previousExport,
+          modified: this.isWorkingModified(this.snapshot.chain, "idle"),
         };
         this.emitSnapshot();
       }
@@ -495,7 +513,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return { ok: false, reason: "disconnected" };
     }
-    this.refreshChain();
+    this.refreshChain(false);
     return { ok: true };
   }
 
@@ -520,8 +538,7 @@ export class DeviceSession {
     const chain = this.snapshot.chain.map((slot, slotIndex) =>
       slotIndex === index ? { ...slot, enabled } : slot,
     );
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
   }
 
@@ -543,8 +560,7 @@ export class DeviceSession {
     if (!packets) {
       return;
     }
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
     for (const packet of packets) {
       await this.sendBytes(packet);
     }
@@ -584,8 +600,7 @@ export class DeviceSession {
     const chain = this.snapshot.chain.map((entry, slotIndex) =>
       slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
     );
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
     for (const packet of packets) {
       await this.sendBytes(packet);
     }
@@ -633,8 +648,7 @@ export class DeviceSession {
       const chain = this.snapshot.chain.map((entry, slotIndex) =>
         slotIndex === index ? { ...entry, values } : entry,
       );
-      this.snapshot = { ...this.snapshot, chain };
-      this.emitSnapshot();
+      this.setChain(chain);
     }
     if (unchanged && !options.flush) {
       return;
@@ -680,6 +694,7 @@ export class DeviceSession {
     }
 
     this.chainDump.reset();
+    this.captureBaselineFromDump = true;
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
   }
@@ -795,13 +810,18 @@ export class DeviceSession {
         return;
       }
       const changed = next !== this.snapshot.patch;
-      this.snapshot = { ...this.snapshot, patch: next };
+      this.snapshot = {
+        ...this.snapshot,
+        patch: next,
+        modified: changed ? false : this.snapshot.modified,
+      };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
       if (changed) {
+        this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
         this.ignoreStaleChainDump = true;
-        this.refreshChain();
+        this.refreshChain(true);
       }
       return;
     }
@@ -812,10 +832,11 @@ export class DeviceSession {
     }
   }
 
-  private refreshChain(): void {
+  private refreshChain(captureBaseline = false): void {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
+    this.captureBaselineFromDump = captureBaseline;
     this.clearControlWrites();
     this.chainDump.reset();
     this.beginChainRefresh();
@@ -834,13 +855,11 @@ export class DeviceSession {
     this.pendingPatchLoad = null;
     this.clearChainRefreshTimer();
     this.currentPatchDump = result.dump;
-    this.snapshot = {
-      ...this.snapshot,
-      chain,
-      chainSync: "idle",
-      canExportPatch: true,
-    };
-    this.emitSnapshot();
+    if (this.captureBaselineFromDump) {
+      this.baseline = cloneChain(chain);
+      this.captureBaselineFromDump = false;
+    }
+    this.setChain(chain, { chainSync: "idle", canExportPatch: true });
     this.releaseWaiters(this.chainWaiters);
   }
 
@@ -893,8 +912,7 @@ export class DeviceSession {
     if (exp) {
       chain.push({ id: "exp", enabled: exp.enabled });
     }
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
     return true;
   }
 
@@ -948,8 +966,7 @@ export class DeviceSession {
     const chain = this.snapshot.chain.map((entry, slotIndex) =>
       slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
     );
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
   }
 
   private applyLiveSlotControl(kind: EffectId, controlIndex: number, value: number): void {
@@ -985,8 +1002,7 @@ export class DeviceSession {
     const chain = this.snapshot.chain.map((entry, slotIndex) =>
       slotIndex === index ? { ...entry, values } : entry,
     );
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
   }
 
   private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
@@ -1014,8 +1030,7 @@ export class DeviceSession {
     const chain = this.snapshot.chain.map((slot, slotIndex) =>
       slotIndex === index ? { ...slot, enabled } : slot,
     );
-    this.snapshot = { ...this.snapshot, chain };
-    this.emitSnapshot();
+    this.setChain(chain);
   }
 
   private beginChainRefresh(): void {
@@ -1023,7 +1038,12 @@ export class DeviceSession {
       return;
     }
     this.dropPatchDump();
-    this.snapshot = { ...this.snapshot, chainSync: "syncing", canExportPatch: false };
+    this.snapshot = {
+      ...this.snapshot,
+      chainSync: "syncing",
+      canExportPatch: false,
+      modified: false,
+    };
     this.emitSnapshot();
     this.armChainRefreshTimer();
   }
@@ -1046,7 +1066,11 @@ export class DeviceSession {
         void this.dropLink();
         return;
       }
-      this.snapshot = { ...this.snapshot, chainSync: "idle" };
+      this.snapshot = {
+        ...this.snapshot,
+        chainSync: "idle",
+        modified: this.isWorkingModified(this.snapshot.chain, "idle"),
+      };
       this.emitSnapshot();
       void this.sendIdentity("current-patch", generation);
     }, ms);
@@ -1091,6 +1115,7 @@ export class DeviceSession {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
     this.ignoreStaleChainDump = false;
+    this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
     this.clearControlWrites();
     this.dropPatchDump();
@@ -1101,6 +1126,36 @@ export class DeviceSession {
 
   private dropPatchDump(): void {
     this.currentPatchDump = null;
+  }
+
+  private dropWorkingBaseline(): void {
+    this.baseline = null;
+    this.captureBaselineFromDump = false;
+  }
+
+  private isWorkingModified(chain: AudioChain, chainSync: ChainSync): boolean {
+    if (chainSync === "syncing" || this.baseline === null) {
+      return false;
+    }
+    return !chainSlotsEqual(chain, this.baseline);
+  }
+
+  private setChain(
+    chain: AudioChain,
+    extra: { chainSync?: ChainSync; canExportPatch?: boolean } = {},
+  ): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const chainSync = extra.chainSync ?? this.snapshot.chainSync;
+    this.snapshot = {
+      ...this.snapshot,
+      ...extra,
+      chain,
+      chainSync,
+      modified: this.isWorkingModified(chain, chainSync),
+    };
+    this.emitSnapshot();
   }
 
   private encodeUploadedPatchWrites(
@@ -1200,7 +1255,12 @@ export class DeviceSession {
     }
     const patchNames = this.snapshot.patchNames.slice();
     patchNames[dest] = sanitized;
-    this.snapshot = { ...this.snapshot, patchNames };
+    if (dest === this.snapshot.patch) {
+      this.baseline = cloneChain(this.snapshot.chain);
+      this.snapshot = { ...this.snapshot, patchNames, modified: false };
+    } else {
+      this.snapshot = { ...this.snapshot, patchNames };
+    }
     this.emitSnapshot();
     for (const packet of packets) {
       await this.sendBytes(packet);

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,15 +16,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { decodePrstFile } from "@/device/patch-store";
 import {
+  type DeviceSession,
   formatPatch,
   formatPatchOption,
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import { toast } from "sonner";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -32,6 +40,86 @@ const patchChipClass =
   "rounded-[4px] bg-muted dark:bg-muted/40 dark:hover:bg-muted/50";
 const patchActionClass = `${patchChipClass} px-3`;
 const patchActionIconClass = "size-3 text-muted-foreground";
+
+const unsavedPatchHint = "Unsaved changes will be lost";
+
+function toastError(fallback: string) {
+  return (cause: unknown) => (cause instanceof Error ? cause.message : fallback);
+}
+
+async function runWhileConnected(
+  session: DeviceSession,
+  action: () => Promise<void>,
+): Promise<void> {
+  await action();
+  if (session.getSnapshot().status !== "connected") {
+    throw new Error("Pedal disconnected.");
+  }
+}
+
+function waitUntilChainIdle(session: DeviceSession): Promise<void> {
+  const snapshot = session.getSnapshot();
+  if (snapshot.status !== "connected") {
+    return Promise.reject(new Error("Pedal disconnected."));
+  }
+  if (snapshot.chainSync !== "syncing") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const unsubscribe = session.subscribe(() => {
+      const next = session.getSnapshot();
+      if (next.status !== "connected") {
+        unsubscribe();
+        reject(new Error("Pedal disconnected."));
+        return;
+      }
+      if (next.chainSync !== "syncing") {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
+function savePatchWithToast(
+  session: DeviceSession,
+  before?: () => Promise<void>,
+) {
+  return toast.promise(
+    runWhileConnected(session, async () => {
+      if (before) {
+        await before();
+      }
+      await session.savePatch();
+    }),
+    {
+      loading: "Saving patch…",
+      success: "Patch saved",
+      error: toastError("Could not save patch."),
+    },
+  );
+}
+
+function PatchNavTooltip({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactElement;
+}) {
+  if (!enabled) {
+    return children;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom">
+        <TriangleAlert className="size-3 text-amber-600 dark:text-amber-400" aria-hidden />
+        {unsavedPatchHint}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function triggerPatchDownload(filename: string, bytes: Uint8Array): void {
   const copy = new Uint8Array(bytes.byteLength);
@@ -50,12 +138,14 @@ export function PatchBar({
   patchNames,
   busy,
   canExportPatch,
+  modified,
   model,
 }: {
   patch: number;
   patchNames: (string | null)[];
   busy: boolean;
   canExportPatch: boolean;
+  modified: boolean;
   model: DeviceModel;
 }) {
   const session = useDeviceSession();
@@ -85,8 +175,16 @@ export function PatchBar({
   }
 
   function confirmRename() {
-    void session.renamePatch(renameValue);
+    const name = renameValue;
     setRenameOpen(false);
+    void toast.promise(
+      runWhileConnected(session, () => session.renamePatch(name)),
+      {
+        loading: "Renaming patch…",
+        success: "Patch renamed",
+        error: toastError("Could not rename patch."),
+      },
+    );
   }
 
   function confirmDuplicate() {
@@ -97,9 +195,17 @@ export function PatchBar({
       setOverwriteOpen(true);
       return;
     }
-    void session.duplicatePatch(destIndex);
+    const slot = destIndex;
     setDuplicateOpen(false);
     setOverwriteOpen(false);
+    void toast.promise(
+      runWhileConnected(session, () => session.duplicatePatch(slot)),
+      {
+        loading: "Duplicating patch…",
+        success: "Patch duplicated",
+        error: toastError("Could not duplicate patch."),
+      },
+    );
   }
 
   async function downloadPatch() {
@@ -138,62 +244,123 @@ export function PatchBar({
     if (!pendingUpload) {
       return;
     }
-    void session.uploadCurrentPatch(pendingUpload);
+    const bytes = pendingUpload;
     setPendingUpload(null);
+    void toast.promise(
+      (async () => {
+        const result = await session.uploadCurrentPatch(bytes);
+        if (!result.ok) {
+          throw new Error(
+            result.reason === "disconnected"
+              ? "Pedal disconnected."
+              : result.reason === "busy"
+                ? "The patch is still syncing."
+                : result.reason === "wrong-model"
+                  ? "This preset is for a different pedal."
+                  : "This file is not a valid Valeton preset.",
+          );
+        }
+        if (session.getSnapshot().status !== "connected") {
+          throw new Error("Pedal disconnected.");
+        }
+      })(),
+      {
+        loading: "Uploading patch…",
+        success: () => ({
+          message: "Patch loaded into the working slot",
+          action: {
+            label: "Save",
+            onClick: () => {
+              void savePatchWithToast(session, () => waitUntilChainIdle(session));
+            },
+          },
+        }),
+        error: toastError("Could not upload patch."),
+      },
+    );
   }
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Previous patch"
-        disabled={busy}
-        className={patchChipClass}
-        onClick={() => void session.stepPatch(-1)}
-      >
-        <ChevronLeft />
-      </Button>
-      <Select
-        value={String(patch)}
-        onValueChange={(value) => {
-          void session.setPatch(Number.parseInt(value, 10));
-        }}
-      >
-        <SelectTrigger
-          aria-label="Select patch"
-          size="default"
-          className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-        >
-          <SelectValue>
-            {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent position="popper" className="max-h-72 min-w-72">
-          {patchOptions.map((option) => (
-            <SelectItem
-              key={option}
-              value={String(option)}
-              className="font-medium tabular-nums"
+      <TooltipProvider delayDuration={0}>
+        <PatchNavTooltip enabled={modified}>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Previous patch"
+              disabled={busy}
+              className={patchChipClass}
+              onClick={() => void session.stepPatch(-1)}
             >
-              {formatPatchOption(option, patchNames[option])}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Next patch"
-        disabled={busy}
-        className={patchChipClass}
-        onClick={() => void session.stepPatch(1)}
-      >
-        <ChevronRight />
-      </Button>
+              <ChevronLeft />
+            </Button>
+          </span>
+        </PatchNavTooltip>
+        <Select
+          value={String(patch)}
+          onValueChange={(value) => {
+            void session.setPatch(Number.parseInt(value, 10));
+          }}
+        >
+          <PatchNavTooltip enabled={modified}>
+            <SelectTrigger
+              aria-label="Select patch"
+              size="default"
+              className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+            >
+              <SelectValue>
+                {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
+              </SelectValue>
+            </SelectTrigger>
+          </PatchNavTooltip>
+          <SelectContent position="popper" className="max-h-72 min-w-72">
+            {patchOptions.map((option) => (
+              <SelectItem
+                key={option}
+                value={String(option)}
+                className="font-medium tabular-nums"
+              >
+                {formatPatchOption(option, patchNames[option])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <PatchNavTooltip enabled={modified}>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Next patch"
+              disabled={busy}
+              className={patchChipClass}
+              onClick={() => void session.stepPatch(1)}
+            >
+              <ChevronRight />
+            </Button>
+          </span>
+        </PatchNavTooltip>
+      </TooltipProvider>
       <div className="ml-2 flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy || !modified}
+          className={
+            modified && !busy
+              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
+              : patchActionClass
+          }
+          aria-label="Save patch"
+          onClick={() => {
+            void savePatchWithToast(session);
+          }}
+        >
+          <Save className={modified && !busy ? "size-3" : patchActionIconClass} />
+          Save
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -204,16 +371,6 @@ export function PatchBar({
         >
           <Pencil className={patchActionIconClass} />
           Rename
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className={patchActionClass}
-          onClick={() => void session.savePatch()}
-        >
-          <Save className={patchActionIconClass} />
-          Save
         </Button>
         <Button
           type="button"

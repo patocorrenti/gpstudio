@@ -492,3 +492,126 @@ While the current patch is syncing, Save, rename, duplicate, download, upload, p
 - **WHEN** a Bluetooth session is ready with a synced current patch and the user activates Save
 - **THEN** Controller uses the same Save presentation as USB
 - **AND** that store is sent through the device session
+
+### Requirement: Controller Save follows the working modified state
+
+After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be usable when the current working patch is not modified, and MUST NOT be usable while the current patch is syncing. When the working patch is modified and synced, Save MUST be usable and MUST use an emerald style distinct from the other patch-bar actions. Hovering previous, next, or the patch selector MUST show an English tooltip that unsaved changes will be lost. That tooltip MUST NOT block choosing or stepping to another patch. Controller MUST NOT show a separate Modified label. The same presentation MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+
+#### Scenario: Loaded patch cannot Save
+- **WHEN** the session is ready, a current-preset dump for the selected patch has landed, and the user has not changed the working chain
+- **THEN** Save cannot be used
+- **AND** Controller does not show a Modified label
+
+#### Scenario: A working edit enables emerald Save
+- **WHEN** the session is ready with a dumped current patch and the user turns DST off
+- **THEN** Save can be used
+- **AND** Save uses an emerald style
+- **AND** Save appears before Rename
+
+#### Scenario: Restoring the baseline disables Save
+- **WHEN** Save is usable because DST was turned off and the user turns DST on again so the working chain matches the dumped patch
+- **THEN** Save cannot be used
+
+#### Scenario: Save after an edit stores and disables Save
+- **WHEN** Save is usable and the user Saves the current slot
+- **THEN** the current working patch is stored on the pedal in the current slot through the device session
+- **AND** Save cannot be used
+- **AND** the selected patch does not change
+
+#### Scenario: Rename of the current slot disables Save
+- **WHEN** Save is usable and the user renames the current patch
+- **THEN** Save cannot be used
+
+#### Scenario: Duplicate keeps Save enabled
+- **WHEN** Save is usable and the user duplicates onto another slot
+- **THEN** Save can still be used
+- **AND** the selected patch does not change
+
+#### Scenario: Upload of a different file enables Save
+- **WHEN** the session is ready with a dumped current patch and the user confirms upload of a Valeton `.prst` whose chain differs from that dump
+- **THEN** Save can be used
+- **AND** no store write is sent solely because upload ran
+
+#### Scenario: Changing patch disables Save
+- **WHEN** Save is usable and the user selects another patch
+- **THEN** Save cannot be used for the newly selected patch after that patch's dump lands
+
+#### Scenario: Disconnect hides Save
+- **WHEN** Save is usable and the user disconnects
+- **THEN** Save is hidden
+- **AND** the screen states that no pedals are connected
+
+#### Scenario: Unsaved-edit tooltip warns without blocking
+- **WHEN** Save is usable and the user hovers previous, next, or the patch selector
+- **THEN** Controller shows an English tooltip that unsaved changes will be lost
+- **AND** previous, next, and the selector can still change patch
+
+#### Scenario: Clean patch has no unsaved-edit tooltip
+- **WHEN** the session is ready with a dumped current patch that matches the baseline
+- **THEN** hovering previous, next, or the patch selector does not show an unsaved-changes tooltip
+
+#### Scenario: USB and Bluetooth share Save
+- **WHEN** a Bluetooth session is ready with a dumped current patch and the user turns DST off
+- **THEN** Controller shows the same Save presentation as USB
+
+### Requirement: Patch store and upload report status with toasts
+
+After the patch bar is shown, Save, rename, duplicate, and a confirmed upload MUST each show an English toast with a loading spinner while that action runs through the device session, then a success toast when it completes or an error toast if it fails. Labels MUST be in English. Those toasts MUST NOT send raw MIDI from React. The same toast behavior MUST be used on USB and Bluetooth.
+
+After a successful upload, the success toast MUST offer an English Save action for the current slot. Activating that Save MUST store the current working patch on the pedal in the current slot through the device session. The toast MUST NOT store the patch solely because upload succeeded. Dismissing the toast without activating Save MUST NOT send a store write. Rename, duplicate, and upload confirm Dialogs, and the English error Dialog for an invalid or wrong-model file, MUST stay as Dialogs. Download MUST NOT emit a toast.
+
+If the session becomes disconnected while Save, rename, duplicate, or upload is in progress, that action's toast MUST become an error toast. The disconnect toast defined by device-connection MUST still appear, and the Connect modal MUST still close.
+
+#### Scenario: Save shows loading then success
+- **WHEN** the session is ready, the current patch is synced, Save is usable, and the user activates Save
+- **THEN** a toast shows a loading spinner while the store runs
+- **AND** a success toast appears when the current working patch is stored on the pedal in the current slot through the device session
+- **AND** the selected patch does not change
+
+#### Scenario: Rename shows loading then success
+- **WHEN** the session is ready, the current patch is synced, and the user confirms a rename
+- **THEN** a toast shows a loading spinner while the rename runs
+- **AND** a success toast appears when that name change is sent through the device session
+
+#### Scenario: Duplicate shows loading then success
+- **WHEN** the session is ready, the current patch is synced, and the user confirms duplicate onto another slot
+- **THEN** a toast shows a loading spinner while the duplicate runs
+- **AND** a success toast appears when the current working patch is stored on the destination slot through the device session
+- **AND** the selected patch does not change
+
+#### Scenario: Failed store shows an error toast
+- **WHEN** the user activates Save, rename, or duplicate and that store fails
+- **THEN** the loading toast becomes an English error toast
+
+#### Scenario: Confirmed upload shows loading then success with Save
+- **WHEN** the session is ready, the current patch is synced, and the user confirms upload of a valid Valeton `.prst` for the connected model
+- **THEN** a toast shows a loading spinner while the file is applied onto the working patch through the device session
+- **AND** a success toast appears when that apply completes
+- **AND** that success toast offers Save
+- **AND** no store write is sent solely because upload ran
+- **AND** the selected patch does not change
+
+#### Scenario: User Saves from the upload toast
+- **WHEN** a successful upload toast is showing Save and the user activates Save on that toast
+- **THEN** the current working patch is stored on the pedal in the current slot through the device session
+- **AND** a toast reports that Save
+
+#### Scenario: User dismisses the upload toast without Save
+- **WHEN** a successful upload toast is showing Save and the user dismisses it without activating Save
+- **THEN** no store write is sent solely because the toast was dismissed
+
+#### Scenario: Failed upload shows an error toast
+- **WHEN** the user confirms upload and applying the file fails
+- **THEN** the loading toast becomes an English error toast
+- **AND** that toast does not offer Save
+
+#### Scenario: Invalid file still uses the error Dialog
+- **WHEN** the session is ready and the user picks a file that is not a valid Valeton `.prst`
+- **THEN** Controller shows an English error Dialog
+- **AND** no upload toast is shown
+- **AND** no upload write is sent
+
+#### Scenario: Download does not toast
+- **WHEN** the session is ready with a current-preset dump and the user activates download
+- **THEN** a Valeton `.prst` is produced through the device session
+- **AND** no toast is shown solely because download ran

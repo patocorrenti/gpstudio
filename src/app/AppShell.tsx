@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
 import MainMenu from "@/components/main-menu";
@@ -7,6 +8,7 @@ import MainMenu from "@/components/main-menu";
 export function AppShell() {
   return (
     <ConnectDialogProvider>
+      <Toaster />
       <div className="relative flex min-h-svh flex-col bg-background text-foreground">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
         <p className="text-lg font-semibold tracking-tight">
