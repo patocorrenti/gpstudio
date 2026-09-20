@@ -45,9 +45,12 @@ export function PatchBodySkeleton({ pedal }: { pedal: DeviceModel }) {
         ))}
       </div>
       <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-2 px-2 pb-6 md:grid-cols-2 lg:grid-cols-3">
-        {MODULE_CONTROL_COUNTS.map((controls, index) => (
+        {MODULE_CONTROL_COUNTS.slice(0, 2).map((controls, index) => (
           <ModulePanelSkeleton key={index} controls={controls} />
         ))}
+        <div className="hidden lg:block">
+          <ModulePanelSkeleton controls={MODULE_CONTROL_COUNTS[2]} />
+        </div>
       </div>
     </div>
   );
