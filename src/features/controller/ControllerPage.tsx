@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import type { DeviceModel } from "@/device/models";
 import type { AudioChain } from "@/device/session";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
@@ -32,7 +33,11 @@ function PatchBody({
 
 function SyncingController() {
   return (
-    <section role="status" className="flex flex-1 flex-col items-center">
+    <section
+      role="status"
+      className="flex flex-1 flex-col items-center justify-center gap-3"
+    >
+      <RefreshCw className="size-8 animate-spin text-muted-foreground" aria-hidden />
       <p className="text-muted-foreground">Syncing with the pedal…</p>
     </section>
   );
