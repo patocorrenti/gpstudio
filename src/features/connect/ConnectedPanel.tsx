@@ -61,7 +61,7 @@ export function ConnectedPanel({
           disabled={busy}
           onClick={onDisconnect}
         >
-          <Unplug />
+          <Unplug className="size-3 text-muted-foreground" />
           Disconnect
         </Button>
       </DialogFooter>

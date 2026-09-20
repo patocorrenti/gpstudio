@@ -28,7 +28,7 @@ function MenuLink({
         active={Boolean(match)}
         className={cn(
           navigationMenuTriggerStyle(),
-          "bg-muted data-active:bg-muted dark:bg-muted/40 dark:data-active:bg-muted/40",
+          "rounded-[4px] bg-muted data-active:bg-muted dark:bg-muted/40 dark:data-active:bg-muted/40",
         )}
       >
         <NavLink to={to} end={end}>

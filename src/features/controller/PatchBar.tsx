@@ -26,6 +26,11 @@ import { useState } from "react";
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
+const patchChipClass =
+  "rounded-[4px] bg-muted dark:bg-muted/40 dark:hover:bg-muted/50";
+const patchActionClass = `${patchChipClass} px-3`;
+const patchActionIconClass = "size-3 text-muted-foreground";
+
 function triggerPatchDownload(filename: string, bytes: Uint8Array): void {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -103,13 +108,13 @@ export function PatchBar({
       <Button
         type="button"
         variant="ghost"
-        size="icon-lg"
+        size="icon"
         aria-label="Previous patch"
         disabled={busy}
-        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
+        className={patchChipClass}
         onClick={() => void session.stepPatch(-1)}
       >
-        <ChevronLeft className="size-6" />
+        <ChevronLeft />
       </Button>
       <Select
         value={String(patch)}
@@ -120,7 +125,7 @@ export function PatchBar({
         <SelectTrigger
           aria-label="Select patch"
           size="default"
-          className="h-12 min-h-12 w-72 min-w-72 justify-center border-transparent bg-muted py-0 text-xl font-semibold tabular-nums data-[size=default]:h-12 dark:border-transparent dark:bg-muted/40 dark:hover:bg-muted/50"
+          className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
         >
           <SelectValue>
             {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
@@ -141,56 +146,56 @@ export function PatchBar({
       <Button
         type="button"
         variant="ghost"
-        size="icon-lg"
+        size="icon"
         aria-label="Next patch"
         disabled={busy}
-        className="size-12 bg-muted dark:bg-muted/40 dark:hover:bg-muted/50"
+        className={patchChipClass}
         onClick={() => void session.stepPatch(1)}
       >
-        <ChevronRight className="size-6" />
+        <ChevronRight />
       </Button>
       <div className="ml-2 flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
           disabled={busy}
-          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
-          onClick={() => void session.savePatch()}
-        >
-          <Save />
-          Save
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          className={patchActionClass}
           aria-label="Rename patch"
           onClick={openRename}
         >
-          <Pencil />
+          <Pencil className={patchActionIconClass} />
           Rename
         </Button>
         <Button
           type="button"
           variant="ghost"
           disabled={busy}
-          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          className={patchActionClass}
+          onClick={() => void session.savePatch()}
+        >
+          <Save className={patchActionIconClass} />
+          Save
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          className={patchActionClass}
           aria-label="Duplicate patch"
           onClick={openDuplicate}
         >
-          <Copy />
+          <Copy className={patchActionIconClass} />
           Duplicate
         </Button>
         <Button
           type="button"
           variant="ghost"
           disabled={busy || !canExportPatch}
-          className="h-12 bg-muted px-3 dark:bg-muted/40 dark:hover:bg-muted/50"
+          className={patchActionClass}
           aria-label="Download patch"
           onClick={() => void downloadPatch()}
         >
-          <Download />
+          <Download className={patchActionIconClass} />
           Download
         </Button>
       </div>

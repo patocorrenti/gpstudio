@@ -185,7 +185,7 @@ export function ScanPanel({
             disabled={busy}
             onClick={onRefresh}
           >
-            <RefreshCw />
+            <RefreshCw className="size-3 text-muted-foreground" />
             Refresh
           </Button>
         </DialogFooter>
