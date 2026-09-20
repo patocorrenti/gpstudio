@@ -122,7 +122,10 @@ export function ScanPanel({
                 className="mt-0.5 size-4 shrink-0"
                 aria-hidden
               />
-              <p>No USB devices found. Connect the pedal and try again.</p>
+              <p>
+                No pedals found on USB.<br />
+                Connect a Valeton GP5 or GP50 and try again.
+              </p>
             </div>
           ) : null}
           <EndpointList
@@ -165,8 +168,8 @@ export function ScanPanel({
                 aria-hidden
               />
               <p>
-                No Bluetooth pedals found.<br />
-                Put the pedal in pairing mode and refresh.
+                No pedals found on Bluetooth.<br />
+                Put a Valeton GP5 or GP50 in pairing mode and refresh.
               </p>
             </div>
           ) : null}
