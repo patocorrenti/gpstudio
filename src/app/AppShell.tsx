@@ -23,7 +23,10 @@ export function AppShell() {
       </main>
       <footer className="px-10 py-3 text-center text-[11px] border-t leading-none text-muted-foreground/60 ">
         <span className="font-bold">Patone</span>
-        {" · Unoficial controller for Valeton GP5/50 · Version 0.1.0 [ Beta Testing ]"}
+        {" · Unoficial controller for Valeton GP5/50 · Version 0.1.0 [ Beta Testing ] · "}
+        <a href="https://patocorrenti.com" target="_blank" rel="noopener noreferrer" className="text-foreground/60">
+          Pato Correnti
+        </a>
       </footer>
       <div
         aria-hidden
