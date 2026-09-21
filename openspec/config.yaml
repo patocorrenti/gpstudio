@@ -91,6 +91,7 @@ context: |
       src/features/controller  Phase 1 live controller (home); Controller UI lives here
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
+      src/features/about       About GP Studio (no pedal; not a MIDI feature)
       src/device/              models, profiles, official CC maps, identity/chain codecs, session
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
@@ -109,7 +110,8 @@ context: |
 
   Phase 1 visible UI:
   - Shell chrome always visible: GP Studio name, connection-status control on the left,
-    Controller / Editor / Library nav and theme toggle on the right.
+    Pedal / Log / About nav and theme toggle on the right.
+    Editor and Library remain stub routes, not in the main menu.
     The shell hosts global English toasts (shadcn Sonner promise: spinner then
     success/error) for connect, disconnect, and patch Save / rename / duplicate /
     confirmed upload. Upload success may offer Save. Disconnect closes the Connect

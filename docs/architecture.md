@@ -129,6 +129,7 @@ patone/
       controller/        # home / phase 1; Controller UI lives here
       editor/            # phase 2 (stub)
       library/           # phase 3 (stub)
+      about/             # About GP Studio (no pedal)
     device/
       models.ts          # Gp5 | Gp50
       profiles/
@@ -184,13 +185,15 @@ Library/IR SysEx is reverse-engineered in third-party projects. **Do not paste t
 
 ## Phase 1 — what is visible
 
-Chrome always visible: GP Studio name, connection control on the left, Controller / Editor / Library sections and theme on the right. Controller is home (`/`). Connect is not a section: it is global state. With no pedal the control reads Connect and opens a modal.
+Chrome always visible: GP Studio name, connection control on the left, Pedal / Log / About navigation and theme on the right. Controller is home (`/`). Connect is not a section: it is global state. With no pedal the control reads Connect and opens a modal. Editor and Library remain stub routes, not in the main menu.
 
 Connection modal: USB and Bluetooth tabs. USB asks for MIDI permission, lists endpoints, connects, suggests/confirms model, and presents as one-way and super fast. Bluetooth explains two-way and slower, scans GATT pedals, connects, and suggests/confirms model. With Bluetooth connected, Controller sends patch recall through the GATT encoder (same 00–99 selector as USB). What the control shows when a pedal is connected is defined in `device-connection`.
 
 Controller screen: on connect it may show loading while identity and the audio chain sync; then the patch bar (previous / 00–99 selector with names if they arrived / next, plus Save, rename, duplicate, download, and upload) and the current-patch chain (10 slots on GP-5, 11 on GP-50 with EXP at the end; the ten effects toggle via CC 48–57; GP-50 EXP via CC 13 on Bluetooth and via captured SysEx on USB). Save comes before rename: it stays disabled while the working patch matches the loaded or stored baseline, and enables with emerald styling when it differs. If there are unsaved changes, previous / selector / next show an English warning tooltip and do not block the patch change. Below that row, a panel for each enabled effect with a known model and knobs, in two columns when width allows (model select if that kind has more than one factory model; catalog sliders/toggles; EXP has no panel). The slider number follows the drag; the control SET is coalesced (throttle ~80 ms and flush on release) so BLE-MIDI is not flooded. Movable modules (NR, PRE, MOD, DLY, RVB) reorder by drag-and-drop on that same row (USB and Bluetooth) and show a three-dot grip; DST, NS, AMP, CAB, and EQ are not draggable and stay contiguous in that order (nothing in between); EXP is not draggable either. On Bluetooth, if the user reorders, changes a model, or turns a knob on the pedal, Controller follows those reports; USB ignores that telemetry. If NS (SnapTone) is on, AMP and CAB are marked bypassed with a prohibition overlay; their on/off is not rewritten and their panels are hidden. Volume, tuner, and GP-50 extras come later. The snapshot compares the chain against an in-memory copy of the last dump or Save/rename of the current slot (`modified`); it clears when those values are restored, on Save/rename, on patch change, or on disconnect. No dialog on patch change and no Modified label on the bar.
 
 Log screen: inbound MIDI from USB or Bluetooth only while it is open. It does not apply that traffic to the snapshot. The session may apply patch identity, chain dumps, and, on Bluetooth, live module on/off SysEx (including a Stomp footswitch), live chain-order SysEx, and live model/control SysEx separately.
+
+About screen: titled About GP Studio; English copy describing GP Studio as an independent controller for Valeton GP-5 and GP-50; What's next and a Changelog for the current version; reachable from the main menu after Log; does not require a pedal and does not send MIDI.
 
 Windows packaging: `tauri build` → NSIS/MSI installer. Web: `vite` in Chrome/Edge (localhost or HTTPS). Mobile is out of these changes; the MIDI abstraction already leaves that path open.
 
