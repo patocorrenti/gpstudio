@@ -32,7 +32,7 @@ function ModeNotes({
       {notes.map(({ icon: Icon, text }, index) => (
         <li key={index} className="flex gap-2">
           <Icon
-            className="mt-0.5 size-3.5 shrink-0 text-neutral-900 dark:text-neutral-100"
+            className="mt-0.5 size-3.5 shrink-0 text-foreground"
             aria-hidden
           />
           <span>{text}</span>
@@ -95,7 +95,7 @@ export function ScanPanel({
               {
                 icon: Zap,
                 text: (
-                  <span className="text-black dark:text-white">
+                  <span className="text-foreground">
                     <span className="font-bold">Super responsive</span>
                     {" "}—{" "}Fast, stable connection.
                   </span>
@@ -140,7 +140,7 @@ export function ScanPanel({
               {
                 icon: ArrowLeftRight,
                 text: (
-                  <span className="text-black dark:text-white">
+                  <span className="text-foreground">
                     <span className="font-bold">Fully interactive</span>
                     {" "}—{" "}Pedal and computer talk to each other.
                   </span>
