@@ -8,15 +8,16 @@ Provides the runnable web and desktop application shell for Patone GP Studio: la
 
 ### Requirement: Web and desktop shells launch without a backend
 
-The system SHALL serve the UI as a local web app and as a native desktop window. The shell MUST start without an HTTP backend and MUST NOT require network access to render the first screen.
+The system SHALL serve the UI as a local web app and as a native desktop window. The shell MUST start without an HTTP backend and MUST NOT require network access to render the first screen. The web document title and the native window title MUST be GP Studio.
 
 #### Scenario: Web development launch
 - **WHEN** the operator starts the web development command
 - **THEN** the UI is reachable in a Chromium-based browser on localhost
+- **AND** the document title is GP Studio
 
 #### Scenario: Desktop development launch
 - **WHEN** the operator starts the desktop development command
-- **THEN** a native window opens titled Patone and hosts the same UI
+- **THEN** a native window opens titled GP Studio and hosts the same UI
 
 #### Scenario: Production build artifacts
 - **WHEN** the operator runs the documented build commands
@@ -42,12 +43,13 @@ On first launch with no stored preference, the shell SHALL present a dark color 
 
 ### Requirement: Planned feature areas exist as placeholders
 
-The shell SHALL expose a global connection-status control and areas for Controller, Editor, and Library. Those areas MUST be visible and labeled in English. Connect MUST NOT be a navigation destination. Editor and Library placeholders MUST NOT send MIDI or implement preset/IR features. Controller empty-state and live-control behavior is defined by live-controller. Connection-status behavior (discover, connect, disconnect, connected label, USB vs Bluetooth tabs) is defined by device-connection.
+The shell SHALL expose a global connection-status control and areas for Controller, Editor, and Library. Those areas MUST be visible and labeled in English. Connect MUST NOT be a navigation destination. Editor and Library placeholders MUST NOT send MIDI or implement preset/IR features. Controller empty-state and live-control behavior is defined by live-controller. Connection-status behavior (discover, connect, disconnect, connected label, USB vs Bluetooth tabs) is defined by device-connection. The chrome wordmark MUST read GP Studio. The UI MUST NOT show the brand name Patone.
 
 #### Scenario: Shell identifies the product
 - **WHEN** the user opens the app
-- **THEN** the shell shows the product name Patone, a connection-status control, section navigation, and a way to change appearance
+- **THEN** the shell shows the product name GP Studio, a connection-status control, section navigation, and a way to change appearance
 - **AND** Controller is the active section
+- **AND** the visible chrome does not include the word Patone
 
 #### Scenario: Connection status is always visible
 - **WHEN** the user is on Controller, Editor, or Library
@@ -82,3 +84,13 @@ The shell SHALL host a global toast region that can show English status messages
 - **WHEN** a toast is shown and the user navigates from Controller to Editor or Library
 - **THEN** that toast remains visible
 - **AND** the connection-status control remains visible
+
+### Requirement: Shell footer names GP Studio as independent
+
+The shell SHALL show a footer that names GP Studio and states that it is an Independent controller for Valeton GP5/50. The footer MUST NOT use Unofficial or Unoficial. The footer MUST NOT include the brand name Patone.
+
+#### Scenario: Footer copy on first screen
+- **WHEN** the user opens the app
+- **THEN** the footer shows GP Studio
+- **AND** the footer includes Independent
+- **AND** the footer does not include Unofficial, Unoficial, or Patone
