@@ -1,4 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="6" fill="#171717" />
-  <path d="M8 22L16 8l8 14h-5.5L16 14 13.5 22H8z" fill="#fafafa" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#010f24" />
+  <text
+    x="32"
+    y="33"
+    text-anchor="middle"
+    dominant-baseline="central"
+    fill="#f4f7fb"
+    font-family="ui-sans-serif, system-ui, sans-serif"
+    font-size="22"
+    font-weight="700"
+    letter-spacing="-0.04em"
+  >
+    GPs
+  </text>
 </svg>
