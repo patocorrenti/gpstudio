@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AppShell } from "@/app/AppShell";
+import { DocumentHead } from "@/app/DocumentHead";
 import { DeviceSessionProvider } from "@/features/connect/DeviceSessionProvider";
 import { ControllerPage } from "@/features/controller/ControllerPage";
 import { EditorPage } from "@/features/editor/EditorPage";
@@ -18,6 +19,7 @@ export function App() {
     >
       <DeviceSessionProvider>
         <HashRouter>
+          <DocumentHead />
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<ControllerPage />} />

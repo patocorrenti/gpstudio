@@ -4,7 +4,52 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GP Studio</title>
+    <title>GP Studio — Controller for Valeton GP-5 and GP-50</title>
+    <meta
+      name="description"
+      content="Independent controller for Valeton GP-5 and GP-50. Connect over USB or Bluetooth to edit patches, the audio chain, and .prst files."
+    />
+    <meta name="author" content="Pato Correnti" />
+    <meta name="application-name" content="GP Studio" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#010f24" />
+    <meta property="og:site_name" content="GP Studio" />
+    <meta
+      property="og:title"
+      content="GP Studio — Controller for Valeton GP-5 and GP-50"
+    />
+    <meta
+      property="og:description"
+      content="Independent controller for Valeton GP-5 and GP-50. Connect over USB or Bluetooth to edit patches, the audio chain, and .prst files."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en" />
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:title"
+      content="GP Studio — Controller for Valeton GP-5 and GP-50"
+    />
+    <meta
+      name="twitter:description"
+      content="Independent controller for Valeton GP-5 and GP-50. Connect over USB or Bluetooth to edit patches, the audio chain, and .prst files."
+    />
+    <link rel="canonical" href="/" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "GP Studio",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web",
+        "softwareVersion": "0.1.0",
+        "inLanguage": "en",
+        "description": "Independent controller for Valeton GP-5 and GP-50. Connect over USB or Bluetooth to edit patches, the audio chain, and .prst files.",
+        "author": {
+          "@type": "Person",
+          "name": "Pato Correnti"
+        }
+      }
+    </script>
     <script>
       (function () {
         try {
@@ -13,9 +58,27 @@
           var root = document.documentElement;
           root.classList.remove("light", "dark");
           root.classList.add(theme);
+          var themeColor = document.querySelector('meta[name="theme-color"]');
+          if (themeColor) {
+            themeColor.setAttribute(
+              "content",
+              theme === "light" ? "#ffffff" : "#010f24",
+            );
+          }
         } catch (e) {
           document.documentElement.classList.add("dark");
         }
+
+        var url = location.origin + location.pathname;
+        var canonical = document.querySelector('link[rel="canonical"]');
+        if (canonical) canonical.setAttribute("href", url);
+        var ogUrl = document.querySelector('meta[property="og:url"]');
+        if (!ogUrl) {
+          ogUrl = document.createElement("meta");
+          ogUrl.setAttribute("property", "og:url");
+          document.head.appendChild(ogUrl);
+        }
+        ogUrl.setAttribute("content", url);
       })();
     </script>
   </head>
