@@ -13,9 +13,9 @@ export function AppShell() {
       <Toaster />
       <div className="relative flex min-h-svh flex-col bg-background text-foreground">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
-        <p className="text-lg font-semibold tracking-tight">
+        <Link to="/" className="w-fit text-lg font-semibold tracking-tight">
           GP Studio
-        </p>
+        </Link>
         <ConnectionStatus />
         <div className="flex items-center justify-end gap-3">
           <MainMenu />
