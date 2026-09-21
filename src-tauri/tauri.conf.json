@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Patone",
+  "productName": "GP Studio",
   "version": "0.1.0",
   "identifier": "com.patone.app",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Patone",
+        "title": "GP Studio",
         "width": 1280,
         "height": 800,
         "resizable": true,

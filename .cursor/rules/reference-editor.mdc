@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Reference editor
 
-A local copy of the third-party GP-50 web editor lives in `reference/`. **Read it** when encoding or decoding Valeton SysEx (chain order, stomps, parameters, dumps). `docs/protocol-references.md` is the index.
+A local copy of the third-party GP-50 web editor lives in `reference/`. **Read it** when encoding or decoding Valeton SysEx for Patone GP Studio (chain order, stomps, parameters, dumps). `docs/protocol-references.md` is the index.
 
 - Do **not** copy that HTML/JavaScript into `src/`.
 - Implement Patone-owned codecs. Match observed wire bytes (operator log / Patone Log), not a source drop.

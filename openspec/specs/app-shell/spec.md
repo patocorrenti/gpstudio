@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides the runnable web and desktop application shell for Patone: layout, a global connection-status control, section navigation, and dark-default appearance so later MIDI and controller work can land in a real app.
+Provides the runnable web and desktop application shell for Patone GP Studio: layout, a global connection-status control, section navigation, and dark-default appearance so later MIDI and controller work can land in a real app.
 
 ## Requirements
 

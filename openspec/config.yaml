@@ -3,7 +3,7 @@ schema: spec-driven
 # Project context shown to AI when creating OpenSpec artifacts.
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
-  Product: Patone — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
+  Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
   factory model and control values for the ten effect slots)
@@ -108,7 +108,7 @@ context: |
     If ambiguous or the name does not match, the user confirms or corrects. Port name is not hardware identity.
 
   Phase 1 visible UI:
-  - Shell chrome always visible: Patone name, connection-status control on the left,
+  - Shell chrome always visible: GP Studio name, connection-status control on the left,
     Controller / Editor / Library nav and theme toggle on the right.
     The shell hosts global English toasts (shadcn Sonner promise: spinner then
     success/error) for connect, disconnect, and patch Save / rename / duplicate /
