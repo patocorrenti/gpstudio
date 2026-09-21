@@ -47,6 +47,7 @@ export default function MainMenu() {
           Pedal
         </MenuLink>
         <MenuLink to="/log">Log</MenuLink>
+        <MenuLink to="/about">About</MenuLink>
       </NavigationMenuList>
     </NavigationMenu>
   );
