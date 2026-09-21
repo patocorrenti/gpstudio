@@ -193,7 +193,7 @@ Controller screen: on connect it may show loading while identity and the audio c
 
 Log screen: inbound MIDI from USB or Bluetooth only while it is open. It does not apply that traffic to the snapshot. The session may apply patch identity, chain dumps, and, on Bluetooth, live module on/off SysEx (including a Stomp footswitch), live chain-order SysEx, and live model/control SysEx separately.
 
-About screen: titled About GP Studio; English copy describing GP Studio as an independent controller for Valeton GP-5 and GP-50; What's next and a Changelog for the current version; reachable from the main menu after Log; does not require a pedal and does not send MIDI.
+About screen: titled About GP Studio; English copy describing GP Studio as an independent controller for Valeton GP-5 and GP-50; What's next and a Changelog for the current version; reachable from the main menu after Log and from Pato Correnti in the footer; web document title GP Studio | About while open (home restores GP Studio); does not require a pedal and does not send MIDI.
 
 Windows packaging: `tauri build` → NSIS/MSI installer. Web: `vite` in Chrome/Edge (localhost or HTTPS). Mobile is out of these changes; the MIDI abstraction already leaves that path open.
 

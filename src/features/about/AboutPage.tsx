@@ -1,4 +1,16 @@
+import { useEffect } from "react";
+
+const ABOUT_DOCUMENT_TITLE = "GP Studio | About";
+const HOME_DOCUMENT_TITLE = "GP Studio";
+
 export function AboutPage() {
+  useEffect(() => {
+    document.title = ABOUT_DOCUMENT_TITLE;
+    return () => {
+      document.title = HOME_DOCUMENT_TITLE;
+    };
+  }, []);
+
   return (
     <section className="mx-auto max-w-2xl space-y-10">
       <div className="space-y-4">

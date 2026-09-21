@@ -8,7 +8,7 @@ Provides the runnable web and desktop application shell for Patone GP Studio: la
 
 ### Requirement: Web and desktop shells launch without a backend
 
-The system SHALL serve the UI as a local web app and as a native desktop window. The shell MUST start without an HTTP backend and MUST NOT require network access to render the first screen. The web document title and the native window title MUST be GP Studio.
+The system SHALL serve the UI as a local web app and as a native desktop window. The shell MUST start without an HTTP backend and MUST NOT require network access to render the first screen. The native window title MUST be GP Studio. The web document title MUST be GP Studio on the home screen. While About is open, the web document title MUST be GP Studio | About.
 
 #### Scenario: Web development launch
 - **WHEN** the operator starts the web development command
@@ -73,7 +73,7 @@ The shell SHALL expose a global connection-status control and areas for Controll
 
 ### Requirement: About page is reachable from chrome
 
-The shell SHALL expose an About item in the main navigation, after Log. The About page MUST be titled About GP Studio and MUST be readable without a connected pedal. Copy MUST be in English. The page MUST describe GP Studio as an independent controller for Valeton GP-5 and GP-50. The page MUST include a What's next section and a Changelog for the current version. About MUST NOT send MIDI or change the session.
+The shell SHALL expose an About item in the main navigation, after Log. The About page MUST be titled About GP Studio and MUST be readable without a connected pedal. Copy MUST be in English. The page MUST describe GP Studio as an independent controller for Valeton GP-5 and GP-50. The page MUST include a What's next section and a Changelog for the current version. While About is open, the web document title MUST be GP Studio | About. About MUST NOT send MIDI or change the session. Pato Correnti in the footer MUST open About.
 
 #### Scenario: About follows Log in the main menu
 - **WHEN** the user opens the app
@@ -92,6 +92,14 @@ The shell SHALL expose an About item in the main navigation, after Log. The Abou
 - **THEN** the About copy is visible
 - **AND** the disconnected empty state is not shown
 
+#### Scenario: About sets the document title
+- **WHEN** the user opens About
+- **THEN** the web document title is GP Studio | About
+
+#### Scenario: Leaving About restores the document title
+- **WHEN** the user leaves About for Controller
+- **THEN** the web document title is GP Studio
+
 ### Requirement: Shell hosts a global toast region
 
 The shell SHALL host a global toast region that can show English status messages without changing the current section. Toasts MUST remain available on Controller, Editor, Library, and About. The toast region MUST NOT be a navigation destination. Which operations emit toasts is defined by device-connection and live-controller.
@@ -108,10 +116,15 @@ The shell SHALL host a global toast region that can show English status messages
 
 ### Requirement: Shell footer names GP Studio as independent
 
-The shell SHALL show a footer that names GP Studio and states that it is an Independent controller for Valeton GP5/50. The footer MUST NOT use Unofficial or Unoficial. The footer MUST NOT include the brand name Patone.
+The shell SHALL show a footer that names GP Studio and states that it is an Independent controller for Valeton GP5/50. The footer MUST NOT use Unofficial or Unoficial. The footer MUST NOT include the brand name Patone. The name Pato Correnti in the footer MUST open About and MUST NOT navigate to an external site.
 
 #### Scenario: Footer copy on first screen
 - **WHEN** the user opens the app
 - **THEN** the footer shows GP Studio
 - **AND** the footer includes Independent
 - **AND** the footer does not include Unofficial, Unoficial, or Patone
+
+#### Scenario: Footer name opens About
+- **WHEN** the user activates Pato Correnti in the footer
+- **THEN** About opens
+- **AND** the app does not navigate to an external site
