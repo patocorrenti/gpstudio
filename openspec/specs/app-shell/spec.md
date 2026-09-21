@@ -73,7 +73,7 @@ The shell SHALL expose a global connection-status control and areas for Controll
 
 ### Requirement: About page is reachable from chrome
 
-The shell SHALL expose an About item in the main navigation, after Log. The About page MUST be titled About GP Studio and MUST be readable without a connected pedal. Copy MUST be in English. The page MUST describe GP Studio as an independent controller for Valeton GP-5 and GP-50. The page MUST include a What's next section and a Changelog for the current version. While About is open, the web document title MUST be GP Studio | About. About MUST NOT send MIDI or change the session. Pato Correnti in the footer MUST open About.
+The shell SHALL expose an About item in the main navigation, after Log. The About page MUST be titled About GP Studio and MUST be readable without a connected pedal. Copy MUST be in English. The page MUST describe GP Studio as an independent controller for Valeton GP-5 and GP-50. The page MUST include a What's next section and a Changelog for the current version. The intro MUST include an external subscribe-for-updates link and an external report-a-bug link. While About is open, the web document title MUST be GP Studio | About. About MUST NOT send MIDI or change the session. Pato Correnti in the footer MUST open About.
 
 #### Scenario: About follows Log in the main menu
 - **WHEN** the user opens the app
@@ -85,6 +85,7 @@ The shell SHALL expose an About item in the main navigation, after Log. The Abou
 - **AND** the page states that GP Studio is an independent controller for Valeton GP-5 and GP-50
 - **AND** the page includes a What's next heading
 - **AND** the page includes a Changelog heading for the current version
+- **AND** the page includes a subscribe-for-updates link and a report-a-bug link
 - **AND** no device or MIDI action occurs
 
 #### Scenario: About does not require a pedal

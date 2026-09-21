@@ -18,6 +18,30 @@ export function AboutPage() {
           The project is headed toward open source. With luck, more people will
           join in, and GP Studio will gain the features they need too.
         </p>
+        <div className="space-y-2 border-y border-border/60 py-4 text-muted-foreground leading-relaxed">
+          <p>
+            <a
+              href="https://forms.gle/wbZYesraBR2QevhUA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+            >
+              Subscribe
+            </a>{" "}
+            to stay informed about the project.
+          </p>
+          <p>
+            <a
+              href="https://forms.gle/PhvZEPBty96WWzDDA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+            >
+              Report a bug
+            </a>{" "}
+            if something is off.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
