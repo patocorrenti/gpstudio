@@ -206,8 +206,6 @@ export class DeviceSession {
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
-  /** While true, a dump that matches the already-shown chain is the previous patch. */
-  private ignoreStaleChainDump = false;
   /** Last loaded or stored working chain for the selected patch. */
   private baseline: AudioChain | null = null;
   /** Next current-preset dump of a newly selected patch becomes the baseline. */
@@ -367,7 +365,6 @@ export class DeviceSession {
     }
     this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
-    this.ignoreStaleChainDump = true;
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
     this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
@@ -820,7 +817,6 @@ export class DeviceSession {
       if (changed) {
         this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
-        this.ignoreStaleChainDump = true;
         this.refreshChain(true);
       }
       return;
@@ -848,10 +844,6 @@ export class DeviceSession {
       return;
     }
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
-    if (this.ignoreStaleChainDump && chainSlotsEqual(this.snapshot.chain, chain)) {
-      return;
-    }
-    this.ignoreStaleChainDump = false;
     this.pendingPatchLoad = null;
     this.clearChainRefreshTimer();
     this.currentPatchDump = result.dump;
@@ -1114,7 +1106,6 @@ export class DeviceSession {
   private beginGeneration(): void {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
-    this.ignoreStaleChainDump = false;
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
     this.clearControlWrites();
