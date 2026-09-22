@@ -6,8 +6,12 @@ context: |
   Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
-  factory model and control values for the ten effect slots)
+  factory model and control values for the ten effect slots, plus the twenty
+  onboard user-IR CAB slots)
   is requested after connect and when the patch changes.
+  The IR-name dump is requested once per connect after the current-preset ask
+  and does not block identity or chain loading. Reload and patch change do not
+  re-request it. Selecting a user IR slot is the existing model SET (1147).
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
@@ -20,7 +24,7 @@ context: |
   Bluetooth live model (command 07) and live control (command 08) follow,
   and Controller drag-and-drop of movable modules are
   in scope on USB and Bluetooth. Library SysEx (browse / import / reorder),
-  IRs/NAM, and the Editor route come in later phases.
+  IR/NAM file upload, and the Editor route come in later phases.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -143,7 +147,8 @@ context: |
     bypassed (prohibition overlay) without rewriting their enabled state.
     Enabled effect slots with a known model show a control panel below the chain
     in two columns when width allows (model select when that kind has more than
-    one factory model; sliders/toggles from the catalog). AMP and CAB panels
+    one model; CAB lists twenty user IR slots with dumped names or
+    User IR 01–20; sliders/toggles from the catalog). AMP and CAB panels
     hide while NS marks those slots bypassed. Slider numbers follow the drag;
     control SETs are throttled (~80 ms) and flushed on release so Bluetooth is
     not flooded. Toggles send on-change. EXP has no model panel.
@@ -158,7 +163,7 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot are in scope;
     not the Library route and not GP-5/GP-50 conversion)
-  - IR / SnapTone / NAM upload
+  - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
   - Applying liveFromPedal inbound volume/tuner to the snapshot
     while the patch stays the same (Bluetooth live-module SysEx, Stomp
     footswitch chain on/off, live chain-order, and live model/control
@@ -184,12 +189,13 @@ context: |
   3. device-connection — detect GP-5/GP-50, connect, session state
      (global shell control + modal, not a route)
   4. live-controller — patch, volume, module on/off, tuner via official CC
-  5. Later: preset-editor (SysEx), preset-library, IRs/NAM
+  5. Later: preset-editor (SysEx), preset-library, IR/NAM file upload
 
   Hard constraints:
-  - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
-  - Patch identity SysEx (current index + names) and current-patch chain SysEx
-    (order + on/off + factory model/control decode, Bluetooth live chain-order
+  - SysEx for the editor and for IR/NAM file upload is reverse-engineered in third-party projects. Do not copy that code.
+    IR-name read and the user-IR CAB catalog are Patone-owned and in scope.
+  - Patch identity SysEx (current index + names), the IR-name dump, and current-patch chain SysEx
+    (order + on/off + factory model/control decode, including user-IR CAB wires, Bluetooth live chain-order
     decode, Bluetooth live model/control decode, the order-only SET, model/control SETs,
     and current-patch store SET 114a)
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
@@ -229,7 +235,8 @@ rules:
     - Always include a Non-goals section
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
     - Do not propose copied SysEx, Library browse/import/reorder, Library .prst
-      import, IRs, or mobile packaging in phase 1 changes
+      import, IR/NAM file upload, or mobile packaging in phase 1 changes.
+      IR-name read and user-IR CAB catalog/select are in scope.
     - Current-patch store SET of the existing parameter-write family and
       current-patch .prst export/import for the connected model are allowed; they are
       not the Library route and not cross-model conversion
@@ -252,7 +259,8 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off + factory model and control values) is in scope; Bluetooth inbound
+      current-patch chain (order + on/off + factory model and control values, including user-IR CAB slots)
+      and the IR-name dump are in scope; Bluetooth inbound
       live-module SysEx, Stomp-originated chain on/off, live chain-order,
       and live model/control (commands 07 / 08)
       are in scope; USB must not apply those reports; chain-order SET writes,

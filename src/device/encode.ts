@@ -15,6 +15,7 @@ import { encodePatchStoreSysex, encodePatchVolumeSysex, encodePatchBpmSysex } fr
 import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
+import { encodeIrNameRequest } from "@/device/ir-names";
 import type { LinkMode } from "@/device/link";
 
 function midiCc(controller: number, value: number): Uint8Array {
@@ -71,6 +72,11 @@ export function encodeIdentity(linkMode: LinkMode, kind: IdentityRequestKind): U
 
 export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
   return encodeLinkMidi(linkMode, encodeCurrentChainRequest());
+}
+
+/** IR-name dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
+export function encodeIrNames(linkMode: LinkMode): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeIrNameRequest());
 }
 
 /** Parameter-write chain-order SET. Same MIDI body on USB and Bluetooth. */
@@ -172,11 +178,17 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleStore = encodePatchStore("bluetooth", 5, "Flow");
   const usbVol = encodePatchVolume("usb", 50);
   const bleVol = encodePatchVolume("bluetooth", 50);
+  const usbIr = encodeIrNames("usb");
+  const bleIr = encodeIrNames("bluetooth");
   const bleModelMidi = bleModel && bleModel.length === 1 ? unwrapBlePacket(bleModel[0]) : null;
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
+  const bleIrMidi = unwrapBlePacket(bleIr);
+  const nameList = encodeIdentity("usb", "name-list");
+  const currentPatch = encodeIdentity("usb", "current-patch");
+  const currentPreset = encodeChainRequest("usb");
   if (
     !usbModel ||
     !bleModel ||
@@ -196,6 +208,21 @@ function assertUsbBluetoothWrapOnly(): void {
     !sameBytes(usbVol[0], bleVolMidi)
   ) {
     throw new Error("USB and Bluetooth slot writes must differ only by one BLE-MIDI wrap");
+  }
+  const factoryCab = encodeSlotModel("usb", "cab", [0x01, 0x00, 0x00, 0x0a]);
+  const userCab = encodeSlotModel("usb", "cab", [0x02, 0x00, 0x10, 0x0a]);
+  if (
+    !bleIrMidi ||
+    !factoryCab ||
+    !userCab ||
+    !sameBytes(usbIr, bleIrMidi) ||
+    sameBytes(usbIr, nameList) ||
+    sameBytes(usbIr, currentPatch) ||
+    sameBytes(usbIr, currentPreset) ||
+    factoryCab[0].length !== userCab[0].length ||
+    userCab[0].length > 80
+  ) {
+    throw new Error("IR-name request must differ from other asks only by the BLE-MIDI wrap, and user IR select stays a model SET");
   }
 }
 

@@ -32,5 +32,7 @@ export type FxModel = {
   basedOn?: string;
   devices: ReadonlySet<DeviceModel>;
   wire: WireIdentity;
+  /** Onboard user-IR slot 1–20. Catalog label stays the English fallback. */
+  userIrSlot?: number;
   controls: readonly FxControl[];
 };

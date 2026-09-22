@@ -30,6 +30,7 @@ function matchesModelQuery(option: FxModel, query: string): boolean {
   if (!trimmed) {
     return true;
   }
+  // `label` is the string shown in the list, including a dumped user-IR name.
   return (
     option.label.toLowerCase().includes(trimmed) ||
     option.id.toLowerCase().includes(trimmed) ||

@@ -15,6 +15,7 @@ import {
   modelsForKind,
   type FxControl,
 } from "@/device/catalog";
+import { userIrDisplayName } from "@/device/ir-names";
 import type { DeviceModel } from "@/device/models";
 import {
   chainSlotBypassed,
@@ -24,7 +25,7 @@ import {
   type AudioChainSlot,
   type EffectId,
 } from "@/device/session";
-import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
 import { ModelSelect } from "@/features/controller/ModelSelect";
 
@@ -115,12 +116,18 @@ function SlotControlPanel({
   disabled: boolean;
 }) {
   const session = useDeviceSession();
+  const snapshot = useSessionSnapshot();
   const model = modelById(slot.modelId);
   if (!model) {
     return null;
   }
-  const options = modelsForKind(slot.id, pedal);
+  const userIrNames = snapshot.status === "connected" ? snapshot.userIrNames : undefined;
+  const options = modelsForKind(slot.id, pedal).map((option) => ({
+    ...option,
+    label: userIrDisplayName(option, userIrNames),
+  }));
   const kindLabel = chainSlotLabel(slot.id);
+  const shownLabel = options.find((option) => option.id === model.id)?.label ?? model.label;
 
   return (
     <section
@@ -159,7 +166,7 @@ function SlotControlPanel({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`About ${model.label}`}
+                  aria-label={`About ${shownLabel}`}
                   className="shrink-0 text-muted-foreground"
                 >
                   <Info />
@@ -167,7 +174,7 @@ function SlotControlPanel({
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>{model.label}</DialogTitle>
+                  <DialogTitle>{shownLabel}</DialogTitle>
                   <DialogDescription className="text-left">
                     {model.description}
                   </DialogDescription>

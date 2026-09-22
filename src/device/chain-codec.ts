@@ -8,6 +8,7 @@ import {
 import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
 import { EFFECT_IDS } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
+import { encodeIrNameDump, isIrNameDump } from "@/device/ir-names";
 import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /**
@@ -809,6 +810,13 @@ function assertPresetDumpFixtures(): void {
   if (nr?.modelId !== "nr-gate" || nr.values?.[0] !== 18) {
     throw new Error("GP-50 dump fixture did not fill sole NR GATE from THRE");
   }
+  writeNibbleBytes(tweedy, GP50_IDENTITY_AT.cab, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
+  writeNibbleBytes(tweedy, GP50_VALUES_AT.cab, float32Le(50));
+  const withUserIr = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
+  const userCab = withUserIr?.find((slot) => slot.id === "cab");
+  if (userCab?.modelId !== "cab-user-ir-03" || userCab.values?.[0] !== 50) {
+    throw new Error("GP-50 user IR dump fixture did not fill CAB User IR 03 VOL 50");
+  }
 
   const unknown = new Uint8Array(tweedy);
   writeNibbleBytes(unknown, GP50_IDENTITY_AT.amp, Uint8Array.from([0x99, 0x00, 0x00, 0x07]));
@@ -863,6 +871,15 @@ function assertPresetDumpFixtures(): void {
   ) {
     throw new Error("Live AMP model notify fixture did not decode Bellman identity");
   }
+
+  const liveCab = new Uint8Array(liveModel);
+  liveCab[14] = DUMP_MODULE_IDS.indexOf("cab");
+  writeNibbleBytes(liveCab, 21, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
+  const liveUserIr = decodeLiveSlotModel(liveCab);
+  const resolved = liveUserIr ? modelByWire("cab", liveUserIr.wire) : undefined;
+  if (liveUserIr?.kind !== "cab" || resolved?.id !== "cab-user-ir-03") {
+    throw new Error("Live CAB user IR notify must decode User IR 03");
+  }
 }
 
 assertPresetDumpFixtures();
@@ -915,7 +932,7 @@ export class ChainDecoder {
     if (midi.length < 8 || midi[0] !== 0xf0) {
       return null;
     }
-    if (isNameDump(midi) || isCurrentPatchIdentity(midi)) {
+    if (isNameDump(midi) || isCurrentPatchIdentity(midi) || isIrNameDump(midi)) {
       return null;
     }
 
@@ -935,3 +952,14 @@ export class ChainDecoder {
     return this.finish(model);
   }
 }
+
+function assertIrFragmentsSkipChainDecoder(): void {
+  const chain = new ChainDecoder();
+  for (const packet of encodeIrNameDump(["", "", "Greenback 412"])) {
+    if (chain.push(packet, "gp50")) {
+      throw new Error("IR-name fragments must not feed ChainDecoder");
+    }
+  }
+}
+
+assertIrFragmentsSkipChainDecoder();
