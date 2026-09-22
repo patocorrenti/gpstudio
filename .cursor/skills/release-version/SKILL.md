@@ -1,0 +1,38 @@
+---
+name: release-version
+description: >-
+  Bump GP Studio to a new version: English changelog entry, version numbers in
+  package, lockfiles, Tauri, footer, and index.html, then commit, create an
+  annotated git tag, and push the tag. Use when the user asks to release, bump
+  or change the version, add a changelog version, or create and push a version tag.
+---
+
+# Release version
+
+Do not edit version files by hand. `scripts/release.mjs` updates them together so the tag points at one commit that has both the changelog and the numbers.
+
+## Before running
+
+1. Get the target version (`x.y.z`, greater than `package.json`) and the user-facing changes. If they were not given, ask.
+2. Changelog bullets are English, one line each, in the voice of the About page. Translate Spanish notes. Do not invent changes.
+3. The working tree must be clean, and the branch must not be behind its upstream. If not, stop and say so.
+
+## Run
+
+From the repo root:
+
+```bash
+npm run release -- <x.y.z> --note "English bullet" --note "Another bullet"
+```
+
+That command:
+
+- prepends a Changelog section on the About page and keeps older versions
+- sets the same version in `package.json`, `package-lock.json` (root package only), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (package `app`), `src-tauri/tauri.conf.json`, the footer in `src/app/AppShell.tsx`, and `softwareVersion` in `index.html`
+- commits `feat: release <version>`
+- creates annotated tag `v<version>` with message `Versión <version> - <first note>`
+- pushes the current branch and the tag to `origin`
+
+Add `--no-push` only when the user wants the commit and tag to stay local. Add `--dry-run` to preview without writing. `npm run release -- --check` only verifies the current numbers match.
+
+Do not amend the release commit, force-push, or skip hooks. If the script fails after writing files, fix the reported problem and rerun only once the working tree is back to a state the script accepts. Do not finish the release with a manual tag on a different commit.
