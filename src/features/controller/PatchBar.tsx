@@ -31,6 +31,7 @@ import {
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { PatchSelect } from "@/features/controller/PatchSelect";
 import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
 import { toast } from "sonner";
 
@@ -298,35 +299,18 @@ export function PatchBar({
             </Button>
           </span>
         </PatchNavTooltip>
-        <Select
-          value={String(patch)}
-          onValueChange={(value) => {
-            void session.setPatch(Number.parseInt(value, 10));
+        <PatchSelect
+          patch={patch}
+          patchNames={patchNames}
+          disabled={busy}
+          triggerClassName={`${patchChipClass} h-8 w-72 min-w-72 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+          wrapTrigger={(trigger) => (
+            <PatchNavTooltip enabled={modified}>{trigger}</PatchNavTooltip>
+          )}
+          onSelect={(next) => {
+            void session.setPatch(next);
           }}
-        >
-          <PatchNavTooltip enabled={modified}>
-            <SelectTrigger
-              aria-label="Select patch"
-              size="default"
-              className={`${patchChipClass} w-72 min-w-72 justify-center border-transparent py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-            >
-              <SelectValue>
-                {currentName ? formatPatchOption(patch, currentName) : formatPatch(patch)}
-              </SelectValue>
-            </SelectTrigger>
-          </PatchNavTooltip>
-          <SelectContent position="popper" className="max-h-72 min-w-72">
-            {patchOptions.map((option) => (
-              <SelectItem
-                key={option}
-                value={String(option)}
-                className="font-medium tabular-nums"
-              >
-                {formatPatchOption(option, patchNames[option])}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         <PatchNavTooltip enabled={modified}>
           <span className="inline-flex">
             <Button
