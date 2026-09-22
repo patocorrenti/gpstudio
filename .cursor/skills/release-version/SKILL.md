@@ -15,7 +15,8 @@ Do not edit version files by hand. `scripts/release.mjs` updates them together s
 
 1. Get the target version (`x.y.z`, greater than `package.json`) and the user-facing changes. If they were not given, ask.
 2. Changelog bullets are English, one line each, in the voice of the About page. Translate Spanish notes. Do not invent changes.
-3. The working tree must be clean, and the branch must not be behind its upstream. If not, stop and say so.
+3. Show the version and the exact English bullets, then stop. Do not run the release until the user explicitly confirms those texts. If they change the wording, show the revised list and wait again.
+4. The working tree must be clean, and the branch must not be behind its upstream. If not, stop and say so. The check can happen before the confirmation. The release command runs only after the user accepts the texts.
 
 ## Run
 
