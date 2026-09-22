@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, RefreshCw, Save, TriangleAlert, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -344,28 +344,6 @@ export function PatchBar({
         </PatchNavTooltip>
       </TooltipProvider>
       <div className="ml-2 flex items-center gap-1">
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={busy}
-                  className={patchChipClass}
-                  aria-label="Reload patch"
-                  onClick={() => {
-                    session.reloadCurrentPatch();
-                  }}
-                >
-                  <RefreshCw />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Reload patch</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
         <Button
           type="button"
           variant="ghost"

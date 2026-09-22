@@ -380,20 +380,6 @@ export class DeviceSession {
     this.refreshChain(true, true);
   }
 
-  /** Re-request the current patch dump. Does not send patch recall. */
-  reloadCurrentPatch(): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
-      return;
-    }
-    this.refreshChain(true);
-  }
-
   async stepPatch(delta: -1 | 1): Promise<void> {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
