@@ -6,6 +6,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-tweedy",
     kind: "amp",
     label: "Tweedy",
+    description: "Based on Fender® Tweed Deluxe*. This amplifier with a dynamic range from clean to wild overdrive, from country rock to distortion, the Fender® Tweed Deluxe* has been a totem in every style for more than 60 years.",
+    basedOn: "Fender® Tweed Deluxe",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x07],
     controls: [
@@ -42,6 +44,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-bellman-59n",
     kind: "amp",
     label: "Bellman 59N",
+    description: "Based on Fender® '59 Bassman®*. The most dramatic speaker in the history of Rock&Roll, originally designed for bass, has become the most classic guitar speaker. As clear as water, Vacuum tubemakes the sound more beautiful,make musical instrument manufacturers are eager to imitate the product.",
+    basedOn: "Fender® '59 Bassman®",
     devices: BOTH_PEDALS,
     wire: [0x03, 0x00, 0x00, 0x07],
     controls: [
@@ -105,6 +109,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-dark-twin",
     kind: "amp",
     label: "Dark Twin",
+    description: "Based on Fender® '65 Twin Reverb®*. With a Stratocaster*, the classic sound can be easily restored in both country jazz and rock music.",
+    basedOn: "Fender® '65 Twin Reverb®",
     devices: BOTH_PEDALS,
     wire: [0x04, 0x00, 0x00, 0x07],
     controls: [
@@ -168,6 +174,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-foxy-30n",
     kind: "amp",
     label: "Foxy 30N",
+    description: "Based on VOX® AC30HW* (normal channel). The symbolic clear sound and warm and sharp overdrive, since the day of its birth, has become the Shadows, The Beatles, the Rolling Stones and other group's favorite speaker. The British band led the \"British Invasion\" has made VOX® speaker a household name as a British rock icon.Even in hard rock and British rock, Radiohead, Suede, Oasis and other super groups are preferred.",
+    basedOn: "VOX® AC30HW (normal channel)",
     devices: BOTH_PEDALS,
     wire: [0x11, 0x00, 0x00, 0x07],
     controls: [
@@ -213,6 +221,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-j-120-cl",
     kind: "amp",
     label: "J-120 CL",
+    description: "Based on the legendary \"Jazz Chorus\" solid state combo. When it came out in 1975, it is the first musical instrument speaker equipped with Chorus effect. It was famous for its pure sound and stereo chorus effect.",
+    basedOn: "Jazz Chorus solid state combo",
     devices: BOTH_PEDALS,
     wire: [0x14, 0x00, 0x00, 0x07],
     controls: [
@@ -267,6 +277,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-match-cl",
     kind: "amp",
     label: "Match CL",
+    description: "Based on Matchless™ Chieftain 212 combo* (clean tone). MATCHLESS®'s philosophy since its founding in 1989 has been to make as many top-notch, all-purpose speakers as possible. The crisp graininess and perfect dynamic feedback will make your playing easy.",
+    basedOn: "Matchless™ Chieftain 212 combo (clean tone)",
     devices: BOTH_PEDALS,
     wire: [0x15, 0x00, 0x00, 0x07],
     controls: [
@@ -330,6 +342,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-l-star-cl",
     kind: "amp",
     label: "L-Star CL",
+    description: "Based on Mesa/Boogie® Lone Star™* (CH1). The pre-amp circuit has extraordinary expressive power, the comprehensive timbre and intuitive operation are indicative of Mesa/Boogie®'s far superior technical capabilities. An engaging and lively timbre experience.It has a more compressed, balanced, soft mid frequency sound, and its high-frequency like gorgeous bell.",
+    basedOn: "Mesa/Boogie® Lone Star™ (CH1)",
     devices: BOTH_PEDALS,
     wire: [0x19, 0x00, 0x00, 0x07],
     controls: [
@@ -393,6 +407,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-uk-45",
     kind: "amp",
     label: "UK 45",
+    description: "Based on Marshall® JTM45* (normal channel). In 1962, Marshall® introduced the first guitar speakers specifically designed for rock music, and its powerful sound laid the foundation for rock music. So its panel material plexiglas as the most classic 1960s sound specific name--- Plexi.",
+    basedOn: "Marshall® JTM45 (normal channel)",
     devices: BOTH_PEDALS,
     wire: [0x2a, 0x00, 0x00, 0x07],
     controls: [
@@ -456,6 +472,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-uk-50jp",
     kind: "amp",
     label: "UK 50JP",
+    description: "Based on Marshall® JMP50* (\"Jump\" connection). Through the adjustment of JTM45*'s rectifier tube, the power was improved. In 1966, Marshall company launched JTM50*, and the \"Plexi\" sound obtained utilizing the overdrive by more people. The timbre is more full compared to JTM45*.",
+    basedOn: "Marshall® JMP50* (\"Jump\" connection)",
     devices: BOTH_PEDALS,
     wire: [0x2f, 0x00, 0x00, 0x07],
     controls: [
@@ -528,6 +546,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-uk-800",
     kind: "amp",
     label: "UK 800",
+    description: "Based on Marshall® JCM800*. In 1981, the JCM800* quickly became the rock and metal sound of the '80s with its excellent higain sound.The founders named it after their own license plate number, inheriting and continuing the legend of Plexi*.",
+    basedOn: "Marshall® JCM800",
     devices: BOTH_PEDALS,
     wire: [0x35, 0x00, 0x00, 0x07],
     controls: [
@@ -591,6 +611,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-bellman-59b",
     kind: "amp",
     label: "Bellman 59B",
+    description: "Based on Fender® '59 Bassman®* Bright CH. The most dramatic speaker in the history of Rock&Roll, originally designed for bass, has become the most classic guitar speaker. As clear as water, Vacuum tubemakes the sound more beautiful,make musical instrument manufacturers are eager to imitate the product.",
+    basedOn: "Fender® '59 Bassman Bright CH",
     devices: BOTH_PEDALS,
     wire: [0x24, 0x00, 0x00, 0x07],
     controls: [
@@ -654,6 +676,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-foxy-30tb",
     kind: "amp",
     label: "Foxy 30TB",
+    description: "Based on VOX® AC30HW* (Top Boost channel). The symbolic clear sound and warm and sharp overdrive, since the day of its birth, has become the Shadows, The Beatles, the Rolling Stones and other group's favorite speaker. The British band led the \"British Invasion\" has made VOX® speaker a household name as a British rock icon.Even in hard rock and British rock, Radiohead, Suede, Oasis and other super groups are preferred.",
+    basedOn: "VOX® AC30HW (Top Boost channel)",
     devices: BOTH_PEDALS,
     wire: [0x27, 0x00, 0x00, 0x07],
     controls: [
@@ -717,6 +741,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-supdual-od",
     kind: "amp",
     label: "SUPDual OD",
+    description: "Based on the Supro® Dual-Tone 1624T* (CH1+2, dirty tone). In the mid 60's, vintage 1624T amps have been sought-after for decades because the Dual-Tone's volume knob is turned beyond noon, a fat and compressed clean tone evolves into an immediately recognizable grind that remains articulate and listenable even when turned up to full blast.",
+    basedOn: "Supro® Dual-Tone 1624T (CH1+2, dirty tone)",
     devices: BOTH_PEDALS,
     wire: [0x28, 0x00, 0x00, 0x07],
     controls: [
@@ -771,6 +797,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-solo100-od",
     kind: "amp",
     label: "Solo100 OD",
+    description: "Based on Soldano® SLO100* (overdrive channel). Also from Eddie Van Halen's Brown Sound, Steve Vai's classic album \"Passion & Warfare\" was recorded in SLO100*.",
+    basedOn: "Soldano® SLO100* (overdrive channel)",
     devices: BOTH_PEDALS,
     wire: [0x47, 0x00, 0x00, 0x07],
     controls: [
@@ -834,6 +862,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-z38-od",
     kind: "amp",
     label: "Z38 OD",
+    description: "Based on Dr. Z® Maz 38 Sr.* combo (Hi Input). With its varied sound, wide frequency response and dynamic range, it is not only an excellent single platform, but it can meet your needs whether you are a British or An American fan.",
+    basedOn: "Dr. Z® Maz 38 Sr. combo (Hi Input)",
     devices: BOTH_PEDALS,
     wire: [0x49, 0x00, 0x00, 0x07],
     controls: [
@@ -897,6 +927,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-bad-kt-od",
     kind: "amp",
     label: "Bad-KT OD",
+    description: "Based on Bad Cat® Hot Cat 30* (overdrive channel). As the world's first use of Class A circuit design guitar speakers, the sound quality has been greatly improved.It combines British and American styles, with rich harmonics and sufficient headroom.",
+    basedOn: "Bad Cat® Hot Cat 30* (overdrive channel)",
     devices: BOTH_PEDALS,
     wire: [0x4b, 0x00, 0x00, 0x07],
     controls: [
@@ -960,6 +992,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-juice-r100",
     kind: "amp",
     label: "Juice R100",
+    description: "Based on Orange® Rockerverb 100™* (Dirty channel). Once launched, this amplifier has become a new favorite of rock musicians. Its sound is unique, and its timbre can be controlled from warm and sweet clear tone to heavy music, which will bring surprise to the performers.",
+    basedOn: "Orange® Rockerverb 100™* (Dirty channel)",
     devices: BOTH_PEDALS,
     wire: [0x53, 0x00, 0x00, 0x07],
     controls: [
@@ -1014,6 +1048,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-dizz-vh",
     kind: "amp",
     label: "Dizz VH",
+    description: "Based on Diezel® VH4* CH3. Born in Germany in the 1990s, its timbre and multifunction have attracted countless guitar masters.The unique Modern Higain quickly conquered many musicians.",
+    basedOn: "Diezel® VH4* CH3",
     devices: BOTH_PEDALS,
     wire: [0x65, 0x00, 0x00, 0x07],
     controls: [
@@ -1077,6 +1113,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-dizz-vh-2",
     kind: "amp",
     label: "Dizz VH+",
+    description: "Based on Diezel® VH4* CH4. Born in Germany in the 1990s, its timbre and multifunction have attracted countless guitar masters.The unique Modern Higain quickly conquered many musicians.",
+    basedOn: "Diezel® VH4* CH4",
     devices: BOTH_PEDALS,
     wire: [0x6a, 0x00, 0x00, 0x07],
     controls: [
@@ -1140,6 +1178,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-eagle-120",
     kind: "amp",
     label: "Eagle 120",
+    description: "\"ENGL® Savage 120* Amplifier embodies ENGL's rich legacy of creating metal machines for delivering truly punishing tones, with clear dynamics and tremendous sonic variety. This incredible tonal flexibility comes from the 4 channel layout of the amp, with a dedicated Clean channel, two separate Crunch channels, and a super-saturated Lead channel, all supported by two discrete EQs and a wide selection of additional features.\"",
+    basedOn: "ENGL® Savage 120* Amplifier",
     devices: BOTH_PEDALS,
     wire: [0x5f, 0x00, 0x00, 0x07],
     controls: [
@@ -1203,6 +1243,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-ev-51",
     kind: "amp",
     label: "EV 51",
+    description: "Based on Peavey® 5150® (LEAD channel). Guitarist Eddie Van Halen, who began working with Peavey® in the 1980s, loved the sound and took the album's title \"5150\" to the world with its metallic sound.",
+    basedOn: "Peavey® 5150® (LEAD channel)",
     devices: BOTH_PEDALS,
     wire: [0x5a, 0x00, 0x00, 0x07],
     controls: [
@@ -1266,6 +1308,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-solo100-ld",
     kind: "amp",
     label: "Solo100 LD",
+    description: "Based on Soldano® SLO100* (overdrive channel). Also from Eddie Van Hale's Brown Sound, Steve Vai's classic album “Passion & Warfare” was recorded in SLO100*.",
+    basedOn: "Soldano® SLO100* (overdrive channel)",
     devices: BOTH_PEDALS,
     wire: [0x59, 0x00, 0x00, 0x07],
     controls: [
@@ -1329,6 +1373,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-mess-dualv",
     kind: "amp",
     label: "Mess DualV",
+    description: "Based on Mesa/Boogie® Dual Rectifier* (CH3, Vintage mode). The distortion of Rectifier series is warm, and the distortion of Rectifier series is very wide, which is more thick and solid than Mark.",
+    basedOn: "Mesa/Boogie® Dual Rectifier* (CH3, Vintage mode)",
     devices: BOTH_PEDALS,
     wire: [0x68, 0x00, 0x00, 0x07],
     controls: [
@@ -1392,6 +1438,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-mess-dualm",
     kind: "amp",
     label: "Mess DualM",
+    description: "Based on Mesa/Boogie® Dual Rectifier* (CH3, Modern mode). The distortion of Rectifier series is warm, and the distortion of Rectifier series is very wide, which is more thick and solid than Mark.",
+    basedOn: "Mesa/Boogie® Dual Rectifier* (CH3, Modern mode)",
     devices: BOTH_PEDALS,
     wire: [0x69, 0x00, 0x00, 0x07],
     controls: [
@@ -1455,6 +1503,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-power-ld",
     kind: "amp",
     label: "Power LD",
+    description: "Based on ENGL® Powerball II E645/2* (CH4). It can bring you extremely compact low frequency, a lot of gain and precise dynamic response, which is very suitable for modern rock and metal music.",
+    basedOn: "ENGL® Powerball II E645/2* (CH4)",
     devices: BOTH_PEDALS,
     wire: [0x63, 0x00, 0x00, 0x07],
     controls: [
@@ -1518,6 +1568,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-flagman",
     kind: "amp",
     label: "Flagman+",
+    description: "Based on the famous \"Brown Eye\" UK-style boutique amp head (HBE channel).",
+    basedOn: "Brown Eye UK-style boutique amp head (HBE channel)",
     devices: BOTH_PEDALS,
     wire: [0x5d, 0x00, 0x00, 0x07],
     controls: [
@@ -1581,6 +1633,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-bog-redv",
     kind: "amp",
     label: "Bog RedV",
+    description: "The Bogner® XTC* red channel is known for its fiery high gain distortion and the main timbre.",
+    basedOn: "Bogner® XTC* red channel",
     devices: BOTH_PEDALS,
     wire: [0x6d, 0x00, 0x00, 0x07],
     controls: [
@@ -1644,6 +1698,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-classic-bass",
     kind: "amp",
     label: "Classic Bass",
+    description: "Based on Ampeg® SVT* bass amp. Launched in 1969, Ampeg SVT has always been the most mainstream bass speaker, Have a strong ability to sound shape.",
+    basedOn: "Ampeg® SVT* bass amp",
     devices: BOTH_PEDALS,
     wire: [0x73, 0x00, 0x00, 0x07],
     controls: [
@@ -1707,6 +1763,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-foxy-bass",
     kind: "amp",
     label: "Foxy Bass",
+    description: "Based on vintage VOX®* AC-100* bass amp. In 1963, the Beatles was in urgent need of a bass speaker with a volume greater than that of the club's crazy shouting, and the AC-100* came into being. With 100W power and 4x12\" box, it has successfully become the most representative bass voice in the 1960s.",
+    basedOn: "Vintage VOX® AC-100* bass amp",
     devices: BOTH_PEDALS,
     wire: [0x75, 0x00, 0x00, 0x07],
     controls: [
@@ -1743,6 +1801,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-mess-bass",
     kind: "amp",
     label: "Mess Bass",
+    description: "Based on Mesa/Boogie® Bass 400* amp. You can hear the sound of the early bass speakers in many albums.",
+    basedOn: "Mesa/Boogie® Bass 400* amp.",
     devices: BOTH_PEDALS,
     wire: [0x77, 0x00, 0x00, 0x07],
     controls: [
@@ -1797,6 +1857,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-ac-pre1",
     kind: "amp",
     label: "AC Pre1",
+    description: "Based on AER® Colourizer 2* acoustic preamp. Originated in Germany, it is a preamp designed for acoustic guitar sound reinforcement. It will bring richer dynamics and overtones to your acoustic guitar, making the sound more three-dimensional and vivid.",
+    basedOn: "AER® Colourizer 2* acoustic preamp",
     devices: BOTH_PEDALS,
     wire: [0x7a, 0x00, 0x00, 0x08],
     controls: [
@@ -1860,6 +1922,8 @@ export const AMP_MODELS: readonly FxModel[] = [
     id: "amp-ac-pre2",
     kind: "amp",
     label: "AC Pre2",
+    description: "Based on AER® Colourizer 2* acoustic preamp. Originated in Germany, it is a preamp designed for acoustic guitar sound reinforcement. It will bring richer dynamics and overtones to your acoustic guitar, making the sound more three-dimensional and vivid.",
+    basedOn: "AER® Colourizer 2* acoustic preamp",
     devices: BOTH_PEDALS,
     wire: [0x7b, 0x00, 0x00, 0x08],
     controls: [

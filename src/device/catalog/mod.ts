@@ -6,6 +6,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-a-chorus",
     kind: "mod",
     label: "A-Chorus",
+    description: "Based on legendary Arion® SCH-1* stereo chorus pedal. Eric Clapton and Michael Landau used its sound to create the wonderful atmosphere of the 80s! Whether it's the classic chorus effect or the wonderful rotating speaker sound, you can easily get it.",
+    basedOn: "Arion® SCH-1* stereo chorus pedal",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x04],
     controls: [
@@ -51,6 +53,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-b-chorus",
     kind: "mod",
     label: "B-Chorus",
+    description: "Based on the famous ensemble chorus unit tuned for bassists.",
+    basedOn: "Ensemble chorus unit tuned for bassists.",
     devices: BOTH_PEDALS,
     wire: [0x08, 0x00, 0x00, 0x04],
     controls: [
@@ -96,6 +100,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-jet",
     kind: "mod",
     label: "Jet",
+    description: "Classic flanger effect, producing rich and natural flanger tone.",
     devices: BOTH_PEDALS,
     wire: [0x11, 0x00, 0x00, 0x04],
     controls: [
@@ -150,6 +155,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-n-jet",
     kind: "mod",
     label: "N-Jet",
+    description: "A flanger with negative feedback, producing \"underwater\" style sound.",
     devices: BOTH_PEDALS,
     wire: [0x13, 0x00, 0x00, 0x04],
     controls: [
@@ -204,6 +210,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-o-phase",
     kind: "mod",
     label: "O-Phase",
+    description: "Based on legendary MXR® M101 Phase 90*. Have you heard the guitar sound in Eddie Van Halen's \"Eruption\"? That distorted tone with a sense of rotation is realized by Phase 90.",
+    basedOn: "MXR® M101 Phase 90*",
     devices: BOTH_PEDALS,
     wire: [0x19, 0x00, 0x00, 0x04],
     controls: [
@@ -231,6 +239,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-m-vibe",
     kind: "mod",
     label: "M-Vibe",
+    description: "Based on Voodoo Lab® Micro Vibe*. Voodoo Lab Micro Vibe has the same design as the original 1968 Uni-Vibe*. Jimi Hendrix and Stevie Ray Vaughan used these effects extensively in their albums. The Vibe effect will bring about slight and regular pitch changes.",
+    basedOn: "Voodoo Lab® Micro Vibe*",
     devices: BOTH_PEDALS,
     wire: [0x1f, 0x00, 0x00, 0x04],
     controls: [
@@ -267,6 +277,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-v-roto",
     kind: "mod",
     label: "V-Roto",
+    description: "Based on a BBD-based blue vibrato pedal, producing natural analog vibrato sound.",
+    basedOn: "BBD-based blue vibrato pedal",
     devices: BOTH_PEDALS,
     wire: [0x15, 0x00, 0x00, 0x04],
     controls: [
@@ -303,6 +315,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-vibrato",
     kind: "mod",
     label: "Vibrato",
+    description: "A classic vibrato effect with wide adjustable range.",
     devices: BOTH_PEDALS,
     wire: [0x17, 0x00, 0x00, 0x04],
     controls: [
@@ -348,6 +361,8 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-o-trem",
     kind: "mod",
     label: "O-Trem",
+    description: "Based on legendary Demeter® TRM-1 Tremulator*, offering classical opto tremolo sound. In 1982, rock pioneer Ry Cooder approached James Demeter to ask whether the tremolo sound of the Fender® twin series speakers could be made into a pedal effect device, and this classic effect device was born.",
+    basedOn: "Demeter® TRM-1 Tremulator*",
     devices: BOTH_PEDALS,
     wire: [0x21, 0x00, 0x00, 0x04],
     controls: [
@@ -384,6 +399,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-sine-trem",
     kind: "mod",
     label: "Sine Trem",
+    description: "Sine tremolo waveforms and super wide tonal range.",
     devices: BOTH_PEDALS,
     wire: [0x26, 0x00, 0x00, 0x04],
     controls: [
@@ -429,6 +445,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     id: "mod-bias-trem",
     kind: "mod",
     label: "Bias Trem",
+    description: "Bias tremolo waveforms and super wide tonal range.",
     devices: BOTH_PEDALS,
     wire: [0x28, 0x00, 0x00, 0x04],
     controls: [

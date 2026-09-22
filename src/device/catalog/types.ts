@@ -26,6 +26,10 @@ export type FxModel = {
   id: string;
   kind: EffectId;
   label: string;
+  /** Manual / factory blurb for this model. */
+  description?: string;
+  /** Named gear this model is based on, when the description identifies one. */
+  basedOn?: string;
   devices: ReadonlySet<DeviceModel>;
   wire: WireIdentity;
   controls: readonly FxControl[];

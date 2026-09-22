@@ -6,6 +6,7 @@ export const EQ_MODELS: readonly FxModel[] = [
     id: "eq-guitar-eq-1",
     kind: "eq",
     label: "Guitar EQ 1",
+    description: "Equalizer designed for guitars.",
     devices: BOTH_PEDALS,
     wire: [0x35, 0x00, 0x00, 0x01],
     controls: [
@@ -69,6 +70,7 @@ export const EQ_MODELS: readonly FxModel[] = [
     id: "eq-guitar-eq-2",
     kind: "eq",
     label: "Guitar EQ 2",
+    description: "Equalizer designed for guitars.",
     devices: BOTH_PEDALS,
     wire: [0x36, 0x00, 0x00, 0x01],
     controls: [
@@ -132,6 +134,7 @@ export const EQ_MODELS: readonly FxModel[] = [
     id: "eq-bass-eq-1",
     kind: "eq",
     label: "Bass EQ 1",
+    description: "Equalizer designed for basses.",
     devices: BOTH_PEDALS,
     wire: [0x39, 0x00, 0x00, 0x01],
     controls: [
@@ -195,6 +198,7 @@ export const EQ_MODELS: readonly FxModel[] = [
     id: "eq-bass-eq-2",
     kind: "eq",
     label: "Bass EQ 2",
+    description: "Equalizer designed for basses.",
     devices: BOTH_PEDALS,
     wire: [0x3a, 0x00, 0x00, 0x01],
     controls: [
@@ -258,6 +262,8 @@ export const EQ_MODELS: readonly FxModel[] = [
     id: "eq-mess-eq",
     kind: "eq",
     label: "Mess EQ",
+    description: "Based on the 5-band EQ module on Mesa/Boogie®* amps, can easily realize the classic boogie V-shaped sound.",
+    basedOn: "Mesa/Boogie®* 5-band EQ",
     devices: BOTH_PEDALS,
     wire: [0x3c, 0x00, 0x00, 0x01],
     controls: [
