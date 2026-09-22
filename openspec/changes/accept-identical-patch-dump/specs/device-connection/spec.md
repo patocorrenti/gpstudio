@@ -58,7 +58,7 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 
 ### Requirement: Connected session tracks whether the working patch is modified
 
-After a USB or Bluetooth session is ready, the connected snapshot MUST report whether the current working chain (module order, on/off, factory model, and control values) differs from a baseline kept for the selected patch. The session MUST capture that baseline from the current-preset dump that lands for a newly selected patch (connect, user recall, or pedal-initiated patch change) and MUST report not modified then. A dump that matches the chain already shown MUST still capture that baseline and MUST still report not modified. The session MUST recapture that baseline from the current working chain after a successful Save or rename of the current slot and MUST report not modified then.
+After a USB or Bluetooth session is ready, the connected snapshot MUST report whether the current working chain (module order, on/off, factory model, and control values) differs from a baseline kept for the selected patch. The session MUST capture that baseline from the current-preset dump that lands for a newly selected patch (connect, user recall, or pedal-initiated patch change) and MUST report not modified then. A dump that matches the chain already shown MUST still capture that baseline and MUST still report not modified. A user reload of the selected patch MUST re-request that patch's current-preset dump, MUST NOT send patch recall, MUST capture the baseline from the dump that lands, and MUST report not modified then. The session MUST recapture that baseline from the current working chain after a successful Save or rename of the current slot and MUST report not modified then.
 
 Any later working-chain change that still differs from the baseline (module on/off, reorder, model, control, Bluetooth live follow of those fields, or a successful upload whose dump does not match the baseline) MUST report modified. A later working-chain change that matches the baseline again MUST report not modified. Duplicate onto another slot MUST NOT recapture the current-slot baseline. A dump refresh that is not a newly selected patch (download, upload) MUST NOT recapture the baseline as the stored patch. While the current patch is syncing, or when no dump has been captured for the selected patch, the snapshot MUST report not modified. Changing patch MUST drop the baseline. Disconnect MUST drop that working state.
 
@@ -72,6 +72,14 @@ Any later working-chain change that still differs from the baseline (module on/o
 - **WHEN** the session is ready, the user selects another patch, and the dump for that patch decodes to the same chain already shown
 - **THEN** the snapshot reports not modified
 - **AND** a later edit that turns DST off reports modified
+
+#### Scenario: Reload of the selected patch starts clean
+
+- **WHEN** the session is ready on the selected patch and the user reloads that patch
+- **THEN** the session re-requests the current-preset dump
+- **AND** the snapshot reports not modified after that dump lands
+- **AND** the selected patch does not change
+- **AND** no patch recall is sent solely because reload ran
 
 #### Scenario: A working edit is modified
 

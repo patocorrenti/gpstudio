@@ -2,7 +2,7 @@
 
 ### Requirement: Patch changes refresh the audio chain
 
-After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. A dump whose chain equals the chain already shown MUST still count as that dump arriving. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
+After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. A dump whose chain equals the chain already shown MUST still count as that dump arriving. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Reload, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
 
 #### Scenario: User selects another patch
 
@@ -19,7 +19,7 @@ After initial sync, when the selected patch changes (user previous / select / ne
 #### Scenario: Patch bar waits for the new dump
 
 - **WHEN** the user selects another patch after sync and the new chain dump has not arrived yet
-- **THEN** previous, next, Save, rename, duplicate, download, and upload cannot be used
+- **THEN** previous, next, Reload, Save, rename, duplicate, download, and upload cannot be used
 - **AND** the 00–99 selector may still change patch
 
 #### Scenario: Chain refresh overlay clears
@@ -27,13 +27,13 @@ After initial sync, when the selected patch changes (user previous / select / ne
 - **WHEN** a chain dump for the newly selected patch arrives
 - **THEN** the busy overlay is hidden
 - **AND** Controller shows that dump's module order and on/off states
-- **AND** previous, next, Save, rename, duplicate, download, and upload are usable again
+- **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
 
 #### Scenario: Identical patch dump clears the overlay
 
 - **WHEN** the user selects another patch after sync and the dump for that patch has the same module order and on/off as the chain already shown
 - **THEN** the busy overlay is hidden
-- **AND** previous, next, Save, rename, duplicate, download, and upload are usable again
+- **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
 - **AND** Controller shows that chain
 
 #### Scenario: Pedal changes patch after sync
