@@ -859,16 +859,24 @@ export class DeviceSession {
     }
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
     const armConfirmation = this.patchConfirm === "after-apply";
+    // Bluetooth often gets a stale first dump; keep the busy overlay until confirm.
+    const holdBusyForConfirm =
+      armConfirmation && this.snapshot.linkMode === "bluetooth";
     const patch = this.snapshot.patch;
     const generation = this.syncGeneration;
     this.pendingPatchLoad = null;
-    this.clearChainRefreshTimer();
+    if (!holdBusyForConfirm) {
+      this.clearChainRefreshTimer();
+    }
     this.currentPatchDump = result.dump;
     if (this.captureBaselineFromDump) {
       this.baseline = cloneChain(chain);
       this.captureBaselineFromDump = false;
     }
-    this.setChain(chain, { chainSync: "idle", canExportPatch: true });
+    this.setChain(chain, {
+      chainSync: holdBusyForConfirm ? "syncing" : "idle",
+      canExportPatch: !holdBusyForConfirm,
+    });
     this.releaseWaiters(this.chainWaiters);
     if (
       armConfirmation &&
@@ -876,13 +884,19 @@ export class DeviceSession {
       this.snapshot.status === "connected" &&
       this.snapshot.patch === patch &&
       this.syncGeneration === generation &&
-      this.snapshot.chainSync === "idle"
+      this.snapshot.chainSync === (holdBusyForConfirm ? "syncing" : "idle")
     ) {
       this.requestPatchConfirmation();
+      if (holdBusyForConfirm) {
+        this.armChainRefreshTimer();
+      }
     }
   }
 
-  /** One current-preset request. Does not refresh, recall, or cover the chain. */
+  /**
+   * One current-preset request after a patch-change dump.
+   * USB: no overlay. Bluetooth: overlay stays until the confirmation dump arrives.
+   */
   private requestPatchConfirmation(): void {
     if (this.snapshot.status !== "connected") {
       this.patchConfirm = "off";
@@ -898,16 +912,22 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
+    const finishBusy = this.snapshot.chainSync === "syncing";
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
     if (
       chainSlotsEqual(chain, this.snapshot.chain) ||
       this.snapshot.modified ||
       this.pendingControlWrites.size > 0
     ) {
+      if (finishBusy) {
+        this.clearChainRefreshTimer();
+        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+      }
       return;
     }
     this.currentPatchDump = result.dump;
     this.baseline = cloneChain(chain);
+    this.clearChainRefreshTimer();
     this.setChain(chain, { chainSync: "idle", canExportPatch: true });
   }
 
@@ -1114,9 +1134,11 @@ export class DeviceSession {
         void this.dropLink();
         return;
       }
+      this.patchConfirm = "off";
       this.snapshot = {
         ...this.snapshot,
         chainSync: "idle",
+        canExportPatch: this.currentPatchDump !== null,
         modified: this.isWorkingModified(this.snapshot.chain, "idle"),
       };
       this.emitSnapshot();
