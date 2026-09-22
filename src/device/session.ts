@@ -34,6 +34,7 @@ import {
   encodeChainOrder,
   encodeChainRequest,
   encodeIdentity,
+  encodeIrNames,
   encodeModule,
   encodePatch,
   encodePatchBpm,
@@ -43,6 +44,12 @@ import {
   encodeSlotModel,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
+import {
+  emptyUserIrNames,
+  encodeIrNameDump,
+  IrNameDecoder,
+  USER_IR_COUNT,
+} from "@/device/ir-names";
 import {
   emptyPatchNames,
   IdentityDecoder,
@@ -116,6 +123,7 @@ export type SessionSnapshot =
       model: DeviceModel;
       patch: number;
       patchNames: (string | null)[];
+      userIrNames: (string | null)[];
       chain: AudioChain;
       chainSync: ChainSync;
       canExportPatch: boolean;
@@ -198,6 +206,7 @@ export class DeviceSession {
   private readonly logListeners = new Set<() => void>();
   private readonly identity = new IdentityDecoder();
   private readonly chainDump = new ChainDecoder();
+  private readonly irNames = new IrNameDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
   private namesWaiters = new Set<() => void>();
@@ -297,6 +306,7 @@ export class DeviceSession {
     this.inboundLog = EMPTY_INBOUND;
     this.identity.reset();
     this.chainDump.reset();
+    this.irNames.reset();
     this.sysex.reset();
     this.clearControlWrites();
     this.dropPatchDump();
@@ -309,6 +319,7 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        userIrNames: emptyUserIrNames(),
         chain: defaultChain(model),
         chainSync: "idle",
         canExportPatch: false,
@@ -324,6 +335,7 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        userIrNames: emptyUserIrNames(),
         chain: defaultChain(model),
         chainSync: "idle",
         canExportPatch: false,
@@ -350,6 +362,7 @@ export class DeviceSession {
       this.inboundLog = EMPTY_INBOUND;
       this.identity.reset();
       this.chainDump.reset();
+      this.irNames.reset();
       this.sysex.reset();
       this.dropPatchDump();
       this.dropping = false;
@@ -703,6 +716,7 @@ export class DeviceSession {
     this.captureBaselineFromDump = true;
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
+    await this.sendIrNameRequest(generation);
   }
 
   private finishSync(generation: number, chainSync: ChainSync = "idle"): void {
@@ -731,6 +745,14 @@ export class DeviceSession {
       return;
     }
     await this.sendBytes(encodeChainRequest(this.snapshot.linkMode));
+  }
+
+  /** Device-global IR names. Sent once per connect, after the current-preset ask, without a waiter. */
+  private async sendIrNameRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.sendBytes(encodeIrNames(this.snapshot.linkMode));
   }
 
   private async sendBytes(bytes: Uint8Array): Promise<void> {
@@ -779,6 +801,9 @@ export class DeviceSession {
         this.snapshot.status === "connected"
       ) {
         this.applyIdentity(this.identity.push(message));
+      }
+      if (this.snapshot.status === "connected") {
+        this.applyIrNames(this.irNames.push(message));
       }
       if (this.snapshot.status === "connected") {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
@@ -847,6 +872,14 @@ export class DeviceSession {
     this.chainDump.reset();
     this.beginChainRefresh();
     void this.sendChainRequest(this.syncGeneration);
+  }
+
+  private applyIrNames(names: (string | null)[] | null): void {
+    if (!names || this.snapshot.status !== "connected") {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, userIrNames: names };
+    this.emitSnapshot();
   }
 
   private applyChain(result: ChainDumpResult | null): void {
@@ -1569,5 +1602,247 @@ async function assertUploadRejectsWithoutMidi(): Promise<void> {
 }
 
 void assertUploadRejectsWithoutMidi();
+
+function scriptedBluetooth(): {
+  sent: Uint8Array[];
+  push: (bytes: Uint8Array) => void;
+  link: BluetoothLink;
+} {
+  const sent: Uint8Array[] = [];
+  let handler: ((bytes: Uint8Array) => void) | null = null;
+  let open = false;
+  return {
+    sent,
+    push(bytes) {
+      handler?.(bytes);
+    },
+    link: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes) => {
+        sent.push(Uint8Array.from(bytes));
+      },
+      subscribe: (next) => {
+        handler = next;
+        return () => {
+          if (handler === next) {
+            handler = null;
+          }
+        };
+      },
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      resetInbound: () => undefined,
+      close: async () => {
+        open = false;
+      },
+    },
+  };
+}
+
+function packetsEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isPatchRecall(bytes: Uint8Array): boolean {
+  const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
+  return midi[0] === 0xb0 && midi[1] === 0x00;
+}
+
+function bluetoothNameList(): Uint8Array {
+  const payload = new Uint8Array(4000);
+  const midi = new Uint8Array(10 + payload.length);
+  midi[0] = 0xf0;
+  midi[3] = 1;
+  midi[4] = 5;
+  midi.set(payload, 9);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
+function currentPatchZero(): Uint8Array {
+  const midi = new Uint8Array(16);
+  midi[0] = 0xf0;
+  midi[3] = 0;
+  midi[4] = 1;
+  midi[9] = 1;
+  midi[10] = 2;
+  midi[11] = 4;
+  midi[12] = 3;
+  midi[15] = 0xf7;
+  return midi;
+}
+
+function writeDumpNibbles(data: Uint8Array, start: number, packed: Uint8Array): void {
+  for (let index = 0; index < packed.length; index += 1) {
+    data[start + index * 2] = (packed[index] >> 4) & 0x0f;
+    data[start + index * 2 + 1] = packed[index] & 0x0f;
+  }
+}
+
+function gp50UsbChainWithCab(wire: Uint8Array, volume: number): Uint8Array[] {
+  const merged = new Uint8Array(27 * 38);
+  for (let slot = 0; slot < 10; slot += 1) {
+    merged[243 + slot * 2] = slot;
+  }
+  merged[226] |= 1;
+  writeDumpNibbles(merged, 302, wire);
+  const packed = new Uint8Array(4);
+  new DataView(packed.buffer).setFloat32(0, volume, true);
+  writeDumpNibbles(merged, 614, packed);
+  const packets: Uint8Array[] = [];
+  for (let index = 0; index < 27; index += 1) {
+    const midi = new Uint8Array(48);
+    midi[0] = 0xf0;
+    midi[3] = 1;
+    midi[4] = 11;
+    midi[5] = (index >> 4) & 0x0f;
+    midi[6] = index & 0x0f;
+    midi.set(merged.subarray(index * 38, (index + 1) * 38), 9);
+    midi[47] = 0xf7;
+    packets.push(midi);
+  }
+  return packets;
+}
+
+function liveCabUserIr(): Uint8Array {
+  const live = new Uint8Array(30);
+  live[0] = 0xf0;
+  live[3] = 0;
+  live[4] = 1;
+  live[8] = 0x0a;
+  live[9] = 1;
+  live[10] = 2;
+  live[11] = 4;
+  live[12] = 0x07;
+  live[14] = 4;
+  writeDumpNibbles(live, 21, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
+  live[29] = 0xf7;
+  return live;
+}
+
+function tick(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+async function untilReady(label: string, ready: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (ready()) {
+      return;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+  throw new Error(label);
+}
+
+async function assertUserIrSession(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  const irRequest = encodeIrNames("bluetooth");
+  const irCount = () => bluetooth.sent.filter((packet) => packetsEqual(packet, irRequest)).length;
+  try {
+    await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+    await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
+    await tick();
+    bluetooth.push(bluetoothNameList());
+    await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
+    await tick();
+    bluetooth.push(currentPatchZero());
+    await untilReady("Ready state waited for the IR-name dump", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready" && irCount() === 1;
+    });
+    const beforeNames = session.getSnapshot();
+    if (beforeNames.status !== "connected" || beforeNames.userIrNames.some((name) => name !== null)) {
+      throw new Error("IR names must stay empty until the dump arrives");
+    }
+    if (bluetooth.sent.some(isPatchRecall)) {
+      throw new Error("Connect must not send patch recall to load IR names");
+    }
+    const named = emptyUserIrNames();
+    named[2] = "Greenback 412";
+    const sentBeforeDump = bluetooth.sent.length;
+    for (const packet of encodeIrNameDump(named)) {
+      bluetooth.push(packet);
+    }
+    const namedSnapshot = session.getSnapshot();
+    if (
+      namedSnapshot.status !== "connected" ||
+      namedSnapshot.userIrNames[2] !== "Greenback 412" ||
+      namedSnapshot.userIrNames[6] !== null ||
+      namedSnapshot.userIrNames.length !== USER_IR_COUNT ||
+      namedSnapshot.sync !== "ready" ||
+      bluetooth.sent.length !== sentBeforeDump
+    ) {
+      throw new Error("IR-name dump must fill slot 03 without another request or patch recall");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      bluetooth.push(packet);
+    }
+    const afterChain = session.getSnapshot();
+    const cab = afterChain.status === "connected" ? afterChain.chain.find((slot) => slot.id === "cab") : undefined;
+    if (
+      afterChain.status !== "connected" ||
+      afterChain.userIrNames[2] !== "Greenback 412" ||
+      afterChain.chainSync !== "idle" ||
+      cab?.modelId !== "cab-twd-cp-1x8" ||
+      cab.values?.[0] !== 50
+    ) {
+      throw new Error("A later current-preset dump must not clear IR names");
+    }
+    bluetooth.push(liveCabUserIr());
+    const afterLive = session.getSnapshot();
+    const liveCab = afterLive.status === "connected" ? afterLive.chain.find((slot) => slot.id === "cab") : undefined;
+    if (liveCab?.modelId !== "cab-user-ir-03") {
+      throw new Error("Bluetooth live user IR notify must update CAB like a factory cab");
+    }
+    await session.setSlotModel("cab", "cab-twd-cp-1x8");
+    await session.setSlotModel("cab", "cab-user-ir-03");
+    const factorySet = encodeSlotModel("bluetooth", "cab", [0x01, 0x00, 0x00, 0x0a]);
+    const userSet = encodeSlotModel("bluetooth", "cab", [0x02, 0x00, 0x10, 0x0a]);
+    const last = bluetooth.sent[bluetooth.sent.length - 1];
+    const selected = session.getSnapshot();
+    const selectedCab = selected.status === "connected" ? selected.chain.find((slot) => slot.id === "cab") : undefined;
+    if (
+      !factorySet ||
+      !userSet ||
+      !last ||
+      factorySet[0].length !== userSet[0].length ||
+      userSet[0].length > 80 ||
+      !packetsEqual(last, userSet[0]) ||
+      selectedCab?.modelId !== "cab-user-ir-03" ||
+      irCount() !== 1
+    ) {
+      throw new Error("Selecting User IR 03 must send the existing model SET and no IR file");
+    }
+    await session.setPatch(1);
+    const afterPatch = session.getSnapshot();
+    if (irCount() !== 1 || afterPatch.status !== "connected" || afterPatch.userIrNames[2] !== "Greenback 412") {
+      throw new Error("A patch change must not re-request or clear IR names");
+    }
+  } finally {
+    await session.disconnect();
+  }
+  if (session.getSnapshot().status !== "disconnected") {
+    throw new Error("Disconnect must drop IR names");
+  }
+}
+
+void assertUserIrSession();
 
 

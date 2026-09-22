@@ -1,5 +1,31 @@
 import { BOTH_PEDALS } from "@/device/catalog/shared";
-import type { FxModel } from "@/device/catalog/types";
+import type { FxControl, FxModel, WireIdentity } from "@/device/catalog/types";
+
+const CAB_VOL: FxControl = {
+  index: 0,
+  label: "VOL",
+  min: 0,
+  max: 100,
+  step: 1,
+  default: 50,
+  display: "percent",
+};
+
+/** Twenty onboard cabinet IR slots. Byte 0 is the slot index; byte 2 is the user-IR marker. */
+const USER_IR_CAB_MODELS: readonly FxModel[] = Array.from({ length: 20 }, (_, index) => {
+  const slot = index + 1;
+  const nn = String(slot).padStart(2, "0");
+  const wire: WireIdentity = [index, 0x00, 0x10, 0x0a];
+  return {
+    id: `cab-user-ir-${nn}`,
+    kind: "cab",
+    label: `User IR ${nn}`,
+    devices: BOTH_PEDALS,
+    wire,
+    userIrSlot: slot,
+    controls: [CAB_VOL],
+  };
+});
 
 export const CAB_MODELS: readonly FxModel[] = [
   {
@@ -420,4 +446,5 @@ export const CAB_MODELS: readonly FxModel[] = [
       },
     ],
   },
+  ...USER_IR_CAB_MODELS,
 ];

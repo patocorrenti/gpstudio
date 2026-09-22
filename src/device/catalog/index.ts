@@ -67,6 +67,27 @@ const bellman = BY_ID.get("amp-bellman-59n");
 if (!tweedy || !bellman) {
   throw new Error("AMP catalog must include Tweedy and Bellman 59N");
 }
+const userIr3 = modelByWire("cab", [0x02, 0x00, 0x10, 0x0a]);
+const factoryCab = modelByWire("cab", [0x01, 0x00, 0x00, 0x0a]);
+const userIr20 = modelByWire("cab", [0x13, 0x00, 0x10, 0x0a]);
+if (
+  userIr3?.id !== "cab-user-ir-03" ||
+  userIr3.label !== "User IR 03" ||
+  userIr3.userIrSlot !== 3 ||
+  !userIr3.devices.has("gp5") ||
+  !userIr3.devices.has("gp50") ||
+  userIr3.controls[0]?.label !== "VOL" ||
+  userIr3.controls[0]?.max !== 100
+) {
+  throw new Error("CAB wire 02 00 10 0a must be User IR 03");
+}
+if (factoryCab?.id !== "cab-twd-cp-1x8") {
+  throw new Error("Factory CAB wires must still resolve");
+}
+if (userIr20?.id !== "cab-user-ir-20" || userIr20.userIrSlot !== 20) {
+  throw new Error("CAB wire 13 00 10 0a must be User IR 20");
+}
+
 if (
   tweedy.controls.length === bellman.controls.length &&
   tweedy.controls.every(
