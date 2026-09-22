@@ -317,9 +317,39 @@ After a USB or Bluetooth session is ready, toggling NS MUST update only NS's on/
 - **THEN** the snapshot shows AMP off and NS on
 - **AND** only AMP's official module CC is sent
 
+### Requirement: Connected session reads onboard IR names
+
+After a USB or Bluetooth session is marked connected, the device session SHALL request the pedal's IR-name dump on the open link. That request MUST NOT block session readiness, MUST NOT wait to finish identity or chain sync, and MUST NOT send patch recall solely to obtain IR names. Reload and a newly selected patch MUST NOT re-request the IR-name dump solely because the patch changed.
+
+When the dump is decoded, the connected snapshot MUST carry up to twenty onboard IR names (one per user IR CAB slot). A missing dump, a timeout, or a blank slot name MUST leave that slot unnamed and MUST NOT invent a name that is written to the pedal. IR names are device-global: a later current-preset dump MUST NOT clear them. Disconnect MUST drop IR names. The same request MUST be used on USB and Bluetooth. UI MUST NOT send raw MIDI.
+
+#### Scenario: IR names load after connect
+- **WHEN** a session becomes connected and the IR-name dump loads `Greenback 412` for user IR slot 03
+- **THEN** the snapshot name for that slot is `Greenback 412`
+- **AND** no patch recall is sent solely because that dump arrived
+
+#### Scenario: Missing IR dump does not invent names
+- **WHEN** a session becomes ready without an IR-name dump
+- **THEN** user IR slots have no dumped names
+- **AND** the session does not send an IR write solely because names were missing
+
+#### Scenario: Readiness does not wait for IR names
+- **WHEN** a session has received patch identity and the IR-name dump has not arrived yet
+- **THEN** the session is still allowed to become ready
+- **AND** no patch recall is sent solely to wait for IR names
+
+#### Scenario: Patch change does not re-request IR names
+- **WHEN** a ready session selects another patch
+- **THEN** the session does not re-request the IR-name dump solely because the patch changed
+- **AND** already loaded IR names stay on the snapshot
+
+#### Scenario: Disconnect drops IR names
+- **WHEN** the user disconnects after IR names were loaded
+- **THEN** the session no longer carries those IR names
+
 ### Requirement: Connected session applies slot models and control values
 
-After a USB or Bluetooth session is ready, the connected snapshot MUST carry each effect slot's loaded factory model and control values when those fields are decoded from the same current-preset dump already used for chain order and on/off. GP-5 and GP-50 MUST only expose factory models that exist on that pedal. EXP MUST NOT carry a model or control values. If a dump is missing, a slot's wire identity is unknown, or a control value cannot be decoded, the session MUST leave that slot's model and values unknown and MUST NOT invent values that are written to the pedal.
+After a USB or Bluetooth session is ready, the connected snapshot MUST carry each effect slot's loaded catalog model and control values when those fields are decoded from the same current-preset dump already used for chain order and on/off. GP-5 and GP-50 MUST only expose catalog models that exist on that pedal. The CAB catalog MUST include the twenty onboard user IR slots. EXP MUST NOT carry a model or control values. If a dump is missing, a slot's wire identity is unknown, or a control value cannot be decoded, the session MUST leave that slot's model and values unknown and MUST NOT invent values that are written to the pedal.
 
 Live module on/off reports and live chain-order reports MUST preserve each slot's last known model and control values. When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live model notifies MUST update that slot's model and load catalog default values, and inbound live control notifies MUST update that slot's matching control value. USB MUST NOT apply those inbound reports to the snapshot. A later current-preset dump MUST replace model and values for slots it decodes. Disconnect MUST drop model and value state.
 
@@ -327,6 +357,12 @@ Live module on/off reports and live chain-order reports MUST preserve each slot'
 - **WHEN** a GP-50 session is ready and the current-preset dump loads Tweedy on AMP with Gain at 30
 - **THEN** the snapshot AMP slot's model is Tweedy
 - **AND** AMP Gain is 30
+
+#### Scenario: Dump loads a user IR CAB slot
+- **WHEN** a session is ready and the current-preset dump loads User IR 03 on CAB with VOL at 50
+- **THEN** the snapshot CAB slot's model is User IR 03
+- **AND** CAB VOL is 50
+- **AND** that CAB model can be written
 
 #### Scenario: Missing dump does not invent values
 - **WHEN** a session becomes ready without a current-preset dump
@@ -365,9 +401,13 @@ Live module on/off reports and live chain-order reports MUST preserve each slot'
 - **THEN** the snapshot AMP model is Bellman 59N
 - **AND** AMP's controls are Bellman 59N's catalog controls
 
+#### Scenario: Bluetooth live CAB user IR follows the pedal
+- **WHEN** a Bluetooth session is showing CAB on a factory cab and the pedal reports User IR 03 on CAB
+- **THEN** the snapshot CAB model is User IR 03
+
 ### Requirement: Connected session writes slot model and control changes
 
-After a USB or Bluetooth session is ready, changing an effect slot's loaded model MUST update the snapshot on-change, MUST load that model's catalog controls, and MUST send a model write for the current patch through the open link. Changing a known control value MUST update the snapshot on-change. Slider drags MUST coalesce control writes (throttle, flush on release) so Bluetooth is not flooded with one SET per intermediate value. Toggles MUST send on-change. Both writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because a model or control changed. Model and control writes MUST NOT change slot order or on/off by themselves. The session MUST NOT write a model that is not in the factory catalog for that slot kind and connected pedal. The session MUST NOT write a control when that slot's model and values are unknown. GP-5 MUST NOT expose EXP model or control writes. When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live model and live control reports MUST update the snapshot without sending a SET, recall, or dump. USB MUST NOT apply unsolicited inbound parameter reports to the snapshot. Disconnect MUST drop that state.
+After a USB or Bluetooth session is ready, changing an effect slot's loaded model MUST update the snapshot on-change, MUST load that model's catalog controls, and MUST send a model write for the current patch through the open link. Changing a known control value MUST update the snapshot on-change. Slider drags MUST coalesce control writes (throttle, flush on release) so Bluetooth is not flooded with one SET per intermediate value. Toggles MUST send on-change. Both writes MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live notify path `01 02 04`. The session MUST NOT send extra patch recall or an audio-chain dump solely because a model or control changed. Model and control writes MUST NOT change slot order or on/off by themselves. The session MUST NOT write a model that is not in the catalog for that slot kind and connected pedal. User IR CAB slots that are in that catalog MUST be writable the same way as factory CAB models. The session MUST NOT write a control when that slot's model and values are unknown. GP-5 MUST NOT expose EXP model or control writes. When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live model and live control reports MUST update the snapshot without sending a SET, recall, or dump. USB MUST NOT apply unsolicited inbound parameter reports to the snapshot. Disconnect MUST drop that state.
 
 #### Scenario: USB AMP Gain write
 - **WHEN** a USB session is ready with AMP on Tweedy and Gain at 30 and the user sets Gain to 45
@@ -389,6 +429,13 @@ After a USB or Bluetooth session is ready, changing an effect slot's loaded mode
 - **AND** a model write is sent on the Bluetooth link
 - **AND** no patch recall or chain dump is sent solely because the model changed
 - **AND** AMP on/off does not change from that write alone
+
+#### Scenario: USB user IR CAB model write
+- **WHEN** a USB session is ready with CAB on a factory cab and the user selects User IR 03
+- **THEN** the snapshot CAB model is User IR 03
+- **AND** a model write is sent on the USB link
+- **AND** no patch recall or chain dump is sent solely because the model changed
+- **AND** no IR file is uploaded solely because that slot was selected
 
 #### Scenario: Unknown slot cannot be written
 - **WHEN** a session is ready without AMP model and values and the user would change AMP Gain
