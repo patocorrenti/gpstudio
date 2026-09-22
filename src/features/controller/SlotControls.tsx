@@ -11,13 +11,6 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   modelById,
   modelsForKind,
   type FxControl,
@@ -33,6 +26,7 @@ import {
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
+import { ModelSelect } from "@/features/controller/ModelSelect";
 
 function formatControlValue(control: FxControl, value: number): string {
   if (control.display === "toggle") {
@@ -144,28 +138,15 @@ function SlotControlPanel({
         </h2>
         <div className="flex min-w-0 flex-1 items-center gap-0.5">
           {options.length > 1 ? (
-            <Select
+            <ModelSelect
               value={model.id}
+              options={options}
               disabled={disabled}
+              ariaLabel={`${kindLabel} model`}
               onValueChange={(value) => {
                 void session.setSlotModel(slot.id, value);
               }}
-            >
-              <SelectTrigger
-                aria-label={`${kindLabel} model`}
-                size="sm"
-                className="h-8 w-full min-w-52 flex-1"
-              >
-                <SelectValue>{model.label}</SelectValue>
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {options.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           ) : (
             <p className="min-w-0 flex-1 text-right text-sm text-muted-foreground">
               {model.label}

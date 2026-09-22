@@ -232,7 +232,7 @@ export function PatchSelect({
                   role="option"
                   aria-selected={selected}
                   ref={active ? activeRef : undefined}
-                  className={`relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1.5 pr-8 pl-1.5 text-left text-sm font-medium tabular-nums outline-hidden select-none ${
+                  className={`relative flex w-full cursor-default items-center gap-1.5 py-1.5 pr-8 pl-1.5 text-left text-sm font-medium tabular-nums outline-hidden select-none ${
                     active
                       ? "bg-accent text-accent-foreground"
                       : "hover:bg-accent hover:text-accent-foreground"

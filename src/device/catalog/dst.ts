@@ -110,7 +110,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "SM Dist",
     description: "It is based on a classic orange three-knob distortion effector, which can be used to easily get the timbre characteristics of the 70s-80s.",
-    basedOn: "classic orange three-knob distortion effector",
+    basedOn: "Classic orange three-knob distortion effector",
     devices: BOTH_PEDALS,
     wire: [0x2a, 0x00, 0x00, 0x03],
     controls: [
