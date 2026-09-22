@@ -264,7 +264,7 @@ After initial sync, when the session is on Bluetooth and the pedal reports a cha
 
 ### Requirement: Patch changes refresh the audio chain
 
-After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Reload, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
+After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. A dump whose chain equals the chain already shown MUST still count as that dump arriving. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Reload, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. A confirmation dump after that first dump MUST NOT cover the patch controls again. A confirmation that matches the chain already shown MUST leave that chain on screen. A confirmation that differs MUST update the chain when the user has not edited the working patch, and MUST leave an edited chain on screen. The same chain MUST be used on USB and Bluetooth.
 
 #### Scenario: User selects another patch
 - **WHEN** the user selects patch `42` after sync and a chain dump for that patch arrives
@@ -286,6 +286,27 @@ After initial sync, when the selected patch changes (user previous / select / ne
 - **THEN** the busy overlay is hidden
 - **AND** Controller shows that dump's module order and on/off states
 - **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
+
+#### Scenario: Identical patch dump clears the overlay
+- **WHEN** the user selects another patch after sync and the dump for that patch has the same module order and on/off as the chain already shown
+- **THEN** the busy overlay is hidden
+- **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
+- **AND** Controller shows that chain
+
+#### Scenario: Matching confirmation leaves the chain
+- **WHEN** the newly selected patch's dump is already shown and a confirmation dump matches that chain
+- **THEN** Controller keeps that chain
+- **AND** the busy overlay stays hidden
+
+#### Scenario: Mismatched confirmation updates the chain
+- **WHEN** the newly selected patch's dump is already shown, the user has not edited it, and a confirmation dump has different module order or on/off
+- **THEN** Controller shows the confirmation's chain
+- **AND** the busy overlay stays hidden
+
+#### Scenario: An edit is kept when a confirmation arrives
+- **WHEN** the newly selected patch's dump is already shown, the user turns DST off, and a confirmation dump then arrives
+- **THEN** Controller keeps DST off
+- **AND** the busy overlay stays hidden
 
 #### Scenario: Pedal changes patch after sync
 - **WHEN** the pedal reports it moved to patch `17` after sync and a chain dump for that patch arrives
@@ -541,6 +562,11 @@ After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be u
 #### Scenario: Changing patch disables Save
 - **WHEN** Save is usable and the user selects another patch
 - **THEN** Save cannot be used for the newly selected patch after that patch's dump lands
+
+#### Scenario: Identical patch dump keeps Save disabled until an edit
+- **WHEN** the user selects another patch after sync, that patch's dump matches the chain already shown, and the user has not changed the working chain
+- **THEN** Save cannot be used
+- **AND** after the user turns DST off, Save can be used
 
 #### Scenario: Disconnect hides Save
 - **WHEN** Save is usable and the user disconnects
