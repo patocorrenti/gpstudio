@@ -1,3 +1,13 @@
+import { Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -123,7 +133,7 @@ function SlotControlPanel({
       className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
       aria-label={`${kindLabel} controls`}
     >
-      <div className="flex items-center gap-3 pb-2">
+      <div className="flex items-center gap-3 -mr-2 pb-2">
         <h2 className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-semibold tracking-wide">
           <img
             src={CHAIN_SLOT_ICONS[slot.id]}
@@ -132,34 +142,59 @@ function SlotControlPanel({
           />
           {kindLabel}
         </h2>
-        {options.length > 1 ? (
-          <Select
-            value={model.id}
-            disabled={disabled}
-            onValueChange={(value) => {
-              void session.setSlotModel(slot.id, value);
-            }}
-          >
-            <SelectTrigger
-              aria-label={`${kindLabel} model`}
-              size="sm"
-              className="h-8 w-full min-w-52 flex-1"
+        <div className="flex min-w-0 flex-1 items-center gap-0.5">
+          {options.length > 1 ? (
+            <Select
+              value={model.id}
+              disabled={disabled}
+              onValueChange={(value) => {
+                void session.setSlotModel(slot.id, value);
+              }}
             >
-              <SelectValue>{model.label}</SelectValue>
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {options.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <p className="min-w-0 flex-1 text-right text-sm text-muted-foreground">
-            {model.label}
-          </p>
-        )}
+              <SelectTrigger
+                aria-label={`${kindLabel} model`}
+                size="sm"
+                className="h-8 w-full min-w-52 flex-1"
+              >
+                <SelectValue>{model.label}</SelectValue>
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="min-w-0 flex-1 text-right text-sm text-muted-foreground">
+              {model.label}
+            </p>
+          )}
+          {model.description ? (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`About ${model.label}`}
+                  className="shrink-0 text-muted-foreground"
+                >
+                  <Info />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{model.label}</DialogTitle>
+                  <DialogDescription className="text-left">
+                    {model.description}
+                  </DialogDescription>
+                </DialogHeader>
+              </DialogContent>
+            </Dialog>
+          ) : null}
+        </div>
       </div>
       <div className="flex flex-col gap-3">
         {model.controls.map((control) => (
