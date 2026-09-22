@@ -127,7 +127,7 @@ While a session is connected over Bluetooth and initial patch identity sync has 
 
 ### Requirement: Connected session syncs the current audio chain
 
-After a USB or Bluetooth session is marked connected, the device session SHALL request the current patch's audio-chain dump on the open link after patch identity (names and current index) or when that identity step times out. The connected snapshot MUST carry the current chain (module order and on/off) when a dump is decoded. If the dump times out or SysEx is unavailable, the session MUST still become ready after patch identity and MUST NOT send patch recall solely because the dump was missing. The chain request MAY continue in the background after the session is ready. After the session is ready, choosing a patch or a pedal-initiated patch report MUST refresh the chain for that patch without sending extra patch recall solely to obtain the dump. Disconnect MUST drop chain state.
+After a USB or Bluetooth session is marked connected, the device session SHALL request the current patch's audio-chain dump on the open link after patch identity (names and current index) or when that identity step times out. The connected snapshot MUST carry the current chain (module order and on/off) when a dump is decoded. If the dump times out or SysEx is unavailable, the session MUST still become ready after patch identity and MUST NOT send patch recall solely because the dump was missing. The chain request MAY continue in the background after the session is ready. After the session is ready, choosing a patch or a pedal-initiated patch report MUST refresh the chain for that patch without sending extra patch recall solely to obtain the dump. A decoded dump for that newly selected patch MUST be applied even when its chain equals the chain already shown. The session MUST NOT discard that dump because of that equality. Applying it MUST end the refresh: the snapshot carries that chain, the dump is held for download, and the patch is no longer syncing. After that patch-change dump is applied, the session MUST request one confirmation dump of the current patch and MUST NOT send patch recall for it. The confirmation MUST NOT mark the patch syncing. A confirmation that decodes to the same chain already shown MUST be discarded and MUST leave the shown chain and the held dump unchanged. A confirmation that decodes to a different chain MUST replace the shown chain and the held dump when the working patch is not modified, and MUST NOT request another confirmation. A confirmation that arrives after the user has edited the working patch MUST be discarded. Connect, Reload, download, and upload MUST NOT start a confirmation. Disconnect MUST drop chain state.
 
 #### Scenario: USB connect requests the chain
 - **WHEN** a USB session becomes connected and SysEx is available
@@ -149,6 +149,42 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 - **THEN** that patch is sent through the device session
 - **AND** the session requests or applies a chain dump for the new patch
 - **AND** no extra patch recall is sent solely to obtain that dump
+
+#### Scenario: Identical patch dump is applied
+- **WHEN** the session is ready, the user selects another patch, and the dump for that patch decodes to the same chain already shown
+- **THEN** the session applies that dump
+- **AND** the current patch is no longer syncing
+- **AND** download can use that dump
+- **AND** no extra patch recall is sent solely to obtain that dump
+
+#### Scenario: Matching confirmation is discarded
+- **WHEN** a user or pedal patch change has applied its dump and the confirmation dump decodes to the same chain already shown
+- **THEN** the shown chain stays as it is
+- **AND** the patch stays out of syncing
+- **AND** no further confirmation dump is requested
+- **AND** no patch recall is sent solely because that confirmation arrived
+
+#### Scenario: Mismatched confirmation replaces the chain
+- **WHEN** a user or pedal patch change has applied its dump, the working patch is not modified, and the confirmation dump decodes to a different chain
+- **THEN** the snapshot shows that confirmation's chain
+- **AND** download uses that confirmation dump
+- **AND** the patch stays out of syncing
+- **AND** no further confirmation dump is requested
+
+#### Scenario: An edit keeps the chain ahead of a confirmation
+- **WHEN** a user or pedal patch change has applied its dump, the user edits the working chain, and a confirmation dump then arrives
+- **THEN** the edited chain stays on screen
+- **AND** no patch recall is sent solely because that confirmation arrived
+
+#### Scenario: Reload does not start a confirmation
+- **WHEN** the user reloads the selected patch and that reload dump is applied
+- **THEN** no confirmation dump is requested solely because Reload ran
+
+#### Scenario: Pedal identical patch dump is applied
+- **WHEN** the session is ready, the pedal reports a new current patch, and the dump for that patch decodes to the same chain already shown
+- **THEN** the session applies that dump
+- **AND** the current patch is no longer syncing
+- **AND** no patch recall is sent solely because that inbound report arrived
 
 #### Scenario: Pedal patch change refreshes the chain
 - **WHEN** the session is ready and the pedal reports a new current patch
@@ -447,13 +483,35 @@ Upload MUST apply a Valeton `.prst` of the connected pedal onto the current work
 
 ### Requirement: Connected session tracks whether the working patch is modified
 
-After a USB or Bluetooth session is ready, the connected snapshot MUST report whether the current working chain (module order, on/off, factory model, and control values) differs from a baseline kept for the selected patch. The session MUST capture that baseline from the current-preset dump that lands for a newly selected patch (connect, user recall, or pedal-initiated patch change) and MUST report not modified then. The session MUST recapture that baseline from the current working chain after a successful Save or rename of the current slot and MUST report not modified then.
+After a USB or Bluetooth session is ready, the connected snapshot MUST report whether the current working chain (module order, on/off, factory model, and control values) differs from a baseline kept for the selected patch. The session MUST capture that baseline from the current-preset dump that lands for a newly selected patch (connect, user recall, or pedal-initiated patch change) and MUST report not modified then. A dump that matches the chain already shown MUST still capture that baseline and MUST still report not modified. A matching confirmation dump MUST NOT recapture the baseline and MUST leave modified unchanged. A mismatched confirmation that replaces the chain MUST recapture the baseline and MUST report not modified. A confirmation discarded because the user already edited MUST leave modified as it was. A user reload of the selected patch MUST re-request that patch's current-preset dump, MUST NOT send patch recall, MUST capture the baseline from the dump that lands, and MUST report not modified then. The session MUST recapture that baseline from the current working chain after a successful Save or rename of the current slot and MUST report not modified then.
 
 Any later working-chain change that still differs from the baseline (module on/off, reorder, model, control, Bluetooth live follow of those fields, or a successful upload whose dump does not match the baseline) MUST report modified. A later working-chain change that matches the baseline again MUST report not modified. Duplicate onto another slot MUST NOT recapture the current-slot baseline. A dump refresh that is not a newly selected patch (download, upload) MUST NOT recapture the baseline as the stored patch. While the current patch is syncing, or when no dump has been captured for the selected patch, the snapshot MUST report not modified. Changing patch MUST drop the baseline. Disconnect MUST drop that working state.
 
 #### Scenario: Dump of the selected patch starts clean
 - **WHEN** a USB or Bluetooth session is ready and a current-preset dump for the selected patch is decoded
 - **THEN** the snapshot reports not modified
+
+#### Scenario: Identical patch dump starts clean
+- **WHEN** the session is ready, the user selects another patch, and the dump for that patch decodes to the same chain already shown
+- **THEN** the snapshot reports not modified
+- **AND** a later edit that turns DST off reports modified
+
+#### Scenario: Matching confirmation leaves modified unchanged
+- **WHEN** a patch-change dump has been applied and a confirmation dump matches that chain
+- **THEN** the snapshot reports not modified
+- **AND** the baseline stays the chain from the patch-change dump
+
+#### Scenario: Mismatched confirmation starts clean
+- **WHEN** a patch-change dump has been applied, the working patch is not modified, and a confirmation dump has a different chain
+- **THEN** the snapshot reports not modified
+- **AND** the baseline is that confirmation's chain
+
+#### Scenario: Reload of the selected patch starts clean
+- **WHEN** the session is ready on the selected patch and the user reloads that patch
+- **THEN** the session re-requests the current-preset dump
+- **AND** the snapshot reports not modified after that dump lands
+- **AND** the selected patch does not change
+- **AND** no patch recall is sent solely because reload ran
 
 #### Scenario: A working edit is modified
 - **WHEN** the snapshot has a baseline from that dump and the user turns DST off

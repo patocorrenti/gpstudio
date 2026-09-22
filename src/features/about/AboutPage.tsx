@@ -61,6 +61,12 @@ export function AboutPage() {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Changelog</h2>
         <h3 className="text-sm font-medium text-muted-foreground">
+          <span className="text-foreground font-mono">Version 0.1.1</span>
+        </h3>
+        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+          <li>Faster and more stable connection to the pedal</li>
+        </ul>
+        <h3 className="text-sm font-medium text-muted-foreground">
           <span className="text-foreground font-mono">Version 0.1.0</span>
         </h3>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
