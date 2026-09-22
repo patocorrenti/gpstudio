@@ -8,7 +8,7 @@ Shows Controller as the live home: an empty state with no pedal, a loading state
 
 ### Requirement: Disconnected Controller shows an empty state
 
-When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Save, rename, duplicate, download, upload, a syncing state, or an audio chain.
+When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Reload, Save, rename, duplicate, download, upload, a syncing state, or an audio chain.
 
 #### Scenario: Open Controller with no pedal
 - **WHEN** the user opens Controller while disconnected
@@ -48,13 +48,19 @@ After a pedal session becomes connected, Controller SHALL show an English loadin
 
 ### Requirement: Connected Controller selects patches 00-99 after sync
 
-Once initial sync completes or times out, Controller SHALL show a patch bar: previous, the current patch as a two-digit selectable label (`00`–`99`), next, and English controls to Save, rename, duplicate, download, and upload the current patch. The label MUST show the pedal's current patch when that index was received. If the index was not received, the label MUST stay at `00` and MUST NOT send patch `00` solely because sync ended. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session using official CC 0 (value 0–99). Previous from `00` MUST wrap to `99`. Next from `99` MUST wrap to `00`. Save, rename, duplicate, download, and upload MUST go through the device session and MUST NOT send raw MIDI from React. Disconnecting MUST hide the patch bar and return to the empty state. Controller MUST NOT send raw MIDI.
+Once initial sync completes or times out, Controller SHALL show a patch bar: previous, the current patch as a two-digit selectable label (`00`–`99`), next, Reload, and English controls to Save, rename, duplicate, download, and upload the current patch. Reload MUST sit immediately left of Save. It MUST be an icon-only control with an English tooltip. Activating Reload MUST re-request the current patch's preset dump through the device session, MUST NOT change the selected patch, and MUST NOT send patch recall. The label MUST show the pedal's current patch when that index was received. If the index was not received, the label MUST stay at `00` and MUST NOT send patch `00` solely because sync ended. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session using official CC 0 (value 0–99). Previous from `00` MUST wrap to `99`. Next from `99` MUST wrap to `00`. Save, rename, duplicate, download, and upload MUST go through the device session and MUST NOT send raw MIDI from React. Disconnecting MUST hide the patch bar and return to the empty state. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Patch bar appears with the pedal's patch
 - **WHEN** initial sync receives that the pedal is on patch `42`
-- **THEN** Controller shows previous, the current patch label, next, Save, rename, duplicate, download, and upload
+- **THEN** Controller shows previous, the current patch label, next, Reload, Save, rename, duplicate, download, and upload
 - **AND** the label reads `42`
 - **AND** no patch recall is sent solely because sync completed
+
+#### Scenario: Reload requests the current patch again
+- **WHEN** the session is ready, the current patch is synced on slot `42`, and the user activates Reload
+- **THEN** the session re-requests the current-preset dump for that patch
+- **AND** the selected patch stays `42`
+- **AND** no patch recall is sent solely because Reload ran
 
 #### Scenario: Sync times out without a current patch
 - **WHEN** initial sync ends without a current patch index
@@ -258,7 +264,7 @@ After initial sync, when the session is on Bluetooth and the pedal reports a cha
 
 ### Requirement: Patch changes refresh the audio chain
 
-After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. The same chain MUST be used on USB and Bluetooth.
+After initial sync, when the selected patch changes (user previous / select / next, or a pedal-initiated patch report), Controller MUST update the chain through the device session when a dump for that patch arrives. A dump whose chain equals the chain already shown MUST still count as that dump arriving. Controller MUST NOT send patch recall solely to obtain that dump. While that refresh is in progress, Controller MUST cover every patch control below the patch bar with an English busy overlay so those controls cannot be used. Previous, next, Reload, Save, rename, duplicate, download, and upload MUST NOT be usable until that dump arrives or the refresh times out. The 00–99 selector MAY stay usable. A confirmation dump after that first dump MUST NOT cover the patch controls again. A confirmation that matches the chain already shown MUST leave that chain on screen. A confirmation that differs MUST update the chain when the user has not edited the working patch, and MUST leave an edited chain on screen. The same chain MUST be used on USB and Bluetooth.
 
 #### Scenario: User selects another patch
 - **WHEN** the user selects patch `42` after sync and a chain dump for that patch arrives
@@ -272,14 +278,35 @@ After initial sync, when the selected patch changes (user previous / select / ne
 
 #### Scenario: Patch bar waits for the new dump
 - **WHEN** the user selects another patch after sync and the new chain dump has not arrived yet
-- **THEN** previous, next, Save, rename, duplicate, download, and upload cannot be used
+- **THEN** previous, next, Reload, Save, rename, duplicate, download, and upload cannot be used
 - **AND** the 00–99 selector may still change patch
 
 #### Scenario: Chain refresh overlay clears
 - **WHEN** a chain dump for the newly selected patch arrives
 - **THEN** the busy overlay is hidden
 - **AND** Controller shows that dump's module order and on/off states
-- **AND** previous, next, Save, rename, duplicate, download, and upload are usable again
+- **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
+
+#### Scenario: Identical patch dump clears the overlay
+- **WHEN** the user selects another patch after sync and the dump for that patch has the same module order and on/off as the chain already shown
+- **THEN** the busy overlay is hidden
+- **AND** previous, next, Reload, Save, rename, duplicate, download, and upload are usable again
+- **AND** Controller shows that chain
+
+#### Scenario: Matching confirmation leaves the chain
+- **WHEN** the newly selected patch's dump is already shown and a confirmation dump matches that chain
+- **THEN** Controller keeps that chain
+- **AND** the busy overlay stays hidden
+
+#### Scenario: Mismatched confirmation updates the chain
+- **WHEN** the newly selected patch's dump is already shown, the user has not edited it, and a confirmation dump has different module order or on/off
+- **THEN** Controller shows the confirmation's chain
+- **AND** the busy overlay stays hidden
+
+#### Scenario: An edit is kept when a confirmation arrives
+- **WHEN** the newly selected patch's dump is already shown, the user turns DST off, and a confirmation dump then arrives
+- **THEN** Controller keeps DST off
+- **AND** the busy overlay stays hidden
 
 #### Scenario: Pedal changes patch after sync
 - **WHEN** the pedal reports it moved to patch `17` after sync and a chain dump for that patch arrives
@@ -409,7 +436,7 @@ Save MUST store the current working patch on the pedal in the current slot. Rena
 
 Upload MUST let the user pick a `.prst` from the PC. After a file is chosen, Controller MUST ask the user to confirm that this will load into the current working patch. Cancel MUST NOT apply the file and MUST NOT send MIDI. Confirm MUST apply that file onto the currently selected patch through the device session and MUST NOT store it on the pedal. Save remains the control that stores the working patch. Upload MUST NOT change which patch is selected. Upload MUST NOT convert a GP-5 file for a GP-50 session or the reverse. A file whose model does not match the connected pedal, or that is not a valid Valeton `.prst`, MUST produce an English error and MUST NOT be applied. The slot number in the filename MUST be ignored. Controller MUST NOT send raw MIDI.
 
-While the current patch is syncing, Save, rename, duplicate, download, upload, previous, and next MUST NOT be usable. Disconnecting MUST hide those controls with the patch bar.
+While the current patch is syncing, Reload, Save, rename, duplicate, download, upload, previous, and next MUST NOT be usable. Disconnecting MUST hide those controls with the patch bar.
 
 #### Scenario: User saves the current patch
 - **WHEN** the session is ready, the current patch is synced, and the user activates Save
@@ -485,7 +512,7 @@ While the current patch is syncing, Save, rename, duplicate, download, upload, p
 
 #### Scenario: Busy patch bar blocks store actions
 - **WHEN** the user has selected another patch after sync and the new chain dump has not arrived yet
-- **THEN** Save, rename, duplicate, download, and upload cannot be used
+- **THEN** Reload, Save, rename, duplicate, download, and upload cannot be used
 - **AND** previous and next cannot be used
 
 #### Scenario: USB and Bluetooth share the patch bar actions
@@ -535,6 +562,11 @@ After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be u
 #### Scenario: Changing patch disables Save
 - **WHEN** Save is usable and the user selects another patch
 - **THEN** Save cannot be used for the newly selected patch after that patch's dump lands
+
+#### Scenario: Identical patch dump keeps Save disabled until an edit
+- **WHEN** the user selects another patch after sync, that patch's dump matches the chain already shown, and the user has not changed the working chain
+- **THEN** Save cannot be used
+- **AND** after the user turns DST off, Save can be used
 
 #### Scenario: Disconnect hides Save
 - **WHEN** Save is usable and the user disconnects

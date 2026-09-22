@@ -206,12 +206,16 @@ export class DeviceSession {
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
-  /** While true, a dump that matches the already-shown chain is the previous patch. */
-  private ignoreStaleChainDump = false;
   /** Last loaded or stored working chain for the selected patch. */
   private baseline: AudioChain | null = null;
   /** Next current-preset dump of a newly selected patch becomes the baseline. */
   private captureBaselineFromDump = false;
+  /**
+   * Quiet second current-preset request after a user or pedal patch change.
+   * Connect, Reload, download, and upload leave this off. A match is discarded;
+   * a mismatch is applied once and does not arm another request.
+   */
+  private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
   private dropping = false;
   private readonly pendingControlWrites = new Map<
     string,
@@ -367,13 +371,26 @@ export class DeviceSession {
     }
     this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
-    this.ignoreStaleChainDump = true;
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
     this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
     this.emitSnapshot();
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
+    this.refreshChain(true, true);
+  }
+
+  /** Re-request the current patch dump. Does not send patch recall. */
+  reloadCurrentPatch(): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      return;
+    }
     this.refreshChain(true);
   }
 
@@ -423,6 +440,7 @@ export class DeviceSession {
       return null;
     }
     const generation = this.syncGeneration;
+    this.patchConfirm = "off";
     this.captureBaselineFromDump = false;
     this.clearControlWrites();
     this.chainDump.reset();
@@ -473,6 +491,7 @@ export class DeviceSession {
       return { ok: false, reason: "invalid" };
     }
     const previousExport = this.snapshot.canExportPatch;
+    this.patchConfirm = "off";
     this.snapshot = {
       ...this.snapshot,
       chainSync: "syncing",
@@ -694,6 +713,7 @@ export class DeviceSession {
     }
 
     this.chainDump.reset();
+    this.patchConfirm = "off";
     this.captureBaselineFromDump = true;
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
@@ -820,8 +840,7 @@ export class DeviceSession {
       if (changed) {
         this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
-        this.ignoreStaleChainDump = true;
-        this.refreshChain(true);
+        this.refreshChain(true, true);
       }
       return;
     }
@@ -832,10 +851,11 @@ export class DeviceSession {
     }
   }
 
-  private refreshChain(captureBaseline = false): void {
+  private refreshChain(captureBaseline = false, confirmPatch = false): void {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
+    this.patchConfirm = confirmPatch ? "after-apply" : "off";
     this.captureBaselineFromDump = captureBaseline;
     this.clearControlWrites();
     this.chainDump.reset();
@@ -847,11 +867,14 @@ export class DeviceSession {
     if (!result || this.snapshot.status !== "connected") {
       return;
     }
-    const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
-    if (this.ignoreStaleChainDump && chainSlotsEqual(this.snapshot.chain, chain)) {
+    if (this.patchConfirm === "in-flight") {
+      this.applyPatchConfirmation(result);
       return;
     }
-    this.ignoreStaleChainDump = false;
+    const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
+    const armConfirmation = this.patchConfirm === "after-apply";
+    const patch = this.snapshot.patch;
+    const generation = this.syncGeneration;
     this.pendingPatchLoad = null;
     this.clearChainRefreshTimer();
     this.currentPatchDump = result.dump;
@@ -861,6 +884,45 @@ export class DeviceSession {
     }
     this.setChain(chain, { chainSync: "idle", canExportPatch: true });
     this.releaseWaiters(this.chainWaiters);
+    if (
+      armConfirmation &&
+      this.patchConfirm === "after-apply" &&
+      this.snapshot.status === "connected" &&
+      this.snapshot.patch === patch &&
+      this.syncGeneration === generation &&
+      this.snapshot.chainSync === "idle"
+    ) {
+      this.requestPatchConfirmation();
+    }
+  }
+
+  /** One current-preset request. Does not refresh, recall, or cover the chain. */
+  private requestPatchConfirmation(): void {
+    if (this.snapshot.status !== "connected") {
+      this.patchConfirm = "off";
+      return;
+    }
+    this.patchConfirm = "in-flight";
+    this.chainDump.reset();
+    void this.sendChainRequest(this.syncGeneration);
+  }
+
+  private applyPatchConfirmation(result: ChainDumpResult): void {
+    this.patchConfirm = "off";
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
+    if (
+      chainSlotsEqual(chain, this.snapshot.chain) ||
+      this.snapshot.modified ||
+      this.pendingControlWrites.size > 0
+    ) {
+      return;
+    }
+    this.currentPatchDump = result.dump;
+    this.baseline = cloneChain(chain);
+    this.setChain(chain, { chainSync: "idle", canExportPatch: true });
   }
 
   private applyLiveModule(message: Uint8Array): boolean {
@@ -1114,7 +1176,7 @@ export class DeviceSession {
   private beginGeneration(): void {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
-    this.ignoreStaleChainDump = false;
+    this.patchConfirm = "off";
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
     this.clearControlWrites();
