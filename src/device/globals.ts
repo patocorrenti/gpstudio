@@ -1,22 +1,28 @@
 import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /**
- * GP-50 device-global settings (not patch Save).
+ * Device-global settings (not patch Save).
  *
- * Bluetooth: one SysEx (F0-aligned ~210), command `00 02`, path `01 02 01`.
+ * GP-50 Bluetooth: one SysEx (F0-aligned ~210), command `00 02`, path `01 02 01`.
  * Offsets are absolute in that packet (local BLE reference editor − 2).
+ * GP-50 USB: fragmented SysEx, command `00 08` or `00 09`, data length 48 /
+ * terminator 20 or 22. Payloads start at byte 9; table offsets are the
+ * Bluetooth absolute offsets minus 9.
  *
- * USB: fragmented SysEx, command `00 08` or `00 09`, data length 48 /
- * terminator 20 or 22 (`_reference/GP50-USB.html`). Payloads start at byte 9
- * and concatenate; table offsets are the Bluetooth absolute offsets minus 9.
+ * GP-5 Bluetooth: F0 length 164, command `00 01`, path `01 02 01`
+ * (`_reference/GP5bluetooth.html` index − 2). GP-5 USB: command `00 05`,
+ * data length 48 / terminator 12; payload offsets are those F0 offsets minus 9.
  * Do not paste editor source.
  */
 
 export type FootswitchMode = "patch" | "stomp";
+/** GP-5 footswitch list in the reference editors. Wire byte 0–4. */
+export type Gp5FootswitchMode = "0-99" | "0-9" | "A-Z" | "CTL" | "Tuner";
 /** Editor live UI: 0 → Dry, 1 → Wet. Polarity pending a Patone accept capture. */
 export type RecMode = "dry" | "wet";
 
-export type DeviceGlobals = {
+export type Gp50Globals = {
+  model: "gp50";
   inputLevel: number | null;
   noCab: boolean | null;
   recLevel: number | null;
@@ -28,6 +34,20 @@ export type DeviceGlobals = {
   masterVolume: number | null;
 };
 
+export type Gp5Globals = {
+  model: "gp5";
+  globalVolume: number | null;
+  inputLevel: number | null;
+  noCab: boolean | null;
+  recLevel: number | null;
+  btRec: number | null;
+  monLevel: number | null;
+  screenBrightness: number | null;
+  footswitchMode: Gp5FootswitchMode | null;
+};
+
+export type DeviceGlobals = Gp50Globals | Gp5Globals;
+
 export type GlobalSysexKey =
   | "inputLevel"
   | "noCab"
@@ -37,12 +57,24 @@ export type GlobalSysexKey =
   | "recModeLeft"
   | "recModeRight";
 
+export type Gp5GlobalSysexKey =
+  | "globalVolume"
+  | "inputLevel"
+  | "noCab"
+  | "recLevel"
+  | "btRec"
+  | "monLevel"
+  | "screenBrightness";
+
 export type LiveGlobalChange =
-  | { key: "inputLevel" | "recLevel" | "btRec" | "monLevel"; value: number }
-  | { key: "noCab"; value: boolean }
-  | { key: "recModeLeft" | "recModeRight"; value: RecMode }
-  | { key: "footswitchMode"; value: FootswitchMode }
-  | { key: "masterVolume"; value: number };
+  | { model: "gp50"; key: "inputLevel" | "recLevel" | "btRec" | "monLevel"; value: number }
+  | { model: "gp50"; key: "noCab"; value: boolean }
+  | { model: "gp50"; key: "recModeLeft" | "recModeRight"; value: RecMode }
+  | { model: "gp50"; key: "footswitchMode"; value: FootswitchMode }
+  | { model: "gp50"; key: "masterVolume"; value: number }
+  | { model: "gp5"; key: "inputLevel" | "recLevel" | "btRec" | "monLevel" | "globalVolume"; value: number }
+  | { model: "gp5"; key: "noCab"; value: boolean }
+  | { model: "gp5"; key: "footswitchMode"; value: Gp5FootswitchMode };
 
 /** Packed SET: size `0x0A`, family `1111`. Path appears after CRC + nibble-expand. */
 const GLOBAL_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x11] as const;
@@ -102,8 +134,9 @@ const USB_PAYLOAD_AT = 9;
 /** USB globals fragment commands observed in `_reference/GP50-USB.html`. */
 const USB_GLOBALS_COMMANDS = new Set([8, 9]);
 
-export function emptyGp50Globals(): DeviceGlobals {
+export function emptyGp50Globals(): Gp50Globals {
   return {
+    model: "gp50",
     inputLevel: null,
     noCab: null,
     recLevel: null,
@@ -113,6 +146,20 @@ export function emptyGp50Globals(): DeviceGlobals {
     recModeRight: null,
     footswitchMode: null,
     masterVolume: null,
+  };
+}
+
+export function emptyGp5Globals(): Gp5Globals {
+  return {
+    model: "gp5",
+    globalVolume: null,
+    inputLevel: null,
+    noCab: null,
+    recLevel: null,
+    btRec: null,
+    monLevel: null,
+    screenBrightness: null,
+    footswitchMode: null,
   };
 }
 
@@ -196,6 +243,7 @@ function parseGlobalsTable(
     return null;
   }
   return {
+    model: "gp50",
     inputLevel,
     noCab: data[offsets.noCab] !== 0,
     recLevel,
@@ -249,9 +297,161 @@ export function isUsbGlobalsDumpFragment(bytes: Uint8Array): boolean {
   return usbGlobalsHeader(bytes) !== null;
 }
 
-/** True for a Bluetooth globals dump or a USB globals fragment. */
+const GP5_BT_DUMP_LENGTH = 164;
+const GP5_BT_VOL_AT = 53;
+const GP5_BT_SCREEN_AT = 79;
+const GP5_BT_INPUT_AT = 89;
+const GP5_BT_REC_AT = 99;
+const GP5_BT_MON_AT = 109;
+const GP5_BT_BT_AT = 139;
+const GP5_BT_NO_CAB_AT = 150;
+const GP5_BT_FOOT_AT = 160;
+const GP5_USB_COMMAND = 5;
+const GP5_USB_TERMINATOR_LENGTH = 12;
+const GP5_USB_VOL_AT = GP5_BT_VOL_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_SCREEN_AT = GP5_BT_SCREEN_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_INPUT_AT = GP5_BT_INPUT_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_REC_AT = GP5_BT_REC_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_MON_AT = GP5_BT_MON_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_BT_AT = GP5_BT_BT_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_NO_CAB_AT = GP5_BT_NO_CAB_AT - USB_PAYLOAD_SHIFT;
+const GP5_USB_FOOT_AT = GP5_BT_FOOT_AT - USB_PAYLOAD_SHIFT;
+const SCREEN_MIN = 1;
+const SCREEN_MAX = 100;
+const GP5_FOOT_MODES = ["0-99", "0-9", "A-Z", "CTL", "Tuner"] as const;
+
+function clampScreen(value: number): number | null {
+  if (!Number.isInteger(value) || value < SCREEN_MIN || value > SCREEN_MAX) {
+    return null;
+  }
+  return value;
+}
+
+function gp5FootFromWire(wire: number): Gp5FootswitchMode | null {
+  return GP5_FOOT_MODES[wire] ?? null;
+}
+
+function gp5FootWire(mode: Gp5FootswitchMode): number {
+  return GP5_FOOT_MODES.indexOf(mode);
+}
+
+function parseGp5Table(
+  data: Uint8Array,
+  offsets: {
+    volume: number;
+    screen: number;
+    input: number;
+    noCab: number;
+    rec: number;
+    bt: number;
+    mon: number;
+    foot: number;
+  },
+): Gp5Globals | null {
+  if (data.length <= offsets.foot) {
+    return null;
+  }
+  const globalVolume = clampMaster(fromSignedByte(nibble(data, offsets.volume)));
+  const inputLevel = clampLevel(fromSignedByte(nibble(data, offsets.input)));
+  const recLevel = clampLevel(fromSignedByte(nibble(data, offsets.rec)));
+  const btRec = clampLevel(fromSignedByte(nibble(data, offsets.bt)));
+  const monLevel = clampLevel(fromSignedByte(nibble(data, offsets.mon)));
+  const footswitchMode = gp5FootFromWire(data[offsets.foot] ?? -1);
+  if (
+    globalVolume === null ||
+    inputLevel === null ||
+    recLevel === null ||
+    btRec === null ||
+    monLevel === null ||
+    footswitchMode === null
+  ) {
+    return null;
+  }
+  const screenBrightness =
+    data.length > offsets.screen + 1
+      ? clampScreen(fromSignedByte(nibble(data, offsets.screen)))
+      : null;
+  return {
+    model: "gp5",
+    globalVolume,
+    inputLevel,
+    noCab: data[offsets.noCab] !== 0,
+    recLevel,
+    btRec,
+    monLevel,
+    screenBrightness,
+    footswitchMode,
+  };
+}
+
+/** Bluetooth GP-5 globals dump (command `00 01`, path `01 02 01`, length 164). */
+export function isGp5BluetoothGlobalsDump(bytes: Uint8Array): boolean {
+  const midi = midiPayload(bytes);
+  if (midi.length !== GP5_BT_DUMP_LENGTH || midi[0] !== 0xf0 || midi[midi.length - 1] !== 0xf7) {
+    return false;
+  }
+  return midi[3] === 0 && midi[4] === 1 && midi[9] === 1 && midi[10] === 2 && midi[11] === 1;
+}
+
+function usbGp5GlobalsHeader(bytes: Uint8Array): UsbGlobalsHeader | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < GP5_USB_TERMINATOR_LENGTH || midi[0] !== 0xf0 || midi[midi.length - 1] !== 0xf7) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== GP5_USB_COMMAND) {
+    return null;
+  }
+  const terminator = midi.length === GP5_USB_TERMINATOR_LENGTH;
+  const data = midi.length === USB_DATA_LENGTH;
+  if (!terminator && !data) {
+    return null;
+  }
+  return { index: nibble(midi, 5), terminator };
+}
+
+/** USB GP-5 globals fragment (command `00 05`, length 48 or 12). */
+export function isGp5UsbGlobalsDumpFragment(bytes: Uint8Array): boolean {
+  return usbGp5GlobalsHeader(bytes) !== null;
+}
+
+function decodeGp5BluetoothGlobalsDump(bytes: Uint8Array): Gp5Globals | null {
+  const midi = midiPayload(bytes);
+  if (!isGp5BluetoothGlobalsDump(midi)) {
+    return null;
+  }
+  return parseGp5Table(midi, {
+    volume: GP5_BT_VOL_AT,
+    screen: GP5_BT_SCREEN_AT,
+    input: GP5_BT_INPUT_AT,
+    noCab: GP5_BT_NO_CAB_AT,
+    rec: GP5_BT_REC_AT,
+    bt: GP5_BT_BT_AT,
+    mon: GP5_BT_MON_AT,
+    foot: GP5_BT_FOOT_AT,
+  });
+}
+
+function decodeGp5UsbPayload(payload: Uint8Array): Gp5Globals | null {
+  return parseGp5Table(payload, {
+    volume: GP5_USB_VOL_AT,
+    screen: GP5_USB_SCREEN_AT,
+    input: GP5_USB_INPUT_AT,
+    noCab: GP5_USB_NO_CAB_AT,
+    rec: GP5_USB_REC_AT,
+    bt: GP5_USB_BT_AT,
+    mon: GP5_USB_MON_AT,
+    foot: GP5_USB_FOOT_AT,
+  });
+}
+
+/** True for a GP-50 or GP-5 globals dump or USB fragment. */
 export function isGlobalsDump(bytes: Uint8Array): boolean {
-  return isBluetoothGlobalsDump(bytes) || isUsbGlobalsDumpFragment(bytes);
+  return (
+    isBluetoothGlobalsDump(bytes) ||
+    isUsbGlobalsDumpFragment(bytes) ||
+    isGp5BluetoothGlobalsDump(bytes) ||
+    isGp5UsbGlobalsDumpFragment(bytes)
+  );
 }
 
 function decodeBluetoothGlobalsDump(bytes: Uint8Array): DeviceGlobals | null {
@@ -305,11 +505,24 @@ function sysexPayload(midi: Uint8Array, start: number): Uint8Array {
 /**
  * Assembles USB globals fragments; returns immediately for a Bluetooth dump.
  */
+function assembleFragments(fragments: Map<number, Uint8Array>): Uint8Array {
+  const entries = [...fragments.entries()].sort((left, right) => left[0] - right[0]);
+  const merged = new Uint8Array(entries.reduce((sum, entry) => sum + entry[1].length, 0));
+  let cursor = 0;
+  for (const [, part] of entries) {
+    merged.set(part, cursor);
+    cursor += part.length;
+  }
+  return merged;
+}
+
 export class GlobalsDumpDecoder {
   private fragments = new Map<number, Uint8Array>();
+  private gp5Fragments = new Map<number, Uint8Array>();
 
   reset(): void {
     this.fragments.clear();
+    this.gp5Fragments.clear();
   }
 
   push(bytes: Uint8Array): DeviceGlobals | null {
@@ -318,24 +531,33 @@ export class GlobalsDumpDecoder {
       this.fragments.clear();
       return bluetooth;
     }
+    const gp5Bluetooth = decodeGp5BluetoothGlobalsDump(bytes);
+    if (gp5Bluetooth) {
+      this.gp5Fragments.clear();
+      return gp5Bluetooth;
+    }
     const midi = midiPayload(bytes);
     const header = usbGlobalsHeader(midi);
-    if (!header) {
+    if (header) {
+      this.fragments.set(header.index, sysexPayload(midi, USB_PAYLOAD_AT));
+      if (!header.terminator) {
+        return null;
+      }
+      const merged = assembleFragments(this.fragments);
+      this.fragments.clear();
+      return decodeUsbGlobalsPayload(merged);
+    }
+    const gp5Header = usbGp5GlobalsHeader(midi);
+    if (!gp5Header) {
       return null;
     }
-    this.fragments.set(header.index, sysexPayload(midi, USB_PAYLOAD_AT));
-    if (!header.terminator) {
+    this.gp5Fragments.set(gp5Header.index, sysexPayload(midi, USB_PAYLOAD_AT));
+    if (!gp5Header.terminator) {
       return null;
     }
-    const entries = [...this.fragments.entries()].sort((left, right) => left[0] - right[0]);
-    this.fragments.clear();
-    const merged = new Uint8Array(entries.reduce((sum, entry) => sum + entry[1].length, 0));
-    let cursor = 0;
-    for (const [, part] of entries) {
-      merged.set(part, cursor);
-      cursor += part.length;
-    }
-    return decodeUsbGlobalsPayload(merged);
+    const merged = assembleFragments(this.gp5Fragments);
+    this.gp5Fragments.clear();
+    return decodeGp5UsbPayload(merged);
   }
 }
 
@@ -389,80 +611,269 @@ export function encodeGlobalSysex(
   return framePackedSet(packed);
 }
 
+export function isGp50SysexKey(key: string): key is GlobalSysexKey {
+  return Object.prototype.hasOwnProperty.call(SYSEX_ROWS, key);
+}
+
+const GP5_SYSEX_ROWS: Record<Gp5GlobalSysexKey, { effect: number; flag: number }> = {
+  globalVolume: { effect: 2, flag: 2 },
+  inputLevel: { effect: 1, flag: 3 },
+  noCab: { effect: 3, flag: 3 },
+  recLevel: { effect: 1, flag: 4 },
+  btRec: { effect: 5, flag: 4 },
+  monLevel: { effect: 2, flag: 4 },
+  screenBrightness: { effect: 3, flag: 2 },
+};
+
+export function isGp5SysexKey(key: string): key is Gp5GlobalSysexKey {
+  return Object.prototype.hasOwnProperty.call(GP5_SYSEX_ROWS, key);
+}
+
 /**
- * Pedal→app live global notify (Bluetooth). Identity-family size `0x07`,
- * command `00 01`, path starts `01 02`. Effect / flag match the SET table;
- * footswitch uses effect 1 / flag 6; master volume uses effect 2 / flag 2.
- * Not locked against a Patone Log — shape follows the reference editor's
- * "Change global" / "vol global" handlers (F0-aligned).
+ * Parameter-write SET for a GP-5 global row (family `1111`).
+ * BT REC is effect 5 / flag 4 and monitor is effect 2 / flag 4 — not the GP-50 pairs.
+ * Path `01 01 04` after CRC + nibble-expand. Not CC 1.
  */
-export function decodeLiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
+export function encodeGp5GlobalSysex(
+  key: Gp5GlobalSysexKey,
+  value: number | boolean,
+): Uint8Array | null {
+  const row = GP5_SYSEX_ROWS[key];
+  let wire: number | null = null;
+  if (key === "noCab") {
+    if (typeof value !== "boolean") {
+      return null;
+    }
+    wire = value ? 1 : 0;
+  } else if (key === "globalVolume") {
+    if (typeof value !== "number") {
+      return null;
+    }
+    wire = clampMaster(value);
+  } else if (key === "screenBrightness") {
+    if (typeof value !== "number") {
+      return null;
+    }
+    wire = clampScreen(value);
+  } else if (typeof value === "number") {
+    wire = signedByte(value);
+  }
+  if (wire === null) {
+    return null;
+  }
+  const packed = Uint8Array.from([
+    ...GLOBAL_SET_PREFIX,
+    row.effect,
+    row.flag,
+    0x00,
+    0x00,
+    wire,
+    0x00,
+    0x00,
+    0x00,
+  ]);
+  return framePackedSet(packed);
+}
+
+/**
+ * GP-5 footswitch SET. Packed family `1115`, size `0x04`: `01 00 04 11 15 00` + mode.
+ * Same CRC + nibble-expand as other SETs. Not CC 28 and not a `1111` body.
+ */
+export function encodeGp5Footswitch(mode: Gp5FootswitchMode): Uint8Array | null {
+  const wire = gp5FootWire(mode);
+  if (wire < 0) {
+    return null;
+  }
+  return framePackedSet(Uint8Array.from([0x01, 0x00, 0x04, 0x11, 0x15, 0x00, wire]));
+}
+
+function liveLevel(valueByte: number): number | null {
+  const level = fromSignedByte(valueByte);
+  if (level < LEVEL_MIN || level > LEVEL_MAX) {
+    return null;
+  }
+  return level;
+}
+
+function liveVolume(valueByte: number): number | null {
+  const volume = fromSignedByte(valueByte);
+  if (volume < 0 || volume > MASTER_VOLUME_MAX) {
+    return null;
+  }
+  return volume;
+}
+
+/**
+ * Shared 24-byte notify header (command `00 01`, size `0x07`, path `01 02`).
+ * Effect at byte 14, flag at byte 16, value nibbles at 21–22.
+ */
+function liveNotify24(bytes: Uint8Array): { effect: number; flag: number; valueByte: number; low: number } | null {
   const midi = midiPayload(bytes);
   if (midi.length !== 24 || midi[0] !== 0xf0 || midi[23] !== 0xf7) {
     return null;
   }
-  if (midi[3] !== 0 || midi[4] !== 1) {
+  if (midi[3] !== 0 || midi[4] !== 1 || midi[8] !== 0x07 || midi[9] !== 1 || midi[10] !== 2) {
     return null;
   }
-  if (midi[8] !== 0x07 || midi[9] !== 1 || midi[10] !== 2) {
-    return null;
-  }
-  const effect = midi[14];
-  const flag = midi[16];
-  const valueByte = midi[21] * 16 + midi[22];
-  const low = midi[22];
+  return {
+    effect: midi[14] ?? 0,
+    flag: midi[16] ?? 0,
+    valueByte: (midi[21] ?? 0) * 16 + (midi[22] ?? 0),
+    low: midi[22] ?? 0,
+  };
+}
 
+function decodeGp50LiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
+  const notify = liveNotify24(bytes);
+  if (!notify) {
+    return null;
+  }
+  const { effect, flag, valueByte, low } = notify;
   if (effect === 2 && flag === 2) {
-    const volume = fromSignedByte(valueByte);
-    if (volume < 0 || volume > MASTER_VOLUME_MAX) {
+    const volume = liveVolume(valueByte);
+    if (volume === null) {
       return null;
     }
-    return { key: "masterVolume", value: volume };
+    return { model: "gp50", key: "masterVolume", value: volume };
   }
   if (effect === 1 && flag === 6) {
-    return { key: "footswitchMode", value: low === 0 ? "patch" : "stomp" };
+    return { model: "gp50", key: "footswitchMode", value: low === 0 ? "patch" : "stomp" };
   }
   if (effect === 1 && flag === 3) {
-    const level = fromSignedByte(valueByte);
-    if (level < LEVEL_MIN || level > LEVEL_MAX) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
       return null;
     }
-    return { key: "inputLevel", value: level };
+    return { model: "gp50", key: "inputLevel", value: level };
   }
   if (effect === 3 && flag === 3) {
-    return { key: "noCab", value: low !== 0 };
+    return { model: "gp50", key: "noCab", value: low !== 0 };
   }
   if (effect === 1 && flag === 4) {
-    const level = fromSignedByte(valueByte);
-    if (level < LEVEL_MIN || level > LEVEL_MAX) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
       return null;
     }
-    return { key: "recLevel", value: level };
+    return { model: "gp50", key: "recLevel", value: level };
   }
   if (effect === 2 && flag === 4) {
-    const level = fromSignedByte(valueByte);
-    if (level < LEVEL_MIN || level > LEVEL_MAX) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
       return null;
     }
-    return { key: "btRec", value: level };
+    return { model: "gp50", key: "btRec", value: level };
   }
   if (effect === 3 && flag === 4) {
-    const level = fromSignedByte(valueByte);
-    if (level < LEVEL_MIN || level > LEVEL_MAX) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
       return null;
     }
-    return { key: "monLevel", value: level };
+    return { model: "gp50", key: "monLevel", value: level };
   }
   if (effect === 4 && flag === 4) {
-    return { key: "recModeLeft", value: recModeFromWire(low) };
+    return { model: "gp50", key: "recModeLeft", value: recModeFromWire(low) };
   }
   if (effect === 5 && flag === 4) {
-    return { key: "recModeRight", value: recModeFromWire(low) };
+    return { model: "gp50", key: "recModeRight", value: recModeFromWire(low) };
   }
   return null;
 }
 
-/** Official CC 1 (master) or CC 28 (Patch | Stomp) as a live global report. */
+function decodeGp5LiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
+  const midi = midiPayload(bytes);
+  if (
+    midi.length === 30 &&
+    midi[0] === 0xf0 &&
+    midi[29] === 0xf7 &&
+    midi[3] === 0 &&
+    midi[4] === 1 &&
+    midi[8] === 0x0a &&
+    midi[9] === 1 &&
+    midi[10] === 2 &&
+    midi[14] === 2 &&
+    midi[16] === 2
+  ) {
+    const volume = liveVolume((midi[21] ?? 0) * 16 + (midi[22] ?? 0));
+    if (volume === null) {
+      return null;
+    }
+    return { model: "gp5", key: "globalVolume", value: volume };
+  }
+  if (
+    midi.length === 18 &&
+    midi[0] === 0xf0 &&
+    midi[17] === 0xf7 &&
+    midi[3] === 0 &&
+    midi[4] === 1 &&
+    midi[8] === 0x04 &&
+    midi[9] === 1 &&
+    midi[10] === 2 &&
+    midi[11] === 1 &&
+    midi[12] === 5
+  ) {
+    const mode = gp5FootFromWire((midi[15] ?? 0) * 16 + (midi[16] ?? 0));
+    if (!mode) {
+      return null;
+    }
+    return { model: "gp5", key: "footswitchMode", value: mode };
+  }
+  const notify = liveNotify24(bytes);
+  if (!notify) {
+    return null;
+  }
+  const { effect, flag, valueByte, low } = notify;
+  if (effect === 1 && flag === 3) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
+      return null;
+    }
+    return { model: "gp5", key: "inputLevel", value: level };
+  }
+  if (effect === 3 && flag === 3) {
+    return { model: "gp5", key: "noCab", value: low !== 0 };
+  }
+  if (effect === 1 && flag === 4) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
+      return null;
+    }
+    return { model: "gp5", key: "recLevel", value: level };
+  }
+  if (effect === 5 && flag === 4) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
+      return null;
+    }
+    return { model: "gp5", key: "btRec", value: level };
+  }
+  if (effect === 2 && flag === 4) {
+    const level = liveLevel(valueByte);
+    if (level === null) {
+      return null;
+    }
+    return { model: "gp5", key: "monLevel", value: level };
+  }
+  if (effect === 2 && flag === 2) {
+    const volume = liveVolume(valueByte);
+    if (volume === null) {
+      return null;
+    }
+    return { model: "gp5", key: "globalVolume", value: volume };
+  }
+  return null;
+}
+
+/**
+ * Pedal→app live global notify (Bluetooth). The 24-byte layout is shared;
+ * effect/flag meaning depends on the connected model. GP-5 also accepts the
+ * length-30 global-volume notify and the length-18 footswitch notify.
+ * Screen brightness has no live packet.
+ */
+export function decodeLiveGlobal(bytes: Uint8Array, model: "gp50" | "gp5" = "gp50"): LiveGlobalChange | null {
+  return model === "gp5" ? decodeGp5LiveGlobal(bytes) : decodeGp50LiveGlobal(bytes);
+}
+
+/** Official CC 1 (master) or CC 28 (Patch | Stomp) as a GP-50 live global report. */
 export function decodeLiveGlobalCc(bytes: Uint8Array): LiveGlobalChange | null {
   if (bytes.length < 3) {
     return null;
@@ -477,10 +888,10 @@ export function decodeLiveGlobalCc(bytes: Uint8Array): LiveGlobalChange | null {
     if (value < 0 || value > MASTER_VOLUME_MAX) {
       return null;
     }
-    return { key: "masterVolume", value };
+    return { model: "gp50", key: "masterVolume", value };
   }
   if (controller === 28) {
-    return { key: "footswitchMode", value: value < 64 ? "patch" : "stomp" };
+    return { model: "gp50", key: "footswitchMode", value: value < 64 ? "patch" : "stomp" };
   }
   return null;
 }
@@ -557,6 +968,7 @@ function assertGlobalsCodec(): void {
   const decoded = decodeGlobalsDump(fixture);
   if (
     !decoded ||
+    decoded.model !== "gp50" ||
     decoded.masterVolume !== 63 ||
     decoded.inputLevel !== 0 ||
     decoded.recLevel !== -6 ||
@@ -568,6 +980,9 @@ function assertGlobalsCodec(): void {
     decoded.footswitchMode !== "stomp"
   ) {
     throw new Error("Bluetooth globals dump fixture must decode the reference-editor offsets");
+  }
+  if (isGp5BluetoothGlobalsDump(fixture) || decodeGp5BluetoothGlobalsDump(fixture) !== null) {
+    throw new Error("A GP-50 globals dump must not decode as GP-5");
   }
 
   const usbPayload = new Uint8Array(USB_DUMP_MIN_LENGTH + 10);
@@ -616,6 +1031,7 @@ function assertGlobalsCodec(): void {
   }
   if (
     !usbDecoded ||
+    usbDecoded.model !== "gp50" ||
     usbDecoded.masterVolume !== 63 ||
     usbDecoded.inputLevel !== 0 ||
     usbDecoded.recLevel !== -6 ||
@@ -642,6 +1058,218 @@ function assertGlobalsCodec(): void {
   if (encodeGlobalSysex("inputLevel", 21) !== null || encodeGlobalSysex("noCab", 1) !== null) {
     throw new Error("Global SET must reject out-of-range values");
   }
+
+  const gp5 = new Uint8Array(GP5_BT_DUMP_LENGTH);
+  gp5[0] = 0xf0;
+  gp5[3] = 0;
+  gp5[4] = 1;
+  gp5[9] = 1;
+  gp5[10] = 2;
+  gp5[11] = 1;
+  gp5[GP5_BT_DUMP_LENGTH - 1] = 0xf7;
+  writeSignedAt(gp5, GP5_BT_VOL_AT, 40);
+  writeSignedAt(gp5, GP5_BT_SCREEN_AT, 80);
+  writeSignedAt(gp5, GP5_BT_INPUT_AT, 0);
+  writeSignedAt(gp5, GP5_BT_REC_AT, -6);
+  writeSignedAt(gp5, GP5_BT_MON_AT, 2);
+  writeSignedAt(gp5, GP5_BT_BT_AT, 3);
+  gp5[GP5_BT_NO_CAB_AT] = 1;
+  gp5[GP5_BT_FOOT_AT] = 3;
+  if (isBluetoothGlobalsDump(gp5) || decodeGlobalsDump(gp5) !== null) {
+    throw new Error("A GP-5 globals dump must not decode as GP-50");
+  }
+  const gp5Decoded = decodeGp5BluetoothGlobalsDump(gp5);
+  if (
+    !gp5Decoded ||
+    gp5Decoded.globalVolume !== 40 ||
+    gp5Decoded.screenBrightness !== 80 ||
+    gp5Decoded.inputLevel !== 0 ||
+    gp5Decoded.recLevel !== -6 ||
+    gp5Decoded.monLevel !== 2 ||
+    gp5Decoded.btRec !== 3 ||
+    gp5Decoded.noCab !== true ||
+    gp5Decoded.footswitchMode !== "CTL"
+  ) {
+    throw new Error("GP-5 Bluetooth globals dump must decode the reference-editor offsets");
+  }
+  const presetLookalike = new Uint8Array(GP5_BT_DUMP_LENGTH);
+  presetLookalike[0] = 0xf0;
+  presetLookalike[3] = 0;
+  presetLookalike[4] = 1;
+  presetLookalike[GP5_BT_DUMP_LENGTH - 1] = 0xf7;
+  if (isGlobalsDump(presetLookalike) || decodeGp5BluetoothGlobalsDump(presetLookalike) !== null) {
+    throw new Error("A command 00 01 packet without path 01 02 01 must not classify as a GP-5 globals dump");
+  }
+  const badInput = gp5.slice();
+  writeSignedAt(badInput, GP5_BT_INPUT_AT, 21);
+  if (decodeGp5BluetoothGlobalsDump(badInput) !== null) {
+    throw new Error("An out-of-range GP-5 input level must not apply the dump");
+  }
+
+  const gp5UsbPayload = new Uint8Array(38 * 4 + 2);
+  writeSignedAt(gp5UsbPayload, GP5_USB_VOL_AT, 40);
+  writeSignedAt(gp5UsbPayload, GP5_USB_SCREEN_AT, 0);
+  writeSignedAt(gp5UsbPayload, GP5_USB_INPUT_AT, 1);
+  writeSignedAt(gp5UsbPayload, GP5_USB_REC_AT, -4);
+  writeSignedAt(gp5UsbPayload, GP5_USB_MON_AT, 5);
+  writeSignedAt(gp5UsbPayload, GP5_USB_BT_AT, -2);
+  gp5UsbPayload[GP5_USB_NO_CAB_AT] = 0;
+  gp5UsbPayload[GP5_USB_FOOT_AT] = 4;
+  const gp5Chunks: Uint8Array[] = [];
+  let gp5Offset = 0;
+  let gp5Index = 0;
+  while (gp5Offset + 38 < gp5UsbPayload.length) {
+    const midi = new Uint8Array(USB_DATA_LENGTH);
+    midi[0] = 0xf0;
+    midi[3] = 0;
+    midi[4] = GP5_USB_COMMAND;
+    midi[5] = (gp5Index >> 4) & 0x0f;
+    midi[6] = gp5Index & 0x0f;
+    midi.set(gp5UsbPayload.subarray(gp5Offset, gp5Offset + 38), USB_PAYLOAD_AT);
+    midi[USB_DATA_LENGTH - 1] = 0xf7;
+    gp5Chunks.push(midi);
+    gp5Offset += 38;
+    gp5Index += 1;
+  }
+  const gp5Term = new Uint8Array(GP5_USB_TERMINATOR_LENGTH);
+  gp5Term[0] = 0xf0;
+  gp5Term[3] = 0;
+  gp5Term[4] = GP5_USB_COMMAND;
+  gp5Term[5] = (gp5Index >> 4) & 0x0f;
+  gp5Term[6] = gp5Index & 0x0f;
+  gp5Term.set(gp5UsbPayload.subarray(gp5Offset), USB_PAYLOAD_AT);
+  gp5Term[GP5_USB_TERMINATOR_LENGTH - 1] = 0xf7;
+  gp5Chunks.push(gp5Term);
+  const gp5UsbDecoder = new GlobalsDumpDecoder();
+  let gp5UsbDecoded: DeviceGlobals | null = null;
+  for (const chunk of gp5Chunks) {
+    if (isUsbGlobalsDumpFragment(chunk)) {
+      throw new Error("A GP-5 USB globals fragment must not classify as GP-50");
+    }
+    if (!isGp5UsbGlobalsDumpFragment(chunk)) {
+      throw new Error("GP-5 USB globals fragment must classify");
+    }
+    gp5UsbDecoded = gp5UsbDecoder.push(chunk);
+  }
+  if (
+    !gp5UsbDecoded ||
+    gp5UsbDecoded.model !== "gp5" ||
+    gp5UsbDecoded.globalVolume !== 40 ||
+    gp5UsbDecoded.screenBrightness !== null ||
+    gp5UsbDecoded.inputLevel !== 1 ||
+    gp5UsbDecoded.recLevel !== -4 ||
+    gp5UsbDecoded.monLevel !== 5 ||
+    gp5UsbDecoded.btRec !== -2 ||
+    gp5UsbDecoded.noCab !== false ||
+    gp5UsbDecoded.footswitchMode !== "Tuner"
+  ) {
+    throw new Error("GP-5 USB globals must keep other fields when screen brightness is out of range");
+  }
+
+  const gp5BtSet = encodeGp5GlobalSysex("btRec", 0);
+  const gp50BtSet = encodeGlobalSysex("btRec", 0);
+  const gp5BtPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x05, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+  const gp5Vol = encodeGp5GlobalSysex("globalVolume", 40);
+  const gp5VolPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x02, 0x02, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00]);
+  const gp5Foot = encodeGp5Footswitch("CTL");
+  const gp5FootPacked = framePackedSet(Uint8Array.from([0x01, 0x00, 0x04, 0x11, 0x15, 0x00, 0x03]));
+  if (
+    !gp5BtSet ||
+    !gp50BtSet ||
+    !gp5Vol ||
+    !gp5Foot ||
+    sameBytes(gp5BtSet, gp50BtSet) ||
+    !sameBytes(gp5BtSet, framePackedSet(gp5BtPacked)) ||
+    !sameBytes(gp5Vol, framePackedSet(gp5VolPacked)) ||
+    !sameBytes(gp5Foot, gp5FootPacked) ||
+    gp5Vol[0] === 0xb0 ||
+    gp5Vol.length === 3 ||
+    gp5Foot.length === 24 ||
+    gp5Foot[0] === 0xb0 ||
+    encodeGp5GlobalSysex("globalVolume", 101) !== null ||
+    encodeGp5GlobalSysex("screenBrightness", 0) !== null
+  ) {
+    throw new Error("GP-5 SETs must use GP-5 pairs and must not be CC 1, CC 28, or a live notify");
+  }
+
+  const crossed = liveNotify(2, 4, -6);
+  const gp5Monitor = decodeLiveGlobal(crossed, "gp5");
+  const gp50Bt = decodeLiveGlobal(crossed, "gp50");
+  const btOnGp5 = decodeLiveGlobal(liveNotify(5, 4, 3), "gp5");
+  const recOnGp50 = decodeLiveGlobal(liveNotify(5, 4, 3), "gp50");
+  if (
+    !gp5Monitor ||
+    gp5Monitor.model !== "gp5" ||
+    gp5Monitor.key !== "monLevel" ||
+    gp5Monitor.value !== -6 ||
+    !gp50Bt ||
+    gp50Bt.model !== "gp50" ||
+    gp50Bt.key !== "btRec" ||
+    gp50Bt.value !== -6 ||
+    !btOnGp5 ||
+    btOnGp5.key !== "btRec" ||
+    btOnGp5.value !== 3 ||
+    !recOnGp50 ||
+    recOnGp50.key !== "recModeRight"
+  ) {
+    throw new Error("Effect 2/4 is monitor on GP-5 and BT REC on GP-50; effect 5/4 is BT REC on GP-5");
+  }
+  if (decodeLiveGlobal(liveNotify(3, 2, 40), "gp5") !== null) {
+    throw new Error("GP-5 must not invent a live screen-brightness packet");
+  }
+  const volNotify = new Uint8Array(30);
+  volNotify[0] = 0xf0;
+  volNotify[3] = 0;
+  volNotify[4] = 1;
+  volNotify[8] = 0x0a;
+  volNotify[9] = 1;
+  volNotify[10] = 2;
+  volNotify[14] = 2;
+  volNotify[16] = 2;
+  volNotify[21] = 0x02;
+  volNotify[22] = 0x08;
+  volNotify[29] = 0xf7;
+  const volChange = decodeLiveGlobal(volNotify, "gp5");
+  const footNotify = new Uint8Array(18);
+  footNotify[0] = 0xf0;
+  footNotify[3] = 0;
+  footNotify[4] = 1;
+  footNotify[8] = 0x04;
+  footNotify[9] = 1;
+  footNotify[10] = 2;
+  footNotify[11] = 1;
+  footNotify[12] = 5;
+  footNotify[16] = 1;
+  footNotify[17] = 0xf7;
+  const footChange = decodeLiveGlobal(footNotify, "gp5");
+  if (
+    !volChange ||
+    volChange.key !== "globalVolume" ||
+    volChange.value !== 40 ||
+    !footChange ||
+    footChange.key !== "footswitchMode" ||
+    footChange.value !== "0-9" ||
+    decodeLiveGlobal(volNotify, "gp50") !== null
+  ) {
+    throw new Error("GP-5 length-30 volume and length-18 footswitch notifies must decode only on GP-5");
+  }
+}
+
+function liveNotify(effect: number, flag: number, value: number): Uint8Array {
+  const midi = new Uint8Array(24);
+  midi[0] = 0xf0;
+  midi[3] = 0;
+  midi[4] = 1;
+  midi[8] = 0x07;
+  midi[9] = 1;
+  midi[10] = 2;
+  midi[14] = effect;
+  midi[16] = flag;
+  const wire = value < 0 ? 0x100 + value : value;
+  midi[21] = (wire >> 4) & 0x0f;
+  midi[22] = wire & 0x0f;
+  midi[23] = 0xf7;
+  return midi;
 }
 
 assertGlobalsCodec();

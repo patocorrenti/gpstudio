@@ -2,12 +2,20 @@ import type { EffectId } from "@/device/chain";
 import {
   encodeFootswitchModeCc,
   encodeGlobalSetting,
+  encodeGp5FootswitchMode,
+  encodeGp5GlobalSetting,
   encodeMasterVolumeCc,
   encodePatchTempoCc,
   encodePatchVolumeCc,
   encodeSlotControl,
 } from "@/device/encode";
-import type { FootswitchMode, GlobalSysexKey, RecMode } from "@/device/globals";
+import type {
+  FootswitchMode,
+  GlobalSysexKey,
+  Gp5FootswitchMode,
+  Gp5GlobalSysexKey,
+  RecMode,
+} from "@/device/globals";
 import type { LinkMode } from "@/device/link";
 import type { DeviceModel } from "@/device/models";
 
@@ -22,7 +30,7 @@ export function controlWriteKey(kind: EffectId, index: number): string {
   return `${kind}:${index}`;
 }
 
-export function globalSysexWriteKey(key: GlobalSysexKey): string {
+export function globalSysexWriteKey(key: GlobalSysexKey | Gp5GlobalSysexKey): string {
   return `global:${key}`;
 }
 
@@ -34,7 +42,9 @@ type ConnectedLink = {
 type GlobalWrite =
   | { kind: "masterVolume"; value: number }
   | { kind: "footswitchMode"; value: FootswitchMode }
-  | { kind: "sysex"; key: GlobalSysexKey; value: number | boolean | RecMode };
+  | { kind: "gp5Footswitch"; value: Gp5FootswitchMode }
+  | { kind: "sysex"; key: GlobalSysexKey; value: number | boolean | RecMode }
+  | { kind: "gp5Sysex"; key: Gp5GlobalSysexKey; value: number | boolean };
 
 export class SessionWriteQueue {
   private readonly pendingControlWrites = new Map<
@@ -221,26 +231,30 @@ export class SessionWriteQueue {
   private async sendPendingGlobal(key: string): Promise<void> {
     const pending = this.pendingGlobalWrites.get(key);
     const link = this.connected();
-    if (!pending || !link || link.model !== "gp50") {
+    if (!pending || !link) {
       return;
     }
     this.pendingGlobalWrites.delete(key);
     const sentToken =
-      pending.kind === "sysex"
+      pending.kind === "sysex" || pending.kind === "gp5Sysex"
         ? `${pending.key}:${String(pending.value)}`
-        : pending.kind === "footswitchMode"
-          ? pending.value
-          : pending.value;
+        : pending.value;
     if (this.lastControlSentValue.get(key) === sentToken) {
       return;
     }
     let packets: Uint8Array[] | null = null;
-    if (pending.kind === "masterVolume") {
-      packets = encodeMasterVolumeCc(link.linkMode, pending.value);
-    } else if (pending.kind === "footswitchMode") {
-      packets = encodeFootswitchModeCc(link.linkMode, pending.value);
-    } else {
-      packets = encodeGlobalSetting(link.linkMode, pending.key, pending.value);
+    if (link.model === "gp50") {
+      if (pending.kind === "masterVolume") {
+        packets = encodeMasterVolumeCc(link.linkMode, pending.value);
+      } else if (pending.kind === "footswitchMode") {
+        packets = encodeFootswitchModeCc(link.linkMode, pending.value);
+      } else if (pending.kind === "sysex") {
+        packets = encodeGlobalSetting(link.linkMode, pending.key, pending.value);
+      }
+    } else if (pending.kind === "gp5Sysex") {
+      packets = encodeGp5GlobalSetting(link.linkMode, pending.key, pending.value);
+    } else if (pending.kind === "gp5Footswitch") {
+      packets = encodeGp5FootswitchMode(link.linkMode, pending.value);
     }
     if (!packets) {
       return;
