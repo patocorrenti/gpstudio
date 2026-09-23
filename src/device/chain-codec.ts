@@ -9,6 +9,7 @@ import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device
 import { EFFECT_IDS } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 import { encodeIrNameDump, isIrNameDump } from "@/device/ir-names";
+import { isGlobalsDump } from "@/device/globals";
 import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /**
@@ -992,7 +993,7 @@ export class ChainDecoder {
     if (midi.length < 8 || midi[0] !== 0xf0) {
       return null;
     }
-    if (isNameDump(midi) || isCurrentPatchIdentity(midi) || isIrNameDump(midi)) {
+    if (isNameDump(midi) || isCurrentPatchIdentity(midi) || isIrNameDump(midi) || isGlobalsDump(midi)) {
       return null;
     }
 

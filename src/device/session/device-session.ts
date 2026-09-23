@@ -23,18 +23,15 @@ import {
   decodePresetDump,
   type ChainDumpResult,
 } from "@/device/chain-codec";
-import {
-  encodeChainOrder,
-  encodeChainRequest,
-  encodeIdentity,
-  encodeIrNames,
-  encodeModule,
-  encodePatch,
-  encodePatchStore,
-  encodeSlotModel,
-} from "@/device/encode";
-import type { LinkEndpoint } from "@/device/endpoint";
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
+import {
+  emptyGp50Globals,
+  isGlobalsDump,
+  type DeviceGlobals,
+  type FootswitchMode,
+  type GlobalSysexKey,
+  type RecMode,
+} from "@/device/globals";
 import {
   emptyPatchNames,
   IdentityDecoder,
@@ -54,6 +51,12 @@ import {
   writeDumpPatchBpm,
   writeDumpPatchVolume,
 } from "@/device/patch-store";
+import {
+  applyGlobalsDump,
+  applyLiveGlobal,
+  mergeGlobalField,
+  type GlobalsHost,
+} from "@/device/session/globals";
 import {
   applyLiveChainOrder,
   applyLiveModule,
@@ -81,10 +84,25 @@ import {
 } from "@/device/session/working-patch";
 import {
   controlWriteKey,
+  FOOTSWITCH_MODE_WRITE_KEY,
+  globalSysexWriteKey,
+  MASTER_VOLUME_WRITE_KEY,
   PATCH_BPM_WRITE_KEY,
   PATCH_VOLUME_WRITE_KEY,
   SessionWriteQueue,
 } from "@/device/session/writes";
+import {
+  encodeChainOrder,
+  encodeChainRequest,
+  encodeGlobals,
+  encodeIdentity,
+  encodeIrNames,
+  encodeModule,
+  encodePatch,
+  encodePatchStore,
+  encodeSlotModel,
+} from "@/device/encode";
+import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
@@ -109,6 +127,8 @@ export type SessionSnapshot =
       patch: number;
       patchNames: (string | null)[];
       userIrNames: (string | null)[];
+      /** GP-50 device globals; null on GP-5 until that model locks a read. */
+      globals: DeviceGlobals | null;
       chain: AudioChain;
       chainSync: ChainSync;
       patchVolume: number | null;
@@ -254,6 +274,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
+        globals: model === "gp50" ? emptyGp50Globals() : null,
         chain: defaultChain(model),
         chainSync: "idle",
         patchVolume: null,
@@ -272,6 +293,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
+        globals: model === "gp50" ? emptyGp50Globals() : null,
         chain: defaultChain(model),
         chainSync: "idle",
         patchVolume: null,
@@ -679,6 +701,100 @@ export class DeviceSession {
   this.stagePatchGlobal(PATCH_BPM_WRITE_KEY, next, options.flush === true);
   }
 
+  async setMasterVolume(value: number, options: { flush?: boolean } = {}): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const next = Math.round(value);
+    if (next < 0 || next > PATCH_VOLUME_MAX) {
+      return;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, "masterVolume", next),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      MASTER_VOLUME_WRITE_KEY,
+      { kind: "masterVolume", value: next },
+      options.flush === true,
+    );
+  }
+
+  async setFootswitchMode(mode: FootswitchMode): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, "footswitchMode", mode),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      FOOTSWITCH_MODE_WRITE_KEY,
+      { kind: "footswitchMode", value: mode },
+      true,
+    );
+  }
+
+  async setGlobalSysex(
+    key: GlobalSysexKey,
+    value: number | boolean | RecMode,
+    options: { flush?: boolean } = {},
+  ): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, key, value),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      globalSysexWriteKey(key),
+      { kind: "sysex", key, value },
+      options.flush === true,
+    );
+  }
+
+  flushGlobalSetting(key: "masterVolume" | GlobalSysexKey): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const writeKey = key === "masterVolume" ? MASTER_VOLUME_WRITE_KEY : globalSysexWriteKey(key);
+    this.writes.flush(writeKey);
+  }
+
   private async runIdentitySync(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
@@ -714,6 +830,7 @@ export class DeviceSession {
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
     await this.sendIrNameRequest(generation);
+    await this.sendGlobalsRequest(generation);
   }
 
   private finishSync(generation: number, chainSync: ChainSync = "idle"): void {
@@ -750,6 +867,17 @@ export class DeviceSession {
       return;
     }
     await this.sendBytes(encodeIrNames(this.snapshot.linkMode));
+  }
+
+  /** GP-50 device globals. Once per connect after the current-preset ask; not on GP-5. */
+  private async sendGlobalsRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    await this.sendBytes(encodeGlobals(this.snapshot.linkMode));
   }
 
   private async sendBytes(bytes: Uint8Array): Promise<void> {
@@ -796,11 +924,16 @@ export class DeviceSession {
       const liveOnOff = applyLiveModule(host, message);
       const liveOrder = applyLiveChainOrder(host, message);
       const liveSlot = applyLiveSlot(host, message);
+      const globalsHost = this.globalsHost();
+      const liveGlobal = globalsHost ? applyLiveGlobal(globalsHost, message) : false;
+      const globalsDump = globalsHost ? applyGlobalsDump(globalsHost, message) : false;
       if (
         !liveVolume &&
         !liveOnOff &&
         !liveOrder &&
         !liveSlot &&
+        !liveGlobal &&
+        !globalsDump &&
         this.snapshot.status === "connected"
       ) {
         this.applyIdentity(this.identity.push(message));
@@ -808,7 +941,7 @@ export class DeviceSession {
       if (this.snapshot.status === "connected") {
         this.applyIrNames(this.irNames.push(message));
       }
-      if (this.snapshot.status === "connected") {
+      if (this.snapshot.status === "connected" && !isGlobalsDump(message)) {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
       if (!this.inboundCapture) {
@@ -1027,6 +1160,23 @@ export class DeviceSession {
       clearControlWritesForKind: (kind) => session.writes.clearForKind(kind),
       setChain: (chain) => session.setChain(chain),
       isWorkingModified: (chain, chainSync) => session.isWorkingModified(chain, chainSync),
+      assignSnapshot: (next) => {
+        session.snapshot = next;
+      },
+      emitSnapshot: () => session.emitSnapshot(),
+    };
+  }
+
+  private globalsHost(): GlobalsHost | null {
+    const session = this;
+    if (session.snapshot.status !== "connected" || !session.snapshot.globals) {
+      return null;
+    }
+    return {
+      get snapshot() {
+        return session.snapshot as ConnectedSnapshot;
+      },
+      dropGlobalWrite: (key, value) => session.writes.dropGlobalWrite(key, value),
       assignSnapshot: (next) => {
         session.snapshot = next;
       },

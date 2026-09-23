@@ -4,6 +4,7 @@ import type { AudioChain } from "@/device/session";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { AudioChainRow } from "@/features/controller/AudioChain";
+import { GlobalSettingsControl } from "@/features/controller/GlobalSettingsModal";
 import { PatchBar } from "@/features/controller/PatchBar";
 import { PatchBodySkeleton } from "@/features/controller/PatchBodySkeleton";
 import { SlotControlPanels } from "@/features/controller/SlotControls";
@@ -54,16 +55,19 @@ function ConnectedController() {
 
   return (
     <section className="flex flex-1 flex-col items-center">
-      <PatchBar
-        patch={snapshot.patch}
-        patchNames={snapshot.patchNames}
-        busy={snapshot.chainSync === "syncing"}
-        canExportPatch={snapshot.canExportPatch}
-        modified={snapshot.modified}
-        model={snapshot.model}
-        patchVolume={snapshot.patchVolume}
-        patchBpm={snapshot.patchBpm}
-      />
+      <div className="flex w-full flex-col items-center gap-3">
+        <PatchBar
+          patch={snapshot.patch}
+          patchNames={snapshot.patchNames}
+          busy={snapshot.chainSync === "syncing"}
+          canExportPatch={snapshot.canExportPatch}
+          modified={snapshot.modified}
+          model={snapshot.model}
+          patchVolume={snapshot.patchVolume}
+          patchBpm={snapshot.patchBpm}
+        />
+        <GlobalSettingsControl />
+      </div>
       <PatchBody
         chain={snapshot.chain}
         pedal={snapshot.model}
