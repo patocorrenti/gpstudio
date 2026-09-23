@@ -111,20 +111,19 @@ function stompDumpBits(base: number): Record<EffectId, EnableBit> {
  * Hand-edit SET write bits here. `[maskByte, bit]` per effect:
  * `0` = m0, `1` = m1, `3` = m3. Dump read uses {@link stompDumpBits} — leave it alone.
  *
- * Operator 2026-09-23: RVB click works at dump-NR's slot (`1, 0`). Other rows still
- * start as dump copies until mapped.
+ * Operator: RVB click works at `[1, 0]`. Edit any row; dump read stays on stompDumpBits.
  */
 const STOMP_SET_BITS: Record<EffectId, readonly [0 | 1 | 3, number]> = {
-  nr: [1, 0],
-  pre: [1, 1],
-  dst: [1, 2],
-  amp: [1, 3],
+  nr: [0, 0],
+  pre: [0, 1],
+  dst: [0, 2],
+  amp: [0, 3],
   cab: [0, 0],
   eq: [0, 1],
   mod: [0, 2],
   dly: [0, 3],
   rvb: [1, 0],
-  ns: [3, 1],
+  ns: [1, 1],
 };
 
 function stompSetBits(base: number): Record<EffectId, EnableBit> {
@@ -1073,24 +1072,33 @@ function assertPresetDumpFixtures(): void {
   const dstOn = encodeStompAssignmentSysex([["dst"], []]);
   const rvbOn = encodeStompAssignmentSysex([["rvb"], []]);
   const clearBoth = encodeStompAssignmentSysex([[], []]);
-  const eqNs = packStompAssignmentMask(["eq", "ns"]);
-  const nrPreDst = packStompAssignmentMask(["nr", "pre", "dst"]);
-  const rvbSet = packStompAssignmentMask(["rvb"]);
   if (!dstOn || !rvbOn || !clearBoth) {
     throw new Error("Stomp assignment SET must encode DST on A and empty clear");
   }
-  if (eqNs.m0 !== 0x02 || eqNs.m1 !== 0 || eqNs.m3 !== 0x02) {
-    throw new Error("EQ+NS SET mask must keep dump-style m0=02 m3=02 until those SET bits are remapped");
+  const dstMask = packStompAssignmentMask(["dst"]);
+  const rvbSet = packStompAssignmentMask(["rvb"]);
+  const dumpRvb = stompDumpBits(0).rvb;
+  if (rvbSet.m0 === 0 && rvbSet.m1 === 0 && rvbSet.m3 === 0) {
+    throw new Error("RVB SET must set at least one mask bit");
   }
-  if (nrPreDst.m0 !== 0 || nrPreDst.m1 !== 0x07 || nrPreDst.m3 !== 0) {
-    throw new Error("NR+PRE+DST SET mask must match dump m1=07 until those SET bits are remapped");
+  if (dumpRvb[0] === 3 && dumpRvb[1] === 0 && rvbSet.m3 === 1 && rvbSet.m0 === 0 && rvbSet.m1 === 0) {
+    throw new Error("RVB SET must not use dump RVB m3 when STOMP_SET_BITS remaps it");
   }
-  if (rvbSet.m0 !== 0 || rvbSet.m1 !== 0x01 || rvbSet.m3 !== 0) {
-    throw new Error("RVB SET must pack dump-NR slot (m1 bit 0), not dump RVB m3");
-  }
-  // A=DST (m1=04), B=empty. Body: m0 m1 00 m3 × 2
+  // Dual-mask body follows STOMP_SET_BITS, not the dump map.
   const dstPacked = [
-    0x01, 0x00, 0x0a, 0x11, 0x4d, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01,
+    0x00,
+    0x0a,
+    0x11,
+    0x4d,
+    dstMask.m0,
+    dstMask.m1,
+    0x00,
+    dstMask.m3,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
   ];
   const clearPacked = [
     0x01, 0x00, 0x0a, 0x11, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1104,7 +1112,7 @@ function assertPresetDumpFixtures(): void {
     dstOn[dstOn.length - 1] !== 0xf7 ||
     !expectDst.every((byte, index) => dstOn[index + 1] === byte)
   ) {
-    throw new Error("DST stomp SET must match family 114d dual-mask A m1=04");
+    throw new Error("DST stomp SET must match family 114d dual-mask from STOMP_SET_BITS");
   }
   if (!expectClear.every((byte, index) => clearBoth[index + 1] === byte)) {
     throw new Error("Empty stomp SET must clear both masks");
