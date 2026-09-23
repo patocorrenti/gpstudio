@@ -89,9 +89,10 @@ export function stompWireFootswitch(
 }
 
 /**
- * Enable-style bit map relative to a stomp mask base (CAB/EQ/MOD/DLY, NR/PRE/DST/AMP, RVB/NS).
+ * Dump / live-`0D` bit map (read only). Relative to a stomp mask base:
+ * m0 CAB/EQ/MOD/DLY, m1 NR/PRE/DST/AMP, m3 RVB/NS. Do not use this for SET packing.
  */
-function stompEnableBits(base: number): Record<EffectId, EnableBit> {
+function stompDumpBits(base: number): Record<EffectId, EnableBit> {
   return {
     cab: [base, 0],
     eq: [base, 1],
@@ -106,25 +107,60 @@ function stompEnableBits(base: number): Record<EffectId, EnableBit> {
   };
 }
 
+/**
+ * Hand-edit SET write bits here. `[maskByte, bit]` per effect:
+ * `0` = m0, `1` = m1, `3` = m3. Dump read uses {@link stompDumpBits} — leave it alone.
+ *
+ * Operator 2026-09-23: RVB click works at dump-NR's slot (`1, 0`). Other rows still
+ * start as dump copies until mapped.
+ */
+const STOMP_SET_BITS: Record<EffectId, readonly [0 | 1 | 3, number]> = {
+  nr: [1, 0],
+  pre: [1, 1],
+  dst: [1, 2],
+  amp: [1, 3],
+  cab: [0, 0],
+  eq: [0, 1],
+  mod: [0, 2],
+  dly: [0, 3],
+  rvb: [1, 0],
+  ns: [3, 1],
+};
+
+function stompSetBits(base: number): Record<EffectId, EnableBit> {
+  return {
+    nr: [base + STOMP_SET_BITS.nr[0], STOMP_SET_BITS.nr[1]],
+    pre: [base + STOMP_SET_BITS.pre[0], STOMP_SET_BITS.pre[1]],
+    dst: [base + STOMP_SET_BITS.dst[0], STOMP_SET_BITS.dst[1]],
+    amp: [base + STOMP_SET_BITS.amp[0], STOMP_SET_BITS.amp[1]],
+    cab: [base + STOMP_SET_BITS.cab[0], STOMP_SET_BITS.cab[1]],
+    eq: [base + STOMP_SET_BITS.eq[0], STOMP_SET_BITS.eq[1]],
+    mod: [base + STOMP_SET_BITS.mod[0], STOMP_SET_BITS.mod[1]],
+    dly: [base + STOMP_SET_BITS.dly[0], STOMP_SET_BITS.dly[1]],
+    rvb: [base + STOMP_SET_BITS.rvb[0], STOMP_SET_BITS.rvb[1]],
+    ns: [base + STOMP_SET_BITS.ns[0], STOMP_SET_BITS.ns[1]],
+  };
+}
+
 export function emptyStomps(model: DeviceModel): StompAssignment {
   return model === "gp50" ? [[], []] : [[]];
 }
 
 function decodeStompMask(data: Uint8Array, base: number): EffectId[] {
-  const bits = stompEnableBits(base);
+  const bits = stompDumpBits(base);
   return EFFECT_IDS.filter((id) => bitOn(data, bits[id][0], bits[id][1]));
 }
 
 /**
- * Dump / live-`0D` mask bytes for one stomp (relative 0 / 1 / 3).
- * Live notify (Footswitch A): byte13=m0, byte14=m1, byte15=00, byte16=m3.
+ * SET `114d` mask bytes for one stomp (relative 0 / 1 / 3). Not the dump map:
+ * RVB SET uses dump-NR's slot. Live `0D` / dump still use {@link stompDumpBits}.
  */
 export function packStompAssignmentMask(effects: readonly EffectId[]): {
   m0: number;
   m1: number;
   m3: number;
 } {
-  const bits = stompEnableBits(0);
+  const bits = stompSetBits(0);
   let m0 = 0;
   let m1 = 0;
   let m3 = 0;
@@ -158,8 +194,8 @@ export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): Stom
 
 /**
  * App→pedal stomp-assignment SET (family `114d`). Replaces both stomp masks.
- * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0,m1,00,m3 each
- * (live `0D` field order; no foot index byte).
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0,m1,00,m3 each.
+ * Packs with {@link stompSetBits}, not the dump / live-`0D` map.
  */
 export function encodeStompAssignmentSysex(
   stomps: readonly (readonly EffectId[])[],
@@ -1027,18 +1063,30 @@ function assertPresetDumpFixtures(): void {
     throw new Error("Short GP-50 dump must yield two empty stomp lists");
   }
 
+  tweedy[1009] = 1 << 0;
+  const gp50Rvb = decodeStompsFromDump(tweedy, "gp50");
+  if (!gp50Rvb[0].includes("rvb") || !gp50Rvb[0].includes("pre")) {
+    throw new Error("GP-50 dump RVB (1009 bit 0) must decode independently of SET packing");
+  }
+  tweedy[1009] = 0;
+
   const dstOn = encodeStompAssignmentSysex([["dst"], []]);
+  const rvbOn = encodeStompAssignmentSysex([["rvb"], []]);
   const clearBoth = encodeStompAssignmentSysex([[], []]);
   const eqNs = packStompAssignmentMask(["eq", "ns"]);
   const nrPreDst = packStompAssignmentMask(["nr", "pre", "dst"]);
-  if (!dstOn || !clearBoth) {
+  const rvbSet = packStompAssignmentMask(["rvb"]);
+  if (!dstOn || !rvbOn || !clearBoth) {
     throw new Error("Stomp assignment SET must encode DST on A and empty clear");
   }
   if (eqNs.m0 !== 0x02 || eqNs.m1 !== 0 || eqNs.m3 !== 0x02) {
-    throw new Error("EQ+NS mask must match live 0D bytes m0=02 m3=02");
+    throw new Error("EQ+NS SET mask must keep dump-style m0=02 m3=02 until those SET bits are remapped");
   }
   if (nrPreDst.m0 !== 0 || nrPreDst.m1 !== 0x07 || nrPreDst.m3 !== 0) {
-    throw new Error("NR+PRE+DST mask must match live 0D m1=07");
+    throw new Error("NR+PRE+DST SET mask must match dump m1=07 until those SET bits are remapped");
+  }
+  if (rvbSet.m0 !== 0 || rvbSet.m1 !== 0x01 || rvbSet.m3 !== 0) {
+    throw new Error("RVB SET must pack dump-NR slot (m1 bit 0), not dump RVB m3");
   }
   // A=DST (m1=04), B=empty. Body: m0 m1 00 m3 × 2
   const dstPacked = [

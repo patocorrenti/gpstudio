@@ -22,4 +22,7 @@ Max 3 effects per foot; 4th ignored.
 | H11 | foot + m0,m1,00,m3 | pattern: foot=1→NR A; m0→m3 A; m3→m1 B |
 | **H12** | **both masks, no foot** (`size 0A`: A then B as m0,m1,00,m3) | under test |
 
-Retest A: NR on/off; PRE; CAB; clear. B should not get ghost NR from A edits.
+## H13 — dump bits ≠ SET bits
+
+Dump / live `0D` stay on `stompDumpBits`. SET packing uses `STOMP_SET_BITS` in `src/device/chain-codec.ts` (hand-edit that table). RVB SET is `[1, 0]` (dump-NR slot).
+
