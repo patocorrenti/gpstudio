@@ -4,6 +4,12 @@ import {
   type EffectId,
   type StompAssignment,
 } from "@/device/session";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +36,22 @@ export function stompMarkForEffect(
 
 function footHasRoom(stomps: StompAssignment, stompIndex: number): boolean {
   return (stomps[stompIndex]?.length ?? 0) < MAX_EFFECTS_PER_STOMP;
+}
+
+function stompMarkTooltip(
+  mark: "off" | "on" | "A" | "B",
+  pedal: DeviceModel,
+): string {
+  if (pedal === "gp5") {
+    return mark === "off" ? "Assign to stomp" : "Assigned to stomp";
+  }
+  if (mark === "A") {
+    return "Footswitch A";
+  }
+  if (mark === "B") {
+    return "Footswitch B";
+  }
+  return "Assign to footswitch";
 }
 
 /**
@@ -108,37 +130,44 @@ export function SlotStompMark({
           : `${label} not assigned to a footswitch`;
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      aria-label={aria}
-      aria-pressed={filled}
-      className={cn(
-        "cursor-pointer absolute top-1 right-1 z-20 flex size-4 items-center justify-center rounded-full border text-[0.8rem] font-bold leading-none transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-        filled
-          ? "border-primary bg-primary text-primary-foreground opacity-80"
-          : "border-muted-foreground/45 bg-background text-transparent",
-        disabled && "pointer-events-none opacity-50",
-      )}
-      onPointerDown={(event) => {
-        event.stopPropagation();
-      }}
-      onClick={(event) => {
-        event.stopPropagation();
-        if (disabled) {
-          return;
-        }
-        void cycleSlotStomp(
-          (stompIndex, id, assigned) =>
-            session.setStompAssignment(stompIndex, id, assigned),
-          stomps,
-          effect,
-          pedal,
-        );
-      }}
-    >
-      {mark === "A" || mark === "B" ? mark : null}
-    </button>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={aria}
+            aria-pressed={filled}
+            className={cn(
+              "absolute top-1 right-1 z-20 flex size-4 cursor-pointer items-center justify-center rounded-full border text-[0.8rem] font-bold leading-none transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+              filled
+                ? "border-primary bg-primary text-primary-foreground opacity-70"
+                : "border-muted-foreground/45 bg-background text-transparent",
+              disabled && "pointer-events-none opacity-50",
+            )}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (disabled) {
+                return;
+              }
+              void cycleSlotStomp(
+                (stompIndex, id, assigned) =>
+                  session.setStompAssignment(stompIndex, id, assigned),
+                stomps,
+                effect,
+                pedal,
+              );
+            }}
+          >
+            {mark === "A" || mark === "B" ? mark : null}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{stompMarkTooltip(mark, pedal)}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
