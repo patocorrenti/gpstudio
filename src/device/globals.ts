@@ -2,9 +2,14 @@ import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /**
  * GP-50 device-global settings (not patch Save).
- * Dump field offsets follow the local GP-50 reference editor's Bluetooth
- * "Received Global Parameters" packet (BLE indices − 2 → F0-aligned).
- * Confirm against a Patone Log when one lands; do not paste editor source.
+ *
+ * Bluetooth: one SysEx (F0-aligned ~210), command `00 02`, path `01 02 01`.
+ * Offsets are absolute in that packet (local BLE reference editor − 2).
+ *
+ * USB: fragmented SysEx, command `00 08` or `00 09`, data length 48 /
+ * terminator 20 or 22 (`_reference/GP50-USB.html`). Payloads start at byte 9
+ * and concatenate; table offsets are the Bluetooth absolute offsets minus 9.
+ * Do not paste editor source.
  */
 
 export type FootswitchMode = "patch" | "stomp";
@@ -66,19 +71,36 @@ const GLOBALS_REQUEST = Uint8Array.from([
 ]);
 
 /**
- * F0-aligned offsets from the reference editor's BLE-wrapped dump
- * (editor index − 2). Nibble pairs use high*16+low; single-byte rows are raw.
+ * Bluetooth F0-aligned absolute offsets (BLE reference editor index − 2).
+ * USB concatenated payload uses the same table at offset − 9.
  */
-const DUMP_MASTER_AT = 63;
-const DUMP_INPUT_AT = 73;
-const DUMP_NO_CAB_AT = 84;
-const DUMP_REC_AT = 103;
-const DUMP_BT_AT = 113;
-const DUMP_MON_AT = 123;
-const DUMP_REC_MODE_L_AT = 134;
-const DUMP_REC_MODE_R_AT = 144;
-const DUMP_FOOT_AT = 194;
-const DUMP_MIN_LENGTH = DUMP_FOOT_AT + 1;
+const BT_DUMP_MASTER_AT = 63;
+const BT_DUMP_INPUT_AT = 73;
+const BT_DUMP_NO_CAB_AT = 84;
+const BT_DUMP_REC_AT = 103;
+const BT_DUMP_BT_AT = 113;
+const BT_DUMP_MON_AT = 123;
+const BT_DUMP_REC_MODE_L_AT = 134;
+const BT_DUMP_REC_MODE_R_AT = 144;
+const BT_DUMP_FOOT_AT = 194;
+/** USB payloads omit the 9-byte SysEx header of each fragment. */
+const USB_PAYLOAD_SHIFT = 9;
+const USB_DUMP_MASTER_AT = BT_DUMP_MASTER_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_INPUT_AT = BT_DUMP_INPUT_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_NO_CAB_AT = BT_DUMP_NO_CAB_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_REC_AT = BT_DUMP_REC_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_BT_AT = BT_DUMP_BT_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_MON_AT = BT_DUMP_MON_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_REC_MODE_L_AT = BT_DUMP_REC_MODE_L_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_REC_MODE_R_AT = BT_DUMP_REC_MODE_R_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_FOOT_AT = BT_DUMP_FOOT_AT - USB_PAYLOAD_SHIFT;
+const USB_DUMP_MIN_LENGTH = USB_DUMP_FOOT_AT + 1;
+
+const USB_DATA_LENGTH = 48;
+const USB_TERMINATOR_LENGTHS = new Set([20, 22]);
+const USB_PAYLOAD_AT = 9;
+/** USB globals fragment commands observed in `_reference/GP50-USB.html`. */
+const USB_GLOBALS_COMMANDS = new Set([8, 9]);
 
 export function emptyGp50Globals(): DeviceGlobals {
   return {
@@ -109,24 +131,23 @@ function nibble(bytes: Uint8Array, index: number): number {
   return bytes[index] * 16 + bytes[index + 1];
 }
 
-/**
- * Globals dump: command `00 02`, path `01 02 01`.
- * Bluetooth reference packet is F0-aligned length 210 (BLE-wrapped 212).
- * Accept any length that still covers the footswitch byte so a USB whole-SysEx
- * of the same shape is not dropped solely for a length mismatch.
- */
-export function isGlobalsDump(bytes: Uint8Array): boolean {
-  const midi = midiPayload(bytes);
-  if (midi.length < DUMP_MIN_LENGTH || midi[0] !== 0xf0 || midi[midi.length - 1] !== 0xf7) {
-    return false;
+function fromSignedByte(packed: number): number {
+  return packed & 0x80 ? packed - 0x100 : packed;
+}
+
+function signedByte(value: number): number | null {
+  if (!Number.isInteger(value) || value < LEVEL_MIN || value > LEVEL_MAX) {
+    return null;
   }
-  return (
-    midi[3] === 0 &&
-    midi[4] === 2 &&
-    midi[9] === 1 &&
-    midi[10] === 2 &&
-    midi[11] === 1
-  );
+  return value < 0 ? 0x100 + value : value;
+}
+
+function recModeWire(mode: RecMode): number {
+  return mode === "dry" ? 0 : 1;
+}
+
+function recModeFromWire(wire: number): RecMode {
+  return wire === 0 ? "dry" : "wet";
 }
 
 function clampLevel(value: number): number | null {
@@ -143,20 +164,28 @@ function clampMaster(value: number): number | null {
   return value;
 }
 
-/**
- * Decode a globals dump using the reference-editor F0-aligned offsets.
- * Returns null when the header does not match.
- */
-export function decodeGlobalsDump(bytes: Uint8Array): DeviceGlobals | null {
-  const midi = midiPayload(bytes);
-  if (!isGlobalsDump(midi)) {
+function parseGlobalsTable(
+  data: Uint8Array,
+  offsets: {
+    master: number;
+    input: number;
+    noCab: number;
+    rec: number;
+    bt: number;
+    mon: number;
+    recModeL: number;
+    recModeR: number;
+    foot: number;
+  },
+): DeviceGlobals | null {
+  if (data.length <= offsets.foot) {
     return null;
   }
-  const inputLevel = clampLevel(fromSignedByte(nibble(midi, DUMP_INPUT_AT)));
-  const recLevel = clampLevel(fromSignedByte(nibble(midi, DUMP_REC_AT)));
-  const btRec = clampLevel(fromSignedByte(nibble(midi, DUMP_BT_AT)));
-  const monLevel = clampLevel(fromSignedByte(nibble(midi, DUMP_MON_AT)));
-  const masterVolume = clampMaster(fromSignedByte(nibble(midi, DUMP_MASTER_AT)));
+  const inputLevel = clampLevel(fromSignedByte(nibble(data, offsets.input)));
+  const recLevel = clampLevel(fromSignedByte(nibble(data, offsets.rec)));
+  const btRec = clampLevel(fromSignedByte(nibble(data, offsets.bt)));
+  const monLevel = clampLevel(fromSignedByte(nibble(data, offsets.mon)));
+  const masterVolume = clampMaster(fromSignedByte(nibble(data, offsets.master)));
   if (
     inputLevel === null ||
     recLevel === null ||
@@ -168,34 +197,146 @@ export function decodeGlobalsDump(bytes: Uint8Array): DeviceGlobals | null {
   }
   return {
     inputLevel,
-    noCab: midi[DUMP_NO_CAB_AT] !== 0,
+    noCab: data[offsets.noCab] !== 0,
     recLevel,
     btRec,
     monLevel,
-    recModeLeft: recModeFromWire(midi[DUMP_REC_MODE_L_AT]),
-    recModeRight: recModeFromWire(midi[DUMP_REC_MODE_R_AT]),
-    footswitchMode: midi[DUMP_FOOT_AT] === 0 ? "patch" : "stomp",
+    recModeLeft: recModeFromWire(data[offsets.recModeL]),
+    recModeRight: recModeFromWire(data[offsets.recModeR]),
+    footswitchMode: data[offsets.foot] === 0 ? "patch" : "stomp",
     masterVolume,
   };
 }
 
-function signedByte(value: number): number | null {
-  if (!Number.isInteger(value) || value < LEVEL_MIN || value > LEVEL_MAX) {
+/** Bluetooth single-packet globals dump (command `00 02`, path `01 02 01`). */
+export function isBluetoothGlobalsDump(bytes: Uint8Array): boolean {
+  const midi = midiPayload(bytes);
+  if (midi.length < BT_DUMP_FOOT_AT + 1 || midi[0] !== 0xf0 || midi[midi.length - 1] !== 0xf7) {
+    return false;
+  }
+  return (
+    midi[3] === 0 &&
+    midi[4] === 2 &&
+    midi[9] === 1 &&
+    midi[10] === 2 &&
+    midi[11] === 1
+  );
+}
+
+type UsbGlobalsHeader = {
+  index: number;
+  terminator: boolean;
+};
+
+function usbGlobalsHeader(bytes: Uint8Array): UsbGlobalsHeader | null {
+  const midi = midiPayload(bytes);
+  if (midi.length < 12 || midi[0] !== 0xf0 || midi[midi.length - 1] !== 0xf7) {
     return null;
   }
-  return value < 0 ? 0x100 + value : value;
+  if (midi[3] !== 0 || !USB_GLOBALS_COMMANDS.has(midi[4] ?? -1)) {
+    return null;
+  }
+  const terminator = USB_TERMINATOR_LENGTHS.has(midi.length);
+  const data = midi.length === USB_DATA_LENGTH;
+  if (!terminator && !data) {
+    return null;
+  }
+  return { index: nibble(midi, 5), terminator };
 }
 
-function fromSignedByte(packed: number): number {
-  return packed & 0x80 ? packed - 0x100 : packed;
+/** USB globals fragment (command `00 08` / `00 09`, length 48 or 20/22). */
+export function isUsbGlobalsDumpFragment(bytes: Uint8Array): boolean {
+  return usbGlobalsHeader(bytes) !== null;
 }
 
-function recModeWire(mode: RecMode): number {
-  return mode === "dry" ? 0 : 1;
+/** True for a Bluetooth globals dump or a USB globals fragment. */
+export function isGlobalsDump(bytes: Uint8Array): boolean {
+  return isBluetoothGlobalsDump(bytes) || isUsbGlobalsDumpFragment(bytes);
 }
 
-function recModeFromWire(wire: number): RecMode {
-  return wire === 0 ? "dry" : "wet";
+function decodeBluetoothGlobalsDump(bytes: Uint8Array): DeviceGlobals | null {
+  const midi = midiPayload(bytes);
+  if (!isBluetoothGlobalsDump(midi)) {
+    return null;
+  }
+  return parseGlobalsTable(midi, {
+    master: BT_DUMP_MASTER_AT,
+    input: BT_DUMP_INPUT_AT,
+    noCab: BT_DUMP_NO_CAB_AT,
+    rec: BT_DUMP_REC_AT,
+    bt: BT_DUMP_BT_AT,
+    mon: BT_DUMP_MON_AT,
+    recModeL: BT_DUMP_REC_MODE_L_AT,
+    recModeR: BT_DUMP_REC_MODE_R_AT,
+    foot: BT_DUMP_FOOT_AT,
+  });
+}
+
+function decodeUsbGlobalsPayload(payload: Uint8Array): DeviceGlobals | null {
+  if (payload.length < USB_DUMP_MIN_LENGTH) {
+    return null;
+  }
+  return parseGlobalsTable(payload, {
+    master: USB_DUMP_MASTER_AT,
+    input: USB_DUMP_INPUT_AT,
+    noCab: USB_DUMP_NO_CAB_AT,
+    rec: USB_DUMP_REC_AT,
+    bt: USB_DUMP_BT_AT,
+    mon: USB_DUMP_MON_AT,
+    recModeL: USB_DUMP_REC_MODE_L_AT,
+    recModeR: USB_DUMP_REC_MODE_R_AT,
+    foot: USB_DUMP_FOOT_AT,
+  });
+}
+
+/**
+ * Decode a Bluetooth single-packet globals dump.
+ * USB dumps must go through GlobalsDumpDecoder.
+ */
+export function decodeGlobalsDump(bytes: Uint8Array): DeviceGlobals | null {
+  return decodeBluetoothGlobalsDump(bytes);
+}
+
+function sysexPayload(midi: Uint8Array, start: number): Uint8Array {
+  const end = midi[midi.length - 1] === 0xf7 ? midi.length - 1 : midi.length;
+  return midi.subarray(start, end);
+}
+
+/**
+ * Assembles USB globals fragments; returns immediately for a Bluetooth dump.
+ */
+export class GlobalsDumpDecoder {
+  private fragments = new Map<number, Uint8Array>();
+
+  reset(): void {
+    this.fragments.clear();
+  }
+
+  push(bytes: Uint8Array): DeviceGlobals | null {
+    const bluetooth = decodeBluetoothGlobalsDump(bytes);
+    if (bluetooth) {
+      this.fragments.clear();
+      return bluetooth;
+    }
+    const midi = midiPayload(bytes);
+    const header = usbGlobalsHeader(midi);
+    if (!header) {
+      return null;
+    }
+    this.fragments.set(header.index, sysexPayload(midi, USB_PAYLOAD_AT));
+    if (!header.terminator) {
+      return null;
+    }
+    const entries = [...this.fragments.entries()].sort((left, right) => left[0] - right[0]);
+    this.fragments.clear();
+    const merged = new Uint8Array(entries.reduce((sum, entry) => sum + entry[1].length, 0));
+    let cursor = 0;
+    for (const [, part] of entries) {
+      merged.set(part, cursor);
+      cursor += part.length;
+    }
+    return decodeUsbGlobalsPayload(merged);
+  }
 }
 
 function framePackedSet(packed: Uint8Array): Uint8Array {
@@ -390,6 +531,12 @@ function assertGlobalsCodec(): void {
     throw new Error("A non-globals header must not decode as globals");
   }
 
+  const writeSignedAt = (target: Uint8Array, at: number, value: number) => {
+    const wire = value < 0 ? 0x100 + value : value;
+    target[at] = (wire >> 4) & 0x0f;
+    target[at + 1] = wire & 0x0f;
+  };
+
   const fixture = new Uint8Array(210);
   fixture[0] = 0xf0;
   fixture[3] = 0;
@@ -398,20 +545,15 @@ function assertGlobalsCodec(): void {
   fixture[10] = 2;
   fixture[11] = 1;
   fixture[209] = 0xf7;
-  const writeSigned = (at: number, value: number) => {
-    const wire = value < 0 ? 0x100 + value : value;
-    fixture[at] = (wire >> 4) & 0x0f;
-    fixture[at + 1] = wire & 0x0f;
-  };
-  writeSigned(DUMP_MASTER_AT, 63);
-  writeSigned(DUMP_INPUT_AT, 0);
-  writeSigned(DUMP_REC_AT, -6);
-  writeSigned(DUMP_BT_AT, 3);
-  writeSigned(DUMP_MON_AT, 0);
-  fixture[DUMP_NO_CAB_AT] = 0;
-  fixture[DUMP_REC_MODE_L_AT] = 0;
-  fixture[DUMP_REC_MODE_R_AT] = 1;
-  fixture[DUMP_FOOT_AT] = 1;
+  writeSignedAt(fixture, BT_DUMP_MASTER_AT, 63);
+  writeSignedAt(fixture, BT_DUMP_INPUT_AT, 0);
+  writeSignedAt(fixture, BT_DUMP_REC_AT, -6);
+  writeSignedAt(fixture, BT_DUMP_BT_AT, 3);
+  writeSignedAt(fixture, BT_DUMP_MON_AT, 0);
+  fixture[BT_DUMP_NO_CAB_AT] = 0;
+  fixture[BT_DUMP_REC_MODE_L_AT] = 0;
+  fixture[BT_DUMP_REC_MODE_R_AT] = 1;
+  fixture[BT_DUMP_FOOT_AT] = 1;
   const decoded = decodeGlobalsDump(fixture);
   if (
     !decoded ||
@@ -425,7 +567,64 @@ function assertGlobalsCodec(): void {
     decoded.recModeRight !== "wet" ||
     decoded.footswitchMode !== "stomp"
   ) {
-    throw new Error("Globals dump fixture must decode the reference-editor offsets");
+    throw new Error("Bluetooth globals dump fixture must decode the reference-editor offsets");
+  }
+
+  const usbPayload = new Uint8Array(USB_DUMP_MIN_LENGTH + 10);
+  writeSignedAt(usbPayload, USB_DUMP_MASTER_AT, 63);
+  writeSignedAt(usbPayload, USB_DUMP_INPUT_AT, 0);
+  writeSignedAt(usbPayload, USB_DUMP_REC_AT, -6);
+  writeSignedAt(usbPayload, USB_DUMP_BT_AT, 3);
+  writeSignedAt(usbPayload, USB_DUMP_MON_AT, 0);
+  usbPayload[USB_DUMP_NO_CAB_AT] = 1;
+  usbPayload[USB_DUMP_REC_MODE_L_AT] = 1;
+  usbPayload[USB_DUMP_REC_MODE_R_AT] = 0;
+  usbPayload[USB_DUMP_FOOT_AT] = 0;
+  const usbDataPayload = 38;
+  const chunks: Uint8Array[] = [];
+  let offset = 0;
+  let index = 0;
+  while (offset + usbDataPayload < usbPayload.length) {
+    const midi = new Uint8Array(USB_DATA_LENGTH);
+    midi[0] = 0xf0;
+    midi[3] = 0;
+    midi[4] = 8;
+    midi[5] = (index >> 4) & 0x0f;
+    midi[6] = index & 0x0f;
+    midi.set(usbPayload.subarray(offset, offset + usbDataPayload), USB_PAYLOAD_AT);
+    midi[USB_DATA_LENGTH - 1] = 0xf7;
+    chunks.push(midi);
+    offset += usbDataPayload;
+    index += 1;
+  }
+  const term = new Uint8Array(20);
+  term[0] = 0xf0;
+  term[3] = 0;
+  term[4] = 8;
+  term[5] = (index >> 4) & 0x0f;
+  term[6] = index & 0x0f;
+  term.set(usbPayload.subarray(offset), USB_PAYLOAD_AT);
+  term[19] = 0xf7;
+  chunks.push(term);
+  const usbDecoder = new GlobalsDumpDecoder();
+  let usbDecoded: DeviceGlobals | null = null;
+  for (const chunk of chunks) {
+    if (!isUsbGlobalsDumpFragment(chunk) && chunk !== chunks[chunks.length - 1]) {
+      throw new Error("USB globals data fragment must classify");
+    }
+    usbDecoded = usbDecoder.push(chunk);
+  }
+  if (
+    !usbDecoded ||
+    usbDecoded.masterVolume !== 63 ||
+    usbDecoded.inputLevel !== 0 ||
+    usbDecoded.recLevel !== -6 ||
+    usbDecoded.noCab !== true ||
+    usbDecoded.recModeLeft !== "wet" ||
+    usbDecoded.recModeRight !== "dry" ||
+    usbDecoded.footswitchMode !== "patch"
+  ) {
+    throw new Error("USB globals fragments must assemble to the payload table");
   }
 
   const inputSet = encodeGlobalSysex("inputLevel", 0);
@@ -437,7 +636,6 @@ function assertGlobalsCodec(): void {
   if (!sameBytes(inputSet, expected)) {
     throw new Error("Input-level SET must match packed 1111 effect 1 flag 3");
   }
-  // Live-notify path 01 02 04 is not a SET: a size-0x07 notify must not equal this frame.
   if (inputSet.length === 24) {
     throw new Error("Global SET must not be a 24-byte live notify");
   }

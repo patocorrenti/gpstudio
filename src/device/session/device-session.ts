@@ -26,6 +26,7 @@ import {
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import {
   emptyGp50Globals,
+  GlobalsDumpDecoder,
   isGlobalsDump,
   type DeviceGlobals,
   type FootswitchMode,
@@ -52,7 +53,7 @@ import {
   writeDumpPatchVolume,
 } from "@/device/patch-store";
 import {
-  applyGlobalsDump,
+  applyDecodedGlobals,
   applyLiveGlobal,
   mergeGlobalField,
   type GlobalsHost,
@@ -156,6 +157,7 @@ export class DeviceSession {
   private readonly identity = new IdentityDecoder();
   private readonly chainDump = new ChainDecoder();
   private readonly irNames = new IrNameDecoder();
+  private readonly globalsDump = new GlobalsDumpDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
   private namesWaiters = new Set<() => void>();
@@ -179,6 +181,12 @@ export class DeviceSession {
    * a mismatch is applied once and does not arm another request.
    */
   private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
+  /**
+   * IR-name and GP-50 globals asks after the first current-preset dump.
+   * USB overlaps those dumps with the preset dump if asked in the same burst
+   * (`_reference/GP50-USB.html` waits for preset info before globals).
+   */
+  private postChainDeviceAsks = false;
   private dropping = false;
   private readonly writes: SessionWriteQueue;
 
@@ -261,8 +269,10 @@ export class DeviceSession {
     this.identity.reset();
     this.chainDump.reset();
     this.irNames.reset();
+    this.globalsDump.reset();
     this.sysex.reset();
     this.writes.clear();
+    this.postChainDeviceAsks = false;
     this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -323,7 +333,9 @@ export class DeviceSession {
       this.identity.reset();
       this.chainDump.reset();
       this.irNames.reset();
+      this.globalsDump.reset();
       this.sysex.reset();
+      this.postChainDeviceAsks = false;
       this.dropPatchDump();
       this.dropping = false;
       this.emitSnapshot();
@@ -827,10 +839,9 @@ export class DeviceSession {
     this.chainDump.reset();
     this.patchConfirm = "off";
     this.captureBaselineFromDump = true;
+    this.postChainDeviceAsks = true;
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
-    await this.sendIrNameRequest(generation);
-    await this.sendGlobalsRequest(generation);
   }
 
   private finishSync(generation: number, chainSync: ChainSync = "idle"): void {
@@ -926,14 +937,17 @@ export class DeviceSession {
       const liveSlot = applyLiveSlot(host, message);
       const globalsHost = this.globalsHost();
       const liveGlobal = globalsHost ? applyLiveGlobal(globalsHost, message) : false;
-      const globalsDump = globalsHost ? applyGlobalsDump(globalsHost, message) : false;
+      const globalsMessage = isGlobalsDump(message);
+      if (globalsHost) {
+        applyDecodedGlobals(globalsHost, this.globalsDump.push(message));
+      }
       if (
         !liveVolume &&
         !liveOnOff &&
         !liveOrder &&
         !liveSlot &&
         !liveGlobal &&
-        !globalsDump &&
+        !globalsMessage &&
         this.snapshot.status === "connected"
       ) {
         this.applyIdentity(this.identity.push(message));
@@ -941,7 +955,7 @@ export class DeviceSession {
       if (this.snapshot.status === "connected") {
         this.applyIrNames(this.irNames.push(message));
       }
-      if (this.snapshot.status === "connected" && !isGlobalsDump(message)) {
+      if (this.snapshot.status === "connected" && !globalsMessage) {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
       if (!this.inboundCapture) {
@@ -1062,6 +1076,7 @@ export class DeviceSession {
       canExportPatch: !holdBusyForConfirm,
     });
     this.releaseWaiters(this.chainWaiters);
+    this.queuePostChainDeviceAsks(generation);
     if (
       armConfirmation &&
       this.patchConfirm === "after-apply" &&
@@ -1075,6 +1090,17 @@ export class DeviceSession {
         this.armChainRefreshTimer();
       }
     }
+  }
+
+  /** Once per connect: IR names and GP-50 globals after the first preset dump. */
+  private queuePostChainDeviceAsks(generation: number): void {
+    if (!this.postChainDeviceAsks) {
+      return;
+    }
+    this.postChainDeviceAsks = false;
+    this.globalsDump.reset();
+    void this.sendIrNameRequest(generation);
+    void this.sendGlobalsRequest(generation);
   }
 
   /**
@@ -1268,6 +1294,7 @@ export class DeviceSession {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
     this.patchConfirm = "off";
+    this.postChainDeviceAsks = false;
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
     this.writes.clear();

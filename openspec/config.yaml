@@ -11,9 +11,13 @@ context: |
   is requested after connect and when the patch changes.
   The IR-name dump is requested once per connect after the current-preset ask
   and does not block identity or chain loading. Reload and patch change do not
-  re-request it. On GP-50 only, the globals dump is requested the same way
-  (once per connect, no waiter); dump field offsets follow the local
-  GP-50 reference editor Bluetooth packet (pending Patone Log confirm).
+  re-request it. On GP-50 only, the globals dump is requested once per connect
+  after the first current-preset dump (no waiter; not in the same burst as the
+  preset ask—USB overlaps those dumps otherwise). Bluetooth returns one SysEx
+  (command 00 02); USB returns fragments (command 00 08 or 00 09, lengths 48 /
+  20–22) assembled in session. Field offsets follow the local GP-50 reference
+  editors (USB payload = Bluetooth absolute minus 9; No CAB is not the USB
+  editor's data[64]).
   GP-5 does not send the GP-50 globals ask.
   Selecting a user IR slot is the existing model SET (1147).
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order

@@ -1,8 +1,6 @@
 import {
-  decodeGlobalsDump,
   decodeLiveGlobal,
   decodeLiveGlobalCc,
-  isGlobalsDump,
   type DeviceGlobals,
   type FootswitchMode,
   type GlobalSysexKey,
@@ -24,17 +22,13 @@ export type GlobalsHost = {
   emitSnapshot: () => void;
 };
 
-/** True when the message is a globals dump (even if field offsets are still unlocked). */
-export function applyGlobalsDump(host: GlobalsHost, message: Uint8Array): boolean {
-  if (!isGlobalsDump(message)) {
-    return false;
+/** Apply a finished globals decode (Bluetooth packet or assembled USB dump). */
+export function applyDecodedGlobals(host: GlobalsHost, decoded: DeviceGlobals | null): void {
+  if (!decoded || !host.snapshot.globals) {
+    return;
   }
-  const decoded = decodeGlobalsDump(message);
-  if (decoded && host.snapshot.globals) {
-    host.assignSnapshot({ ...host.snapshot, globals: decoded });
-    host.emitSnapshot();
-  }
-  return true;
+  host.assignSnapshot({ ...host.snapshot, globals: decoded });
+  host.emitSnapshot();
 }
 
 export function applyLiveGlobal(host: GlobalsHost, message: Uint8Array): boolean {
