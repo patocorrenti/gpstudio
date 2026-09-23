@@ -45,16 +45,14 @@ EXP is never in the mask. Same bit layout as module enable masks in the dump.
 
 **Choice:** Patone-owned encoder parallel to model/control SETs:
 
-- Packed body: size `0x05`, family `11 4d`, then footswitch `0|1`, effect index `0`–`9`, value `0|1`.
-- CRC-8 ATM (poly `0x07`, init 0) + nibble-expand; SysEx path `01 01 04` after expand (`src/device/sysex-nibble.ts`).
 - Effect index map (CTL order, **not** UI chain order): `0` NR, `1` PRE, `2` DST, `3` AMP, `4` CAB, `5` EQ, `6` MOD, `7` DLY, `8` RVB, **`9` NS**.
-- GP-5: always footswitch `0` (single stomp). GP-50: `0` = A, `1` = B.
-- One SET per checkbox flip (assign or clear), not a 30-byte mask poke.
-- BLE-MIDI wrap on Bluetooth via the existing link encoder; send as one GATT write (same rule as other SETs — do not chunk).
+- Packed body: size `0x05`, family `11 4d`, then wire footswitch, effect, value (one byte each). GP-50 UI A → wire `1`, UI B → wire `0` (operator map). GP-5 → wire `0`.
+- One SET per checkbox flip (assign or clear), **not** a full stomp mask. Multi-module side effects mean mis-parse, not intentional mask replace.
+- BLE-MIDI wrap on Bluetooth via the existing link encoder; send as one GATT write.
 
-**Why:** Reference editors move the pedal with this shape. Spike H7 guessed command `0D` / wrong body and was ignored. Live `0D` is pedal→app notify only (spike captures).
+**Why:** Operator: B-app NR (wire foot was `1`) lit NR on A-pedal cleanly; A-app (wire `0`) wrote to B. Short body matches reference `sendCTL`; padded `0E` caused extra NR ghosts on other effects.
 
-**Alternative:** Echo live `0D` or host dump-offset poke. Rejected; already failed in the lab.
+**Alternative:** Full-mask SET per stomp. Not indicated while a single `(foot, effect, val)` can light exactly one module (B-NR→A-NR). Echo live `0D` rejected earlier.
 
 **Confirm:** Operator assigns DST on stomp 1 over USB, Log shows Patone’s `114d` frame, dump 1006/1014 (or GP-5 920) matches. Refine only if the pedal still ignores — then capture an accepted app→pedal frame; do not invent a third family.
 

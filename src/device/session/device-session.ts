@@ -22,6 +22,7 @@ import {
   ChainDecoder,
   decodePresetDump,
   emptyStomps,
+  stompWireFootswitch,
   type ChainDumpResult,
   type StompAssignment,
 } from "@/device/chain-codec";
@@ -588,7 +589,8 @@ export class DeviceSession {
 
   /**
    * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
-   * Sends family `114d` (not live `0D`). GP-5 always uses footswitch 0.
+   * Sends family `114d` (not live `0D`) — one effect bit, not the whole stomp mask.
+   * GP-50 UI A/B map to wire foot 1/0; GP-5 uses wire foot 0.
    */
   async setStompAssignment(
     stompIndex: number,
@@ -608,8 +610,8 @@ export class DeviceSession {
     if (stompIndex < 0 || stompIndex >= stomps.length) {
       return;
     }
-    const footswitch = (stompIndex === 0 ? 0 : 1) as 0 | 1;
-    if (this.snapshot.model === "gp5" && footswitch !== 0) {
+    const footswitch = stompWireFootswitch(this.snapshot.model, stompIndex);
+    if (footswitch === null) {
       return;
     }
     const current = stomps[stompIndex];

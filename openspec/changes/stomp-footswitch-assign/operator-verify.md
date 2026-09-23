@@ -30,4 +30,14 @@ Do **not** retry envelopes in `openspec/changes/stomp-assignment/spike-assignmen
 - [ ] Pass
 - [ ] Fail — notes:
 
-If all pass, live `0D` apply on Bluetooth can be a small follow-up. If fail, capture the accepted app→pedal frame from the official/reference editor before inventing another family.
+## Hypothesis H9 (2026-09-23) — wire foot inverted + short body
+
+Operator on padded `0E`: A-app wrote only to B-pedal; B-app NR lit NR on A-pedal (clean). So UI A ⇔ wire `1`, UI B ⇔ wire `0`.
+
+Multi-module lights are from mis-parsed frames, not a full-stomp payload: each click still sends one `(foot, effect, 0|1)`.
+
+**Under test:** short size-`05` `114d` again, with GP-50 foot map A→1 / B→0.
+
+Retest: A-NR on/off (expect only NR on A); A-PRE; B-NR.
+
+
