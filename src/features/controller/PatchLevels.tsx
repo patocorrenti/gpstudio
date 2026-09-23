@@ -1,6 +1,13 @@
 import { Slider } from "@/components/ui/slider";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { DeviceModel } from "@/device/models";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { useState } from "react";
 
 function LevelSlider({
   label,
@@ -21,35 +28,48 @@ function LevelSlider({
   onChange: (value: number) => void;
   onCommit: (value: number) => void;
 }) {
+  const [dragging, setDragging] = useState(false);
+  const tip = value === null ? "—" : String(value);
+
   return (
-    <div className="flex w-40 items-center gap-1.5">
+    <div className="flex w-32 items-center gap-1.5">
       <span className="w-9 shrink-0 text-sm text-foreground/70">{label}</span>
-      <Slider
-        className="min-w-0 flex-1"
-        min={min}
-        max={max}
-        step={1}
-        value={[value ?? min]}
-        disabled={disabled || value === null}
-        aria-label={ariaLabel}
-        onValueChange={(next) => {
-          const nextValue = next[0];
-          if (nextValue === undefined || value === null) {
-            return;
-          }
-          onChange(nextValue);
-        }}
-        onValueCommit={(next) => {
-          const nextValue = next[0];
-          if (nextValue === undefined || value === null) {
-            return;
-          }
-          onCommit(nextValue);
-        }}
-      />
-      <span className="w-7 shrink-0 text-right text-sm font-medium tabular-nums">
-        {value === null ? "—" : value}
-      </span>
+      <TooltipProvider delayDuration={0}>
+        <Tooltip open={dragging || undefined}>
+          <TooltipTrigger asChild>
+            <div className="min-w-0 flex-1">
+              <Slider
+                className="w-full"
+                min={min}
+                max={max}
+                step={1}
+                value={[value ?? min]}
+                disabled={disabled || value === null}
+                aria-label={ariaLabel}
+                onValueChange={(next) => {
+                  const nextValue = next[0];
+                  if (nextValue === undefined || value === null) {
+                    return;
+                  }
+                  setDragging(true);
+                  onChange(nextValue);
+                }}
+                onValueCommit={(next) => {
+                  const nextValue = next[0];
+                  setDragging(false);
+                  if (nextValue === undefined || value === null) {
+                    return;
+                  }
+                  onCommit(nextValue);
+                }}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="tabular-nums">
+            {tip}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }
