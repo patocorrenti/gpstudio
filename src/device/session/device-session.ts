@@ -4,18 +4,14 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
-import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
   defaultValuesFor,
   modelById,
-  modelByWire,
   modelsForKind,
   snapControlValue,
-  type WireIdentity,
 } from "@/device/catalog";
 import {
   defaultChain,
-  isEffectSlot,
   reorderChain,
   type AudioChain,
   type ChainSlotId,
@@ -23,11 +19,6 @@ import {
 } from "@/device/chain";
 import {
   ChainDecoder,
-  decodeLiveChainOrder,
-  decodeLiveOnOffChanges,
-  decodeLivePatchVolume,
-  decodeLiveSlotControl,
-  decodeLiveSlotModel,
   decodePresetDump,
   type ChainDumpResult,
 } from "@/device/chain-codec";
@@ -38,25 +29,14 @@ import {
   encodeIrNames,
   encodeModule,
   encodePatch,
-  encodePatchBpm,
   encodePatchStore,
-  encodePatchTempoCc,
-  encodePatchVolume,
-  encodePatchVolumeCc,
-  encodeSlotControl,
   encodeSlotModel,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
-import {
-  emptyUserIrNames,
-  encodeIrNameDump,
-  IrNameDecoder,
-  USER_IR_COUNT,
-} from "@/device/ir-names";
+import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import {
   emptyPatchNames,
   IdentityDecoder,
-  PATCH_COUNT,
   SysexAssembler,
   type IdentityEvent,
 } from "@/device/identity";
@@ -73,60 +53,45 @@ import {
   writeDumpPatchBpm,
   writeDumpPatchVolume,
 } from "@/device/patch-store";
-import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
+import {
+  applyLiveChainOrder,
+  applyLiveModule,
+  applyLivePatchVolume,
+  applyLiveSlot,
+  type ConnectedSnapshot,
+  type LiveFollowHost,
+} from "@/device/session/inbound";
+import {
+  encodeUploadedPatchWrites,
+  overlayDumpPatchGlobals,
+  UPLOAD_COMMIT_GAP_MS,
+  UPLOAD_MODEL_GAP_MS,
+  UPLOAD_WRITE_GAP_MS,
+} from "@/device/session/patch-io";
+import {
+  clampPatch,
+  cloneChain,
+  chainSlotsEqual,
+  isWorkingModified as workingPatchIsModified,
+  patchDiffersFromBaseline,
+  preserveExpEnabled,
+  wrapPatch,
+  type WorkingBaseline,
+} from "@/device/session/working-patch";
+import {
+  controlWriteKey,
+  PATCH_BPM_WRITE_KEY,
+  PATCH_VOLUME_WRITE_KEY,
+  SessionWriteQueue,
+} from "@/device/session/writes";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
-export type { LinkMode, LinkCapabilities } from "@/device/link";
-export { capabilitiesForLink } from "@/device/link";
-export type { InboundMidiEvent } from "@/device/midi-log";
-export type { LinkEndpoint } from "@/device/endpoint";
-export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
-export {
-  chainSlotBypassed,
-  chainSlotLabel,
-  defaultChain,
-  isEffectSlot,
-  isMovableEffect,
-  type AudioChain,
-  type AudioChainSlot,
-  type ChainSlotId,
-  type EffectId,
-} from "@/device/chain";
-
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
-/** Coalesce slider SETs so BLE-MIDI is not flooded. Toggles flush immediately. */
-const CONTROL_WRITE_THROTTLE_MS = 80;
-/**
- * Upload paces SETs. USB `output.send` and BLE `writeValueWithoutResponse`
- * both return before the pedal has applied the previous SysEx; a burst drops
- * trailing writes (often store `114a`). Gaps are apply-only, not the slider throttle.
- */
-const UPLOAD_WRITE_GAP_MS = { usb: 20, bluetooth: 40 } as const;
-const UPLOAD_MODEL_GAP_MS = { usb: 50, bluetooth: 80 } as const;
-const UPLOAD_COMMIT_GAP_MS = { usb: 80, bluetooth: 120 } as const;
-
-type UploadApplyStep = {
-  kind: "model" | "control" | "order" | "module" | "global";
-  bytes: Uint8Array;
-};
-
-function controlWriteKey(kind: EffectId, index: number): string {
-  return `${kind}:${index}`;
-}
-
-const PATCH_VOLUME_WRITE_KEY = "patch-volume";
-const PATCH_BPM_WRITE_KEY = "patch-bpm";
 const PATCH_VOLUME_MAX = 100;
 const PATCH_BPM_MIN = 40;
 const PATCH_BPM_MAX = 260;
-
-type WorkingBaseline = {
-  chain: AudioChain;
-  patchVolume: number | null;
-  patchBpm: number | null;
-};
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
@@ -152,64 +117,6 @@ export type SessionSnapshot =
       sync: SessionSync;
       linkMode: LinkMode;
     };
-
-function clampPatch(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.min(PATCH_COUNT - 1, Math.max(0, Math.trunc(value)));
-}
-
-function wrapPatch(value: number): number {
-  return ((value % PATCH_COUNT) + PATCH_COUNT) % PATCH_COUNT;
-}
-
-function preserveExpEnabled(previous: AudioChain, next: AudioChain): AudioChain {
-  const previousExp = previous.find((slot) => slot.id === "exp");
-  if (!previousExp) {
-    return next;
-  }
-  return next.map((slot) =>
-    slot.id === "exp" ? { ...slot, enabled: previousExp.enabled } : slot,
-  );
-}
-
-function chainSlotsEqual(left: AudioChain, right: AudioChain): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index];
-    const b = right[index];
-    if (a.id !== b.id || a.enabled !== b.enabled || a.modelId !== b.modelId) {
-      return false;
-    }
-    const aValues = a.values;
-    const bValues = b.values;
-    if (aValues === undefined || bValues === undefined) {
-      if (aValues !== bValues) {
-        return false;
-      }
-      continue;
-    }
-    if (aValues.length !== bValues.length) {
-      return false;
-    }
-    for (let valueIndex = 0; valueIndex < aValues.length; valueIndex += 1) {
-      if (aValues[valueIndex] !== bValues[valueIndex]) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-function cloneChain(chain: AudioChain): AudioChain {
-  return chain.map((slot) => ({
-    ...slot,
-    values: slot.values ? slot.values.slice() : undefined,
-  }));
-}
 
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
@@ -252,15 +159,7 @@ export class DeviceSession {
    */
   private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
   private dropping = false;
-  private readonly pendingControlWrites = new Map<
-    string,
-    { kind: EffectId; index: number; value: number }
-  >();
-  private readonly pendingPatchWrites = new Map<string, number>();
-  private readonly controlWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly lastControlWriteAt = new Map<string, number>();
-  private readonly lastControlSentValue = new Map<string, number>();
-  private controlSendTail: Promise<void> = Promise.resolve();
+  private readonly writes: SessionWriteQueue;
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -268,6 +167,13 @@ export class DeviceSession {
   ) {
     this.transport = transport;
     this.bluetooth = bluetooth;
+    this.writes = new SessionWriteQueue(
+      (bytes) => this.sendBytes(bytes),
+      () =>
+        this.snapshot.status === "connected"
+          ? { linkMode: this.snapshot.linkMode, model: this.snapshot.model }
+          : null,
+    );
     this.transport.subscribe((bytes) => this.handleInbound(bytes));
     this.bluetooth.subscribe((bytes) => this.handleInbound(bytes));
     this.transport.subscribeDisconnect(() => {
@@ -335,7 +241,7 @@ export class DeviceSession {
     this.chainDump.reset();
     this.irNames.reset();
     this.sysex.reset();
-    this.clearControlWrites();
+    this.writes.clear();
     this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -472,7 +378,7 @@ export class DeviceSession {
     const generation = this.syncGeneration;
     this.patchConfirm = "off";
     this.captureBaselineFromDump = false;
-    this.clearControlWrites();
+    this.writes.clear();
     this.chainDump.reset();
     this.beginChainRefresh();
     this.keepPatchGlobalsOnDump = this.workingDiffersFromBaseline();
@@ -488,13 +394,12 @@ export class DeviceSession {
     const name = this.snapshot.patchNames[this.snapshot.patch] ?? "";
     let dump = this.currentPatchDump;
     if (this.snapshot.modified) {
-      dump = this.currentPatchDump.slice();
-      if (this.snapshot.patchVolume !== null) {
-        writeDumpPatchVolume(this.snapshot.model, dump, this.snapshot.patchVolume);
-      }
-      if (this.snapshot.model === "gp50" && this.snapshot.patchBpm !== null) {
-        writeDumpPatchBpm(this.snapshot.model, dump, this.snapshot.patchBpm);
-      }
+      dump = overlayDumpPatchGlobals(
+        this.snapshot.model,
+        this.currentPatchDump,
+        this.snapshot.patchVolume,
+        this.snapshot.patchBpm,
+      );
     }
     const bytes = encodePrstFile({
       model: this.snapshot.model,
@@ -540,7 +445,13 @@ export class DeviceSession {
       modified: false,
     };
     this.emitSnapshot();
-    const steps = this.encodeUploadedPatchWrites(chain, parsed.volume, parsed.bpm);
+    const steps = encodeUploadedPatchWrites(
+      this.snapshot.model,
+      this.snapshot.linkMode,
+      chain,
+      parsed.volume,
+      parsed.bpm,
+    );
     if (!steps) {
       if (this.snapshot.status === "connected") {
         this.snapshot = {
@@ -553,7 +464,7 @@ export class DeviceSession {
       }
       return { ok: false, reason: "invalid" };
     }
-    this.clearControlWrites();
+    this.writes.clear();
     const linkMode = this.snapshot.linkMode;
     for (let index = 0; index < steps.length; index += 1) {
       if (this.snapshot.status !== "connected") {
@@ -655,7 +566,7 @@ export class DeviceSession {
     if (!packets) {
       return;
     }
-    this.clearControlWritesForKind(kind);
+    this.writes.clearForKind(kind);
     const values = defaultValuesFor(model);
     const chain = this.snapshot.chain.map((entry, slotIndex) =>
       slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
@@ -713,7 +624,7 @@ export class DeviceSession {
     if (unchanged && !options.flush) {
       return;
     }
-    this.queueControlWrite(kind, controlIndex, nextValue, options.flush === true);
+    this.writes.queueControlWrite(kind, controlIndex, nextValue, options.flush === true);
   }
 
   /** Send the latest queued value for this control now (slider pointer up). */
@@ -721,7 +632,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    this.flushControlWrite(controlWriteKey(kind, controlIndex));
+    this.writes.flush(controlWriteKey(kind, controlIndex));
   }
 
   async setPatchVolume(value: number, options: { flush?: boolean } = {}): Promise<void> {
@@ -875,11 +786,15 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
+    const host = this.liveFollowHost();
+    if (!host) {
+      return;
+    }
     for (const message of this.sysex.push(bytes)) {
-      const liveVolume = this.applyLivePatchVolume(message);
-      const liveOnOff = this.applyLiveModule(message);
-      const liveOrder = this.applyLiveChainOrder(message);
-      const liveSlot = this.applyLiveSlot(message);
+      const liveVolume = applyLivePatchVolume(host, message);
+      const liveOnOff = applyLiveModule(host, message);
+      const liveOrder = applyLiveChainOrder(host, message);
+      const liveSlot = applyLiveSlot(host, message);
       if (
         !liveVolume &&
         !liveOnOff &&
@@ -956,7 +871,7 @@ export class DeviceSession {
     this.keepPatchGlobalsOnDump = false;
     this.patchConfirm = confirmPatch ? "after-apply" : "off";
     this.captureBaselineFromDump = captureBaseline;
-    this.clearControlWrites();
+    this.writes.clear();
     this.chainDump.reset();
     this.beginChainRefresh();
     void this.sendChainRequest(this.syncGeneration);
@@ -1050,9 +965,7 @@ export class DeviceSession {
     const finishBusy = this.snapshot.chainSync === "syncing";
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
     const edited =
-      this.snapshot.modified ||
-      this.pendingControlWrites.size > 0 ||
-      this.pendingPatchWrites.size > 0;
+      this.snapshot.modified || this.writes.hasPending();
     if (edited) {
       if (finishBusy) {
         this.clearChainRefreshTimer();
@@ -1096,208 +1009,28 @@ export class DeviceSession {
     this.setChain(chain, { chainSync: "idle", canExportPatch: true });
   }
 
-  private applyLivePatchVolume(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const volume = decodeLivePatchVolume(message);
-    if (volume === null) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    if (this.snapshot.chainSync === "syncing") {
-      return true;
-    }
-    this.dropPatchWrite(PATCH_VOLUME_WRITE_KEY, volume);
-    if (this.snapshot.patchVolume === volume) {
-      return true;
-    }
-    if (this.currentPatchDump) {
-      writeDumpPatchVolume(this.snapshot.model, this.currentPatchDump, volume);
-    }
-    this.snapshot = {
-      ...this.snapshot,
-      patchVolume: volume,
-    };
-    this.snapshot = {
-      ...this.snapshot,
-      modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
-    };
-    this.emitSnapshot();
-    return true;
-  }
-
-  private applyLiveModule(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const fromCc = this.decodeLiveOnOffCc(message);
-    const reports = fromCc ? [fromCc] : decodeLiveOnOffChanges(message);
-    if (reports.length === 0) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    if (this.snapshot.chainSync === "syncing") {
-      return true;
-    }
-    for (const report of reports) {
-      this.setChainSlotEnabled(report.id, report.enabled);
-    }
-    return true;
-  }
-
-  private applyLiveChainOrder(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const order = decodeLiveChainOrder(message);
-    if (!order) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    if (this.snapshot.chainSync === "syncing") {
-      return true;
-    }
-    const previousById = new Map(this.snapshot.chain.map((slot) => [slot.id, slot] as const));
-    const exp = this.snapshot.chain.find((slot) => slot.id === "exp");
-    const chain: AudioChain = order.map((id) => {
-      const previous = previousById.get(id);
-      return {
-        id,
-        enabled: previous?.enabled ?? false,
-        modelId: previous?.modelId,
-        values: previous?.values,
-      };
-    });
-    if (exp) {
-      chain.push({ id: "exp", enabled: exp.enabled });
-    }
-    this.setChain(chain);
-    return true;
-  }
-
-  private applyLiveSlot(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const modelChange = decodeLiveSlotModel(message);
-    if (modelChange) {
-      if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-        return true;
-      }
-      this.applyLiveSlotModel(modelChange.kind, modelChange.wire);
-      return true;
-    }
-    const controlChange = decodeLiveSlotControl(message);
-    if (!controlChange) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    this.applyLiveSlotControl(controlChange.kind, controlChange.index, controlChange.value);
-    return true;
-  }
-
-  private applyLiveSlotModel(kind: EffectId, wire: WireIdentity): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
-    if (index < 0) {
-      return;
-    }
-    let model = modelByWire(kind, wire);
-    if (!model) {
-      const sole = modelsForKind(kind, this.snapshot.model);
-      if (sole.length !== 1) {
-        return;
-      }
-      model = sole[0];
-    }
-    if (!model.devices.has(this.snapshot.model)) {
-      return;
-    }
-    this.clearControlWritesForKind(kind);
-    const values = defaultValuesFor(model);
-    const chain = this.snapshot.chain.map((entry, slotIndex) =>
-      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
-    );
-    this.setChain(chain);
-  }
-
-  private applyLiveSlotControl(kind: EffectId, controlIndex: number, value: number): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
-    if (index < 0) {
-      return;
-    }
-    const slot = this.snapshot.chain[index];
-    if (slot.modelId === undefined || slot.values === undefined) {
-      return;
-    }
-    const model = modelById(slot.modelId);
-    if (!model || model.kind !== kind) {
-      return;
-    }
-    const control = model.controls.find((entry) => entry.index === controlIndex);
-    if (!control || controlIndex >= slot.values.length) {
-      return;
-    }
-    const nextValue = snapControlValue(control, value);
-    this.dropControlWrite(controlWriteKey(kind, controlIndex), nextValue);
-    if (slot.values[controlIndex] === nextValue) {
-      return;
-    }
-    const values = slot.values.slice();
-    values[controlIndex] = nextValue;
-    const chain = this.snapshot.chain.map((entry, slotIndex) =>
-      slotIndex === index ? { ...entry, values } : entry,
-    );
-    this.setChain(chain);
-  }
-
-  /** Module and EXP on/off only. Inbound CC 7, CC 73, and CC 74 do not change the snapshot. */
-  private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
-    if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
+  private liveFollowHost(): LiveFollowHost | null {
+    const session = this;
+    if (session.snapshot.status !== "connected") {
       return null;
     }
-    if (message[1] === gp50Cc.expOnOff) {
-      return { id: "exp", enabled: moduleEnabledFromCc(message[2]) };
-    }
-    const id = effectIdForModuleCc(message[1]);
-    if (!id) {
-      return null;
-    }
-    return { id, enabled: moduleEnabledFromCc(message[2]) };
-  }
-
-  private setChainSlotEnabled(id: ChainSlotId, enabled: boolean): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === id);
-    if (index < 0 || this.snapshot.chain[index].enabled === enabled) {
-      return;
-    }
-    const chain = this.snapshot.chain.map((slot, slotIndex) =>
-      slotIndex === index ? { ...slot, enabled } : slot,
-    );
-    this.setChain(chain);
+    return {
+      get snapshot() {
+        return session.snapshot as ConnectedSnapshot;
+      },
+      get currentPatchDump() {
+        return session.currentPatchDump;
+      },
+      dropPatchWrite: (key, value) => session.writes.dropPatchWrite(key, value),
+      dropControlWrite: (key, value) => session.writes.dropControlWrite(key, value),
+      clearControlWritesForKind: (kind) => session.writes.clearForKind(kind),
+      setChain: (chain) => session.setChain(chain),
+      isWorkingModified: (chain, chainSync) => session.isWorkingModified(chain, chainSync),
+      assignSnapshot: (next) => {
+        session.snapshot = next;
+      },
+      emitSnapshot: () => session.emitSnapshot(),
+    };
   }
 
   private beginChainRefresh(): void {
@@ -1386,7 +1119,7 @@ export class DeviceSession {
     this.patchConfirm = "off";
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
-    this.clearControlWrites();
+    this.writes.clear();
     this.dropPatchDump();
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
@@ -1421,29 +1154,27 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected" || this.baseline === null) {
       return false;
     }
-    return this.patchDiffers(this.snapshot.chain);
-  }
-
-  private patchDiffers(chain: AudioChain): boolean {
-    if (this.baseline === null || this.snapshot.status !== "connected") {
-      return false;
-    }
-    if (!chainSlotsEqual(chain, this.baseline.chain)) {
-      return true;
-    }
-    if (this.snapshot.patchVolume !== this.baseline.patchVolume) {
-      return true;
-    }
-    return (
-      this.snapshot.model === "gp50" && this.snapshot.patchBpm !== this.baseline.patchBpm
+    return patchDiffersFromBaseline(
+      this.baseline,
+      this.snapshot.chain,
+      this.snapshot.patchVolume,
+      this.snapshot.patchBpm,
+      this.snapshot.model,
     );
   }
 
   private isWorkingModified(chain: AudioChain, chainSync: ChainSync): boolean {
-    if (chainSync === "syncing" || this.baseline === null) {
+    if (this.snapshot.status !== "connected") {
       return false;
     }
-    return this.patchDiffers(chain);
+    return workingPatchIsModified(
+      this.baseline,
+      chain,
+      chainSync,
+      this.snapshot.patchVolume,
+      this.snapshot.patchBpm,
+      this.snapshot.model,
+    );
   }
 
   private setChain(
@@ -1462,81 +1193,6 @@ export class DeviceSession {
       modified: this.isWorkingModified(chain, chainSync),
     };
     this.emitSnapshot();
-  }
-
-  private encodeUploadedPatchWrites(
-    chain: AudioChain,
-    volume: number | null,
-    bpm: number | null,
-  ): UploadApplyStep[] | null {
-    if (this.snapshot.status !== "connected") {
-      return null;
-    }
-    const linkMode = this.snapshot.linkMode;
-    const steps: UploadApplyStep[] = [];
-    for (const slot of chain) {
-      if (!isEffectSlot(slot.id) || slot.modelId === undefined || slot.values === undefined) {
-        continue;
-      }
-      const model = modelById(slot.modelId);
-      if (!model || model.kind !== slot.id || !model.devices.has(this.snapshot.model)) {
-        continue;
-      }
-      const modelPackets = encodeSlotModel(linkMode, slot.id, model.wire);
-      if (!modelPackets) {
-        continue;
-      }
-      for (const bytes of modelPackets) {
-        steps.push({ kind: "model", bytes });
-      }
-      for (const control of model.controls) {
-        const value = slot.values[control.index];
-        if (value === undefined) {
-          continue;
-        }
-        const controlPackets = encodeSlotControl(linkMode, slot.id, control.index, value);
-        if (!controlPackets) {
-          continue;
-        }
-        for (const bytes of controlPackets) {
-          steps.push({ kind: "control", bytes });
-        }
-      }
-    }
-    const orderPackets = encodeChainOrder(linkMode, chain);
-    if (!orderPackets) {
-      return null;
-    }
-    for (const bytes of orderPackets) {
-      steps.push({ kind: "order", bytes });
-    }
-    for (const slot of chain) {
-      if (!isEffectSlot(slot.id)) {
-        continue;
-      }
-      steps.push({ kind: "module", bytes: encodeModule(linkMode, slot.id, slot.enabled) });
-    }
-    if (volume !== null) {
-      const volumePackets = encodePatchVolume(linkMode, volume);
-      if (volumePackets) {
-        for (const bytes of volumePackets) {
-          steps.push({ kind: "global", bytes });
-        }
-      }
-    }
-    if (bpm !== null) {
-      // Family 1142 is one byte (40–255). BPM 256–260 needs official CC 73/74.
-      const bpmPackets =
-        bpm > 255
-          ? encodePatchTempoCc(linkMode, bpm)
-          : encodePatchBpm(linkMode, bpm);
-      if (bpmPackets) {
-        for (const bytes of bpmPackets) {
-          steps.push({ kind: "global", bytes });
-        }
-      }
-    }
-    return steps;
   }
 
   private delay(ms: number): Promise<void> {
@@ -1581,34 +1237,6 @@ export class DeviceSession {
     }
   }
 
-  private queueControlWrite(
-    kind: EffectId,
-    index: number,
-    value: number,
-    flush: boolean,
-  ): void {
-    const key = controlWriteKey(kind, index);
-    this.pendingControlWrites.set(key, { kind, index, value });
-    if (flush) {
-      this.flushControlWrite(key);
-      return;
-    }
-    const elapsed = Date.now() - (this.lastControlWriteAt.get(key) ?? 0);
-    const wait = CONTROL_WRITE_THROTTLE_MS - elapsed;
-    if (wait <= 0) {
-      this.flushControlWrite(key);
-      return;
-    }
-    if (this.controlWriteTimers.has(key)) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      this.controlWriteTimers.delete(key);
-      this.flushControlWrite(key);
-    }, wait);
-    this.controlWriteTimers.set(key, timer);
-  }
-
   private stagePatchGlobal(key: string, value: number, flush: boolean): void {
     if (this.snapshot.status !== "connected") {
       return;
@@ -1638,141 +1266,7 @@ export class DeviceSession {
     if (unchanged && !flush) {
       return;
     }
-    this.queuePatchWrite(key, value, flush);
-  }
-
-  private queuePatchWrite(key: string, value: number, flush: boolean): void {
-    this.pendingPatchWrites.set(key, value);
-    if (flush) {
-      this.flushControlWrite(key);
-      return;
-    }
-    const elapsed = Date.now() - (this.lastControlWriteAt.get(key) ?? 0);
-    const wait = CONTROL_WRITE_THROTTLE_MS - elapsed;
-    if (wait <= 0) {
-      this.flushControlWrite(key);
-      return;
-    }
-    if (this.controlWriteTimers.has(key)) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      this.controlWriteTimers.delete(key);
-      this.flushControlWrite(key);
-    }, wait);
-    this.controlWriteTimers.set(key, timer);
-  }
-
-  private flushControlWrite(key: string): void {
-    const timer = this.controlWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.controlWriteTimers.delete(key);
-    }
-    this.lastControlWriteAt.set(key, Date.now());
-    const send =
-      key === PATCH_VOLUME_WRITE_KEY || key === PATCH_BPM_WRITE_KEY
-        ? () => this.sendPendingPatch(key)
-        : () => this.sendPendingControl(key);
-    this.controlSendTail = this.controlSendTail.then(send).catch(() => undefined);
-  }
-
-  private async sendPendingControl(key: string): Promise<void> {
-    const pending = this.pendingControlWrites.get(key);
-    if (!pending || this.snapshot.status !== "connected") {
-      return;
-    }
-    this.pendingControlWrites.delete(key);
-    if (this.lastControlSentValue.get(key) === pending.value) {
-      return;
-    }
-    const packets = encodeSlotControl(
-      this.snapshot.linkMode,
-      pending.kind,
-      pending.index,
-      pending.value,
-    );
-    if (!packets) {
-      return;
-    }
-    this.lastControlSentValue.set(key, pending.value);
-    for (const packet of packets) {
-      await this.sendBytes(packet);
-    }
-  }
-
-  private async sendPendingPatch(key: string): Promise<void> {
-    const value = this.pendingPatchWrites.get(key);
-    if (value === undefined || this.snapshot.status !== "connected") {
-      return;
-    }
-    this.pendingPatchWrites.delete(key);
-    if (this.lastControlSentValue.get(key) === value) {
-      return;
-    }
-    if (key === PATCH_BPM_WRITE_KEY && this.snapshot.model !== "gp50") {
-      return;
-    }
-    const packets =
-      key === PATCH_VOLUME_WRITE_KEY
-        ? encodePatchVolumeCc(this.snapshot.linkMode, value)
-        : encodePatchTempoCc(this.snapshot.linkMode, value);
-    if (!packets) {
-      return;
-    }
-    this.lastControlSentValue.set(key, value);
-    for (const packet of packets) {
-      await this.sendBytes(packet);
-    }
-  }
-
-  private dropControlWrite(key: string, sentValue: number): void {
-    const timer = this.controlWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.controlWriteTimers.delete(key);
-    }
-    this.pendingControlWrites.delete(key);
-    this.lastControlWriteAt.delete(key);
-    this.lastControlSentValue.set(key, sentValue);
-  }
-
-  private dropPatchWrite(key: string, sentValue: number): void {
-    const timer = this.controlWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.controlWriteTimers.delete(key);
-    }
-    this.pendingPatchWrites.delete(key);
-    this.lastControlWriteAt.delete(key);
-    this.lastControlSentValue.set(key, sentValue);
-  }
-
-  private clearControlWritesForKind(kind: EffectId): void {
-    const prefix = `${kind}:`;
-    for (const key of [...this.pendingControlWrites.keys()]) {
-      if (key.startsWith(prefix)) {
-        const timer = this.controlWriteTimers.get(key);
-        if (timer) {
-          clearTimeout(timer);
-          this.controlWriteTimers.delete(key);
-        }
-        this.pendingControlWrites.delete(key);
-        this.lastControlWriteAt.delete(key);
-        this.lastControlSentValue.delete(key);
-      }
-    }
-  }
-
-  private clearControlWrites(): void {
-    for (const timer of this.controlWriteTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.controlWriteTimers.clear();
-    this.pendingControlWrites.clear();
-    this.pendingPatchWrites.clear();
-    this.lastControlWriteAt.clear();
-    this.lastControlSentValue.clear();
+    this.writes.queuePatchWrite(key, value, flush);
   }
 
   private isCurrentGeneration(generation: number): boolean {
@@ -1791,362 +1285,3 @@ export class DeviceSession {
     }
   }
 }
-
-function bytesFromHex(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function assertUploadSessionFixtures(): void {
-  const gp50 = bytesFromHex(GP50_TOB_PRST_HEX);
-  const gp5 = bytesFromHex(GP5_TOB_PRST_HEX);
-  const decoded = decodePrstFile(gp50);
-  if (!decoded) {
-    throw new Error("GP-50 TOB must decode for upload");
-  }
-  const chain = decodePresetDump(decoded.dump, "gp50", "gp50");
-  if (!chain) {
-    throw new Error("GP-50 TOB dump must decode as a chain");
-  }
-  const order = encodeChainOrder("usb", chain);
-  const store = encodePatchStore("usb", 5, decoded.name);
-  const recall = encodePatch("usb", 5);
-  if (!order || !store) {
-    throw new Error("Upload apply must encode chain-order and store 114a");
-  }
-  if (recall[0] !== 0xb0 || recall[1] !== 0x00) {
-    throw new Error("Patch recall fixture must be CC 0");
-  }
-  for (const packet of [...order, ...store]) {
-    if (packet[0] === 0xb0 && packet[1] === 0x00) {
-      throw new Error("Upload writes must not include extra patch recall");
-    }
-  }
-  if (decodePrstFile(gp5)?.model === "gp50") {
-    throw new Error("A GP-5 file must not classify as GP-50");
-  }
-}
-
-assertUploadSessionFixtures();
-
-function recordingUsb(): {
-  sent: Uint8Array[];
-  transport: MidiTransport;
-} {
-  const sent: Uint8Array[] = [];
-  let open = false;
-  return {
-    sent,
-    transport: {
-      discover: async () => [],
-      open: async () => {
-        open = true;
-      },
-      send: async (bytes) => {
-        sent.push(Uint8Array.from(bytes));
-      },
-      subscribe: () => () => undefined,
-      subscribeDisconnect: () => () => undefined,
-      isOpen: () => open,
-      close: async () => {
-        open = false;
-      },
-      sysexEnabled: () => false,
-    },
-  };
-}
-
-function stubBluetooth(): BluetoothLink {
-  let open = false;
-  return {
-    discover: async () => [],
-    open: async () => {
-      open = true;
-    },
-    send: async () => undefined,
-    subscribe: () => () => undefined,
-    subscribeDisconnect: () => () => undefined,
-    isOpen: () => open,
-    resetInbound: () => undefined,
-    close: async () => {
-      open = false;
-    },
-  };
-}
-
-async function assertUploadRejectsWithoutMidi(): Promise<void> {
-  const usb = recordingUsb();
-  const session = new DeviceSession(usb.transport, stubBluetooth());
-  await session.connect(
-    { id: "usb-1", label: "GP-50", kind: "usb-midi" },
-    "gp50",
-  );
-  const sentAfterConnect = usb.sent.length;
-  const invalid = await session.uploadCurrentPatch(new Uint8Array([0x00, 0x01, 0x02]));
-  const wrong = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
-  const disconnected = await new DeviceSession(
-    recordingUsb().transport,
-    stubBluetooth(),
-  ).uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
-  if (invalid.ok || invalid.reason !== "invalid") {
-    throw new Error("Invalid bytes must return without sending MIDI");
-  }
-  if (wrong.ok || wrong.reason !== "wrong-model") {
-    throw new Error("Wrong-model bytes must return without sending MIDI");
-  }
-  if (disconnected.ok || disconnected.reason !== "disconnected") {
-    throw new Error("Disconnected upload must no-op");
-  }
-  if (usb.sent.length !== sentAfterConnect) {
-    throw new Error("Rejected upload must not send MIDI");
-  }
-}
-
-void assertUploadRejectsWithoutMidi();
-
-function scriptedBluetooth(): {
-  sent: Uint8Array[];
-  push: (bytes: Uint8Array) => void;
-  link: BluetoothLink;
-} {
-  const sent: Uint8Array[] = [];
-  let handler: ((bytes: Uint8Array) => void) | null = null;
-  let open = false;
-  return {
-    sent,
-    push(bytes) {
-      handler?.(bytes);
-    },
-    link: {
-      discover: async () => [],
-      open: async () => {
-        open = true;
-      },
-      send: async (bytes) => {
-        sent.push(Uint8Array.from(bytes));
-      },
-      subscribe: (next) => {
-        handler = next;
-        return () => {
-          if (handler === next) {
-            handler = null;
-          }
-        };
-      },
-      subscribeDisconnect: () => () => undefined,
-      isOpen: () => open,
-      resetInbound: () => undefined,
-      close: async () => {
-        open = false;
-      },
-    },
-  };
-}
-
-function packetsEqual(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isPatchRecall(bytes: Uint8Array): boolean {
-  const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
-  return midi[0] === 0xb0 && midi[1] === 0x00;
-}
-
-function bluetoothNameList(): Uint8Array {
-  const payload = new Uint8Array(4000);
-  const midi = new Uint8Array(10 + payload.length);
-  midi[0] = 0xf0;
-  midi[3] = 1;
-  midi[4] = 5;
-  midi.set(payload, 9);
-  midi[midi.length - 1] = 0xf7;
-  return midi;
-}
-
-function currentPatchZero(): Uint8Array {
-  const midi = new Uint8Array(16);
-  midi[0] = 0xf0;
-  midi[3] = 0;
-  midi[4] = 1;
-  midi[9] = 1;
-  midi[10] = 2;
-  midi[11] = 4;
-  midi[12] = 3;
-  midi[15] = 0xf7;
-  return midi;
-}
-
-function writeDumpNibbles(data: Uint8Array, start: number, packed: Uint8Array): void {
-  for (let index = 0; index < packed.length; index += 1) {
-    data[start + index * 2] = (packed[index] >> 4) & 0x0f;
-    data[start + index * 2 + 1] = packed[index] & 0x0f;
-  }
-}
-
-function gp50UsbChainWithCab(wire: Uint8Array, volume: number): Uint8Array[] {
-  const merged = new Uint8Array(27 * 38);
-  for (let slot = 0; slot < 10; slot += 1) {
-    merged[243 + slot * 2] = slot;
-  }
-  merged[226] |= 1;
-  writeDumpNibbles(merged, 302, wire);
-  const packed = new Uint8Array(4);
-  new DataView(packed.buffer).setFloat32(0, volume, true);
-  writeDumpNibbles(merged, 614, packed);
-  const packets: Uint8Array[] = [];
-  for (let index = 0; index < 27; index += 1) {
-    const midi = new Uint8Array(48);
-    midi[0] = 0xf0;
-    midi[3] = 1;
-    midi[4] = 11;
-    midi[5] = (index >> 4) & 0x0f;
-    midi[6] = index & 0x0f;
-    midi.set(merged.subarray(index * 38, (index + 1) * 38), 9);
-    midi[47] = 0xf7;
-    packets.push(midi);
-  }
-  return packets;
-}
-
-function liveCabUserIr(): Uint8Array {
-  const live = new Uint8Array(30);
-  live[0] = 0xf0;
-  live[3] = 0;
-  live[4] = 1;
-  live[8] = 0x0a;
-  live[9] = 1;
-  live[10] = 2;
-  live[11] = 4;
-  live[12] = 0x07;
-  live[14] = 4;
-  writeDumpNibbles(live, 21, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
-  live[29] = 0xf7;
-  return live;
-}
-
-function tick(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-}
-
-async function untilReady(label: string, ready: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (ready()) {
-      return;
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-  }
-  throw new Error(label);
-}
-
-async function assertUserIrSession(): Promise<void> {
-  const usb = recordingUsb();
-  const bluetooth = scriptedBluetooth();
-  const session = new DeviceSession(usb.transport, bluetooth.link);
-  const irRequest = encodeIrNames("bluetooth");
-  const irCount = () => bluetooth.sent.filter((packet) => packetsEqual(packet, irRequest)).length;
-  try {
-    await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
-    await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
-    await tick();
-    bluetooth.push(bluetoothNameList());
-    await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
-    await tick();
-    bluetooth.push(currentPatchZero());
-    await untilReady("Ready state waited for the IR-name dump", () => {
-      const snapshot = session.getSnapshot();
-      return snapshot.status === "connected" && snapshot.sync === "ready" && irCount() === 1;
-    });
-    const beforeNames = session.getSnapshot();
-    if (beforeNames.status !== "connected" || beforeNames.userIrNames.some((name) => name !== null)) {
-      throw new Error("IR names must stay empty until the dump arrives");
-    }
-    if (bluetooth.sent.some(isPatchRecall)) {
-      throw new Error("Connect must not send patch recall to load IR names");
-    }
-    const named = emptyUserIrNames();
-    named[2] = "Greenback 412";
-    const sentBeforeDump = bluetooth.sent.length;
-    for (const packet of encodeIrNameDump(named)) {
-      bluetooth.push(packet);
-    }
-    const namedSnapshot = session.getSnapshot();
-    if (
-      namedSnapshot.status !== "connected" ||
-      namedSnapshot.userIrNames[2] !== "Greenback 412" ||
-      namedSnapshot.userIrNames[6] !== null ||
-      namedSnapshot.userIrNames.length !== USER_IR_COUNT ||
-      namedSnapshot.sync !== "ready" ||
-      bluetooth.sent.length !== sentBeforeDump
-    ) {
-      throw new Error("IR-name dump must fill slot 03 without another request or patch recall");
-    }
-    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
-      bluetooth.push(packet);
-    }
-    const afterChain = session.getSnapshot();
-    const cab = afterChain.status === "connected" ? afterChain.chain.find((slot) => slot.id === "cab") : undefined;
-    if (
-      afterChain.status !== "connected" ||
-      afterChain.userIrNames[2] !== "Greenback 412" ||
-      afterChain.chainSync !== "idle" ||
-      cab?.modelId !== "cab-twd-cp-1x8" ||
-      cab.values?.[0] !== 50
-    ) {
-      throw new Error("A later current-preset dump must not clear IR names");
-    }
-    bluetooth.push(liveCabUserIr());
-    const afterLive = session.getSnapshot();
-    const liveCab = afterLive.status === "connected" ? afterLive.chain.find((slot) => slot.id === "cab") : undefined;
-    if (liveCab?.modelId !== "cab-user-ir-03") {
-      throw new Error("Bluetooth live user IR notify must update CAB like a factory cab");
-    }
-    await session.setSlotModel("cab", "cab-twd-cp-1x8");
-    await session.setSlotModel("cab", "cab-user-ir-03");
-    const factorySet = encodeSlotModel("bluetooth", "cab", [0x01, 0x00, 0x00, 0x0a]);
-    const userSet = encodeSlotModel("bluetooth", "cab", [0x02, 0x00, 0x10, 0x0a]);
-    const last = bluetooth.sent[bluetooth.sent.length - 1];
-    const selected = session.getSnapshot();
-    const selectedCab = selected.status === "connected" ? selected.chain.find((slot) => slot.id === "cab") : undefined;
-    if (
-      !factorySet ||
-      !userSet ||
-      !last ||
-      factorySet[0].length !== userSet[0].length ||
-      userSet[0].length > 80 ||
-      !packetsEqual(last, userSet[0]) ||
-      selectedCab?.modelId !== "cab-user-ir-03" ||
-      irCount() !== 1
-    ) {
-      throw new Error("Selecting User IR 03 must send the existing model SET and no IR file");
-    }
-    await session.setPatch(1);
-    const afterPatch = session.getSnapshot();
-    if (irCount() !== 1 || afterPatch.status !== "connected" || afterPatch.userIrNames[2] !== "Greenback 412") {
-      throw new Error("A patch change must not re-request or clear IR names");
-    }
-  } finally {
-    await session.disconnect();
-  }
-  if (session.getSnapshot().status !== "disconnected") {
-    throw new Error("Disconnect must drop IR names");
-  }
-}
-
-void assertUserIrSession();
-
-
