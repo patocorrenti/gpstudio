@@ -288,16 +288,36 @@ async function assertUserIrSession(): Promise<void> {
     await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
     await tick();
     bluetooth.push(currentPatchZero());
-    await untilReady("Ready state waited for the IR-name dump", () => {
+    await untilReady("Identity sync did not become ready", () => {
       const snapshot = session.getSnapshot();
-      return snapshot.status === "connected" && snapshot.sync === "ready" && irCount() === 1;
+      return snapshot.status === "connected" && snapshot.sync === "ready";
     });
+    if (irCount() !== 0) {
+      throw new Error("Ready state must not wait for the IR-name request");
+    }
     const beforeNames = session.getSnapshot();
     if (beforeNames.status !== "connected" || beforeNames.userIrNames.some((name) => name !== null)) {
       throw new Error("IR names must stay empty until the dump arrives");
     }
     if (bluetooth.sent.some(isPatchRecall)) {
       throw new Error("Connect must not send patch recall to load IR names");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("First preset dump did not request the IR-name dump", () => irCount() === 1);
+    const afterChain = session.getSnapshot();
+    const cab =
+      afterChain.status === "connected" ? afterChain.chain.find((slot) => slot.id === "cab") : undefined;
+    if (
+      afterChain.status !== "connected" ||
+      afterChain.userIrNames.some((name) => name !== null) ||
+      afterChain.chainSync !== "idle" ||
+      cab?.modelId !== "cab-twd-cp-1x8" ||
+      cab.values?.[0] !== 50 ||
+      bluetooth.sent.some(isPatchRecall)
+    ) {
+      throw new Error("The first preset dump must request IR names once and leave them empty");
     }
     const named = emptyUserIrNames();
     named[2] = "Greenback 412";
@@ -319,14 +339,16 @@ async function assertUserIrSession(): Promise<void> {
     for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
       bluetooth.push(packet);
     }
-    const afterChain = session.getSnapshot();
-    const cab = afterChain.status === "connected" ? afterChain.chain.find((slot) => slot.id === "cab") : undefined;
+    const afterLater = session.getSnapshot();
+    const laterCab =
+      afterLater.status === "connected" ? afterLater.chain.find((slot) => slot.id === "cab") : undefined;
     if (
-      afterChain.status !== "connected" ||
-      afterChain.userIrNames[2] !== "Greenback 412" ||
-      afterChain.chainSync !== "idle" ||
-      cab?.modelId !== "cab-twd-cp-1x8" ||
-      cab.values?.[0] !== 50
+      afterLater.status !== "connected" ||
+      afterLater.userIrNames[2] !== "Greenback 412" ||
+      afterLater.chainSync !== "idle" ||
+      laterCab?.modelId !== "cab-twd-cp-1x8" ||
+      laterCab.values?.[0] !== 50 ||
+      irCount() !== 1
     ) {
       throw new Error("A later current-preset dump must not clear IR names");
     }

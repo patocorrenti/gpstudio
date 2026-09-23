@@ -1193,15 +1193,26 @@ export class DeviceSession {
     }
   }
 
-  /** Once per connect: IR names and device globals after the first preset dump. */
+  /**
+   * Once per connect: IR names and device globals after the first preset dump.
+   * Deferred off the inbound/notify stack and sent one at a time — overlapping
+   * GATT writes from characteristicvaluechanged drop the Bluetooth link.
+   */
   private queuePostChainDeviceAsks(generation: number): void {
     if (!this.postChainDeviceAsks) {
       return;
     }
     this.postChainDeviceAsks = false;
     this.globalsDump.reset();
-    void this.sendIrNameRequest(generation);
-    void this.sendGlobalsRequest(generation);
+    globalThis.setTimeout(() => {
+      void (async () => {
+        if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+          return;
+        }
+        await this.sendIrNameRequest(generation);
+        await this.sendGlobalsRequest(generation);
+      })();
+    }, 0);
   }
 
   /**
