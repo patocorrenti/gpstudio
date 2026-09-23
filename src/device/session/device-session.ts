@@ -22,7 +22,6 @@ import {
   ChainDecoder,
   decodePresetDump,
   emptyStomps,
-  stompWireFootswitch,
   type ChainDumpResult,
   type StompAssignment,
 } from "@/device/chain-codec";
@@ -589,8 +588,7 @@ export class DeviceSession {
 
   /**
    * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
-   * Sends family `114d` with the **full** new mask for that stomp (not a single effect bit).
-   * GP-50 UI A/B map to wire foot 1/0; GP-5 uses wire foot 0.
+   * Sends family `114d` with **both** stomp masks (live `0D` field order; no foot byte).
    */
   async setStompAssignment(
     stompIndex: number,
@@ -610,10 +608,6 @@ export class DeviceSession {
     if (stompIndex < 0 || stompIndex >= stomps.length) {
       return;
     }
-    const footswitch = stompWireFootswitch(this.snapshot.model, stompIndex);
-    if (footswitch === null) {
-      return;
-    }
     const current = stomps[stompIndex];
     const has = current.includes(effect);
     if (assigned === has) {
@@ -622,14 +616,19 @@ export class DeviceSession {
     const nextList = assigned
       ? [...current, effect]
       : current.filter((id) => id !== effect);
+    // Pedal allows at most three effects per footswitch (operator Log).
+    if (assigned && nextList.length > 3) {
+      return;
+    }
     const nextStomps = stomps.map((list, index) =>
-      index === stompIndex ? nextList : list,
+      index === stompIndex ? nextList : [...list],
     );
-    const packets = encodeStompAssignment(
-      this.snapshot.linkMode,
-      footswitch,
-      nextList,
-    );
+    // Dual-mask SET always carries A then B (GP-5: B empty).
+    const wireStomps: EffectId[][] =
+      this.snapshot.model === "gp50"
+        ? [nextStomps[0] ?? [], nextStomps[1] ?? []]
+        : [nextStomps[0] ?? [], []];
+    const packets = encodeStompAssignment(this.snapshot.linkMode, wireStomps);
     if (!packets) {
       return;
     }
