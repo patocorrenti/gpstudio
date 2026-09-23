@@ -88,6 +88,51 @@ if (userIr20?.id !== "cab-user-ir-20" || userIr20.userIrSlot !== 20) {
   throw new Error("CAB wire 13 00 10 0a must be User IR 20");
 }
 
+const cWah = BY_ID.get("pre-c-wah");
+const acSim = BY_ID.get("pre-ac-sim");
+const cabAc = BY_ID.get("cab-ac");
+if (!cWah?.devices.has("gp50") || cWah.devices.has("gp5")) {
+  throw new Error("C-Wah must be GP-50 only");
+}
+if (!acSim?.devices.has("gp50") || acSim.devices.has("gp5")) {
+  throw new Error("AC Sim must be GP-50 only");
+}
+if (!cabAc?.devices.has("gp50") || cabAc.devices.has("gp5")) {
+  throw new Error("CAB AC must be GP-50 only");
+}
+if (modelsForKind("pre", "gp5").some((model) => model.id === "pre-c-wah" || model.id === "pre-ac-sim")) {
+  throw new Error("GP-5 PRE must omit C-Wah and AC Sim");
+}
+if (modelsForKind("cab", "gp5").some((model) => model.id === "cab-ac")) {
+  throw new Error("GP-5 CAB must omit AC");
+}
+if (!modelsForKind("pre", "gp50").some((model) => model.id === "pre-c-wah")) {
+  throw new Error("GP-50 PRE must include C-Wah");
+}
+
+const aChorus = BY_ID.get("mod-a-chorus");
+if (!aChorus) {
+  throw new Error("MOD catalog must include A-Chorus");
+}
+const aChorusGp5 = controlsForPedal(aChorus, "gp5");
+const aChorusGp50 = controlsForPedal(aChorus, "gp50");
+if (aChorusGp5.some((control) => control.label === "Sync")) {
+  throw new Error("GP-5 A-Chorus must omit Sync");
+}
+if (!aChorusGp50.some((control) => control.label === "Sync")) {
+  throw new Error("GP-50 A-Chorus must include Sync");
+}
+const bBoost = BY_ID.get("pre-b-boost");
+if (!bBoost) {
+  throw new Error("PRE catalog must include B-Boost");
+}
+for (const pedal of ["gp5", "gp50"] as const) {
+  const labels = controlsForPedal(bBoost, pedal).map((control) => control.label);
+  if (labels.join(",") !== "Gain,VOL,Bass,Treble") {
+    throw new Error(`B-Boost on ${pedal} must be Gain, VOL, Bass, Treble`);
+  }
+}
+
 if (
   tweedy.controls.length === bellman.controls.length &&
   tweedy.controls.every(
@@ -101,6 +146,14 @@ if (
 
 export function modelsForKind(kind: EffectId, pedal: DeviceModel): FxModel[] {
   return MODELS_BY_KIND[kind].filter((model) => model.devices.has(pedal));
+}
+
+export function controlOnPedal(control: FxControl, pedal: DeviceModel): boolean {
+  return !control.devices || control.devices.has(pedal);
+}
+
+export function controlsForPedal(model: FxModel, pedal: DeviceModel): FxControl[] {
+  return model.controls.filter((control) => controlOnPedal(control, pedal));
 }
 
 export function modelById(id: string): FxModel | undefined {
@@ -152,6 +205,13 @@ export function snapModelValues(model: FxModel, raw: number[]): number[] {
   return values;
 }
 
-export function controlByIndex(model: FxModel, index: number): FxControl | undefined {
-  return model.controls.find((control) => control.index === index);
+export function controlByIndex(
+  model: FxModel,
+  index: number,
+  pedal?: DeviceModel,
+): FxControl | undefined {
+  return model.controls.find(
+    (control) =>
+      control.index === index && (pedal === undefined || controlOnPedal(control, pedal)),
+  );
 }

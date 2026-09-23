@@ -753,6 +753,9 @@ function decodeSlotModel(
 ): Pick<AudioChainSlot, "modelId" | "values"> {
   const wire = readWireIdentity(data, layout.identityAt[id]);
   let model = wire ? modelByWire(id, wire) : undefined;
+  if (model && !model.devices.has(pedal)) {
+    return {};
+  }
   if (!model) {
     const sole = modelsForKind(id, pedal);
     // NR (GATE) has one factory model; the dump identity is unused in captures.

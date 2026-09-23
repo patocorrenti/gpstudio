@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxControl, FxModel, WireIdentity } from "@/device/catalog/types";
 
 const CAB_VOL: FxControl = {
@@ -432,7 +432,7 @@ export const CAB_MODELS: readonly FxModel[] = [
     kind: "cab",
     label: "AC",
     description: "",
-    devices: BOTH_PEDALS,
+    devices: GP50_ONLY,
     wire: [0x3c, 0x00, 0x00, 0x0a],
     controls: [
       {

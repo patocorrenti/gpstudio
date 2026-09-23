@@ -11,6 +11,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
+  controlsForPedal,
   modelById,
   modelsForKind,
   type FxControl,
@@ -185,7 +186,7 @@ function SlotControlPanel({
         </div>
       </div>
       <div className="flex flex-col gap-3">
-        {model.controls.map((control) => (
+        {controlsForPedal(model, pedal).map((control) => (
           <SlotControl
             key={control.index}
             kind={slot.id}

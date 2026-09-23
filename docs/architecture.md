@@ -134,7 +134,14 @@ patone/
       models.ts          # Gp5 | Gp50
       profiles/
       cc.ts              # official maps
-      session.ts
+      session/           # DeviceSession façade; UI imports @/device/session
+        index.ts
+        device-session.ts  # orchestrator (connect, sync, public commands)
+        working-patch.ts
+        inbound.ts         # Bluetooth live follow
+        writes.ts          # throttled SETs
+        patch-io.ts        # .prst upload plan / download overlay
+        checks.ts
     midi/
       types.ts           # MidiTransport: endpoints + bytes (kind usb-midi)
       detect.ts          # picks USB web vs tauri backend
@@ -151,6 +158,8 @@ patone/
 ```
 
 Feature UI lives in `src/features/<feature>/` (sibling files; no `src/components/connection/` or other domain folders under `src/components/`). Extract when a module mixes orchestration with two or more screens, the same JSX is pasted twice, or inner functions already read as components and the parent is hard to navigate. Do not extract a lone button or “just in case”. Promote a widget to `src/components/` only when a second feature imports it. A later split of a large file (Editor, Library) is Direct-lane if the rule does not change.
+
+`DeviceSession` is the single public façade under `src/device/session/` (one session for USB and Bluetooth). Live inbound follow, throttled command-out writes, and current-patch file I/O are siblings in that folder. UI, Connect, and Controller import only `@/device/session`. Codecs stay in `src/device/*.ts`. Extract a new sibling when adding an inbound family, a throttled write family, or a file-I/O planner; do not extract a lone helper or a second session per link. A later oversized `device-session.ts` is Direct-lane if this rule does not change.
 
 Device profiles (phase 1, official CC):
 

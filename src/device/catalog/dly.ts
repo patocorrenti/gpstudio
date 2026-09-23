@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxModel } from "@/device/catalog/types";
 
 export const DLY_MODELS: readonly FxModel[] = [
@@ -45,6 +45,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -100,6 +101,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -201,6 +203,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -256,6 +259,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -311,6 +315,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -366,6 +371,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -448,6 +454,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 7,
@@ -521,6 +528,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 6,
@@ -530,6 +538,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 7,
@@ -585,6 +594,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,

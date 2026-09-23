@@ -98,7 +98,7 @@ context: |
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
       src/features/about       About GP Studio (no pedal; not a MIDI feature)
-      src/device/              models, profiles, official CC maps, identity/chain codecs, session
+      src/device/              models, profiles, official CC maps, identity/chain codecs, session/
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir + btleplug
@@ -107,6 +107,11 @@ context: |
     Extract when one module mixes an orchestrator with two or more screens, JSX is
     pasted twice, or named inner functions already read as components.
     Promote to src/components/ only when a second feature imports the widget.
+    DeviceSession is the façade under src/device/session/; live inbound, throttled
+    writes, and current-patch file I/O are siblings. UI imports only @/device/session;
+    React does not import inbound.ts, writes.ts, patch-io.ts, working-patch.ts, or checks.ts.
+    Extract a new sibling for a new inbound family, throttled write family, or file-I/O
+    planner. Do not extract a lone helper or a second session per link.
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
