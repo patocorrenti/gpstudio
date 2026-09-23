@@ -5,12 +5,14 @@ import {
   snapModelValues,
   type WireIdentity,
 } from "@/device/catalog";
-import type { AudioChain, AudioChainSlot, ChainSlotId, EffectId } from "@/device/chain";
-import { EFFECT_IDS } from "@/device/chain";
+import { EFFECT_IDS, type AudioChain, type AudioChainSlot, type ChainSlotId, type EffectId } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 import { encodeIrNameDump, isIrNameDump } from "@/device/ir-names";
 import { isGlobalsDump } from "@/device/globals";
 import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
+
+/** Snapshot stomp lists: length 1 on GP-5, 2 on GP-50. EXP is never included. */
+export type StompAssignment = EffectId[][];
 
 /**
  * Current-preset dump request (F0…F7). Same identity-family template as
@@ -54,6 +56,178 @@ const CHAIN_ORDER_SET_PREFIX = [0x01, 0x00, 0x0c, 0x11, 0x44] as const;
 /** Packed SET header: size `0x0E`, path `01 01 04`, family `1147` (model) / `1148` (control). */
 const MODEL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x47] as const;
 const CONTROL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x48] as const;
+/**
+ * Packed SET header: size `0x0A`, path `01 01 04`, family `114d` (stomp assignment).
+ * Body is both stomp masks (no foot index): A then B as m0, m1, m2, m3.
+ * m2 is writable (dump gap); do not hardcode 00.
+ */
+const STOMP_ASSIGN_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x4d] as const;
+
+/** GP-50 stomp A / B mask bases; GP-5 single stomp (same 86-byte front shift). */
+const GP50_STOMP_BASES = [1006, 1014] as const;
+const GP5_STOMP_BASES = [920] as const;
+
+/**
+ * Wire footswitch index for a UI stomp column.
+ * GP-50: UI A → `0`, UI B → `1`. GP-5: always `0`.
+ */
+export function stompWireFootswitch(
+  model: DeviceModel,
+  stompIndex: number,
+): 0 | 1 | null {
+  if (model === "gp5") {
+    return stompIndex === 0 ? 0 : null;
+  }
+  if (stompIndex === 0) {
+    return 0;
+  }
+  if (stompIndex === 1) {
+    return 1;
+  }
+  return null;
+}
+
+/**
+ * Dump / live-`0D` bit map (read only). Relative to a stomp mask base:
+ * m0 CAB/EQ/MOD/DLY, m1 NR/PRE/DST/AMP, m3 RVB/NS. Do not use this for SET packing.
+ */
+function stompDumpBits(base: number): Record<EffectId, EnableBit> {
+  return {
+    cab: [base, 0],
+    eq: [base, 1],
+    mod: [base, 2],
+    dly: [base, 3],
+    nr: [base + 1, 0],
+    pre: [base + 1, 1],
+    dst: [base + 1, 2],
+    amp: [base + 1, 3],
+    rvb: [base + 3, 0],
+    ns: [base + 3, 1],
+  };
+}
+
+/**
+ * Hand-edit SET write bits here. `[packedByte, bit]` per effect, bits `0`–`7`.
+ * After nibble-expand, bit 0–3 = MIDI low nibble, bit 4–7 = MIDI high nibble
+ * (the byte the pedal reads like live `0D`). Dump read uses {@link stompDumpBits}.
+ *
+ * Foot A locked: NR/PRE/DST/AMP = packed 0 bits 0–3; RVB/NS = packed 1 bits 0–1.
+ * CAB/EQ/MOD/DLY are dump m0 (live byte 0) = high nibble of packed 0 (bits 4–7).
+ */
+const STOMP_SET_BITS: Record<EffectId, readonly [0 | 1 | 2 | 3, number]> = {
+  nr: [0, 0],
+  pre: [0, 1],
+  dst: [0, 2],
+  amp: [0, 3],
+  cab: [0, 4],
+  eq: [0, 5],
+  mod: [0, 6],
+  dly: [0, 7],
+  rvb: [1, 0],
+  ns: [1, 1],
+};
+
+function stompSetBits(base: number): Record<EffectId, EnableBit> {
+  return {
+    nr: [base + STOMP_SET_BITS.nr[0], STOMP_SET_BITS.nr[1]],
+    pre: [base + STOMP_SET_BITS.pre[0], STOMP_SET_BITS.pre[1]],
+    dst: [base + STOMP_SET_BITS.dst[0], STOMP_SET_BITS.dst[1]],
+    amp: [base + STOMP_SET_BITS.amp[0], STOMP_SET_BITS.amp[1]],
+    cab: [base + STOMP_SET_BITS.cab[0], STOMP_SET_BITS.cab[1]],
+    eq: [base + STOMP_SET_BITS.eq[0], STOMP_SET_BITS.eq[1]],
+    mod: [base + STOMP_SET_BITS.mod[0], STOMP_SET_BITS.mod[1]],
+    dly: [base + STOMP_SET_BITS.dly[0], STOMP_SET_BITS.dly[1]],
+    rvb: [base + STOMP_SET_BITS.rvb[0], STOMP_SET_BITS.rvb[1]],
+    ns: [base + STOMP_SET_BITS.ns[0], STOMP_SET_BITS.ns[1]],
+  };
+}
+
+export function emptyStomps(model: DeviceModel): StompAssignment {
+  return model === "gp50" ? [[], []] : [[]];
+}
+
+function decodeStompMask(data: Uint8Array, base: number): EffectId[] {
+  const bits = stompDumpBits(base);
+  return EFFECT_IDS.filter((id) => bitOn(data, bits[id][0], bits[id][1]));
+}
+
+/**
+ * SET `114d` mask bytes for one stomp (relative 0 / 1 / 2 / 3).
+ */
+export function packStompAssignmentMask(effects: readonly EffectId[]): {
+  m0: number;
+  m1: number;
+  m2: number;
+  m3: number;
+} {
+  const bits = stompSetBits(0);
+  let m0 = 0;
+  let m1 = 0;
+  let m2 = 0;
+  let m3 = 0;
+  for (const id of effects) {
+    const pair = bits[id];
+    if (!pair) {
+      continue;
+    }
+    const [offset, bit] = pair;
+    const flag = 1 << bit;
+    if (offset === 0) {
+      m0 |= flag;
+    } else if (offset === 1) {
+      m1 |= flag;
+    } else if (offset === 2) {
+      m2 |= flag;
+    } else if (offset === 3) {
+      m3 |= flag;
+    }
+  }
+  return { m0: m0 & 0xff, m1: m1 & 0xff, m2: m2 & 0xff, m3: m3 & 0xff };
+}
+
+/** Decode stomp assignment from a merged current-preset dump. Short dumps yield empty lists. */
+export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): StompAssignment {
+  const bases = model === "gp50" ? GP50_STOMP_BASES : GP5_STOMP_BASES;
+  const last = bases[bases.length - 1] + 3;
+  if (data.length <= last) {
+    return emptyStomps(model);
+  }
+  return bases.map((base) => decodeStompMask(data, base));
+}
+
+/**
+ * App→pedal stomp-assignment SET (family `114d`). Replaces both stomp masks.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0, m1, m2, m3.
+ * Packs with {@link stompSetBits}, not the dump / live-`0D` map.
+ */
+export function encodeStompAssignmentSysex(
+  stomps: readonly (readonly EffectId[])[],
+): Uint8Array | null {
+  if (stomps.length < 1 || stomps.length > 2) {
+    return null;
+  }
+  for (const list of stomps) {
+    for (const id of list) {
+      if (DUMP_MODULE_IDS.indexOf(id) < 0) {
+        return null;
+      }
+    }
+  }
+  const a = packStompAssignmentMask(stomps[0] ?? []);
+  const b = packStompAssignmentMask(stomps[1] ?? []);
+  const packed = Uint8Array.from([
+    ...STOMP_ASSIGN_SET_PREFIX,
+    a.m0,
+    a.m1,
+    a.m2,
+    a.m3,
+    b.m0,
+    b.m1,
+    b.m2,
+    b.m3,
+  ]);
+  return framePackedSet(packed);
+}
 
 export function dumpOrderIndices(chain: AudioChain): number[] | null {
   const effects = chain.filter((slot) => slot.id !== "exp");
@@ -838,11 +1012,14 @@ function writeNibbleBytes(data: Uint8Array, start: number, packed: Uint8Array): 
 }
 
 function assertPresetDumpFixtures(): void {
-  const tweedy = new Uint8Array(980);
+  const tweedy = new Uint8Array(1024);
   for (let slot = 0; slot < DUMP_MODULE_IDS.length; slot += 1) {
     tweedy[GP50_LAYOUT.orderAt + slot * 2] = slot;
   }
   tweedy[227] = 1 << 3;
+  // Stomp 1: PRE (1007 bit 1). Stomp 2: MOD+DLY (1006 bits → 1014 bits 2+3 = 0x0C).
+  tweedy[1007] = 1 << 1;
+  tweedy[1014] = (1 << 2) | (1 << 3);
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.amp, Uint8Array.from([0x01, 0x00, 0x00, 0x07]));
   writeNibbleBytes(tweedy, GP50_VALUES_AT.amp, float32Le(30));
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.nr, Uint8Array.from([0x12, 0x34, 0x56, 0x78]));
@@ -856,6 +1033,99 @@ function assertPresetDumpFixtures(): void {
   if (nr?.modelId !== "nr-gate" || nr.values?.[0] !== 18) {
     throw new Error("GP-50 dump fixture did not fill sole NR GATE from THRE");
   }
+  const gp50Stomps = decodeStompsFromDump(tweedy, "gp50");
+  if (
+    gp50Stomps.length !== 2 ||
+    gp50Stomps[0].join(",") !== "pre" ||
+    gp50Stomps[1].join(",") !== "mod,dly"
+  ) {
+    throw new Error("GP-50 dump fixture must decode PRE on stomp 1 and MOD+DLY on stomp 2");
+  }
+  if (loaded?.find((slot) => slot.id === "amp")?.enabled !== true) {
+    throw new Error("GP-50 stomp decode must leave AMP enable intact");
+  }
+
+  const gp5Dump = new Uint8Array(940);
+  for (let slot = 0; slot < DUMP_MODULE_IDS.length; slot += 1) {
+    gp5Dump[GP5_LAYOUT.orderAt + slot * 2] = slot;
+  }
+  gp5Dump[141] = 1 << 3;
+  // Single stomp: MOD+DLY at 920 bits 2+3.
+  gp5Dump[920] = (1 << 2) | (1 << 3);
+  const gp5Chain = parsePresetDump(gp5Dump, GP5_LAYOUT, "gp5");
+  const gp5Stomps = decodeStompsFromDump(gp5Dump, "gp5");
+  if (!gp5Chain || gp5Stomps.length !== 1 || gp5Stomps[0].join(",") !== "mod,dly") {
+    throw new Error("GP-5 dump fixture must decode one stomp with MOD+DLY");
+  }
+  if (gp5Chain.find((slot) => slot.id === "amp")?.enabled !== true) {
+    throw new Error("GP-5 stomp decode must leave AMP enable intact");
+  }
+
+  const shortDump = new Uint8Array(300);
+  if (decodeStompsFromDump(shortDump, "gp50").join("|") !== "|") {
+    throw new Error("Short GP-50 dump must yield two empty stomp lists");
+  }
+
+  tweedy[1009] = 1 << 0;
+  const gp50Rvb = decodeStompsFromDump(tweedy, "gp50");
+  if (!gp50Rvb[0].includes("rvb") || !gp50Rvb[0].includes("pre")) {
+    throw new Error("GP-50 dump RVB (1009 bit 0) must decode independently of SET packing");
+  }
+  tweedy[1009] = 0;
+
+  const dstOn = encodeStompAssignmentSysex([["dst"], []]);
+  const rvbOn = encodeStompAssignmentSysex([["rvb"], []]);
+  const clearBoth = encodeStompAssignmentSysex([[], []]);
+  if (!dstOn || !rvbOn || !clearBoth) {
+    throw new Error("Stomp assignment SET must encode DST on A and empty clear");
+  }
+  const dstMask = packStompAssignmentMask(["dst"]);
+  const rvbSet = packStompAssignmentMask(["rvb"]);
+  const cabSet = packStompAssignmentMask(["cab"]);
+  if (cabSet.m0 < 0x10) {
+    throw new Error("CAB SET must use packed high nibble (bit 4+), not dump-style 0x0f");
+  }
+  const dumpRvb = stompDumpBits(0).rvb;
+  if (rvbSet.m0 === 0 && rvbSet.m1 === 0 && rvbSet.m2 === 0 && rvbSet.m3 === 0) {
+    throw new Error("RVB SET must set at least one mask bit");
+  }
+  if (dumpRvb[0] === 3 && dumpRvb[1] === 0 && rvbSet.m3 === 1 && rvbSet.m0 === 0 && rvbSet.m1 === 0) {
+    throw new Error("RVB SET must not use dump RVB m3 when STOMP_SET_BITS remaps it");
+  }
+  // Dual-mask body follows STOMP_SET_BITS, not the dump map.
+  const dstPacked = [
+    0x01,
+    0x00,
+    0x0a,
+    0x11,
+    0x4d,
+    dstMask.m0,
+    dstMask.m1,
+    dstMask.m2,
+    dstMask.m3,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+  ];
+  const clearPacked = [
+    0x01, 0x00, 0x0a, 0x11, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  ];
+  const dstCrc = crc8Atm(Uint8Array.from(dstPacked));
+  const clearCrc = crc8Atm(Uint8Array.from(clearPacked));
+  const expectDst = nibbleExpand(Uint8Array.from([dstCrc, ...dstPacked]));
+  const expectClear = nibbleExpand(Uint8Array.from([clearCrc, ...clearPacked]));
+  if (
+    dstOn[0] !== 0xf0 ||
+    dstOn[dstOn.length - 1] !== 0xf7 ||
+    !expectDst.every((byte, index) => dstOn[index + 1] === byte)
+  ) {
+    throw new Error("DST stomp SET must match family 114d dual-mask from STOMP_SET_BITS");
+  }
+  if (!expectClear.every((byte, index) => clearBoth[index + 1] === byte)) {
+    throw new Error("Empty stomp SET must clear both masks");
+  }
+
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.cab, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
   writeNibbleBytes(tweedy, GP50_VALUES_AT.cab, float32Le(50));
   const withUserIr = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
@@ -947,6 +1217,7 @@ assertPresetDumpFixtures();
 
 export type ChainDumpResult = {
   chain: AudioChain;
+  stomps: StompAssignment;
   dump: Uint8Array;
 };
 
@@ -983,7 +1254,11 @@ export class ChainDecoder {
     const chain = parsePresetDump(merged, layout, model);
     if (chain) {
       this.reset();
-      return { chain, dump: merged };
+      return {
+        chain,
+        stomps: decodeStompsFromDump(merged, model),
+        dump: merged,
+      };
     }
     return null;
   }

@@ -21,7 +21,9 @@ import {
 import {
   ChainDecoder,
   decodePresetDump,
+  emptyStomps,
   type ChainDumpResult,
+  type StompAssignment,
 } from "@/device/chain-codec";
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import {
@@ -83,6 +85,7 @@ import {
 import {
   clampPatch,
   cloneChain,
+  cloneStomps,
   chainSlotsEqual,
   isWorkingModified as workingPatchIsModified,
   patchDiffersFromBaseline,
@@ -109,6 +112,7 @@ import {
   encodePatch,
   encodePatchStore,
   encodeSlotModel,
+  encodeStompAssignment,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
@@ -138,6 +142,8 @@ export type SessionSnapshot =
       /** Device globals for the connected model. Null only while disconnected. */
       globals: DeviceGlobals | null;
       chain: AudioChain;
+      /** Per-stomp effect lists (length 1 on GP-5, 2 on GP-50). Empty until a dump arrives. */
+      stomps: StompAssignment;
       chainSync: ChainSync;
       patchVolume: number | null;
       patchBpm: number | null;
@@ -173,7 +179,7 @@ export class DeviceSession {
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
-  /** Last loaded or stored working patch (chain, volume, GP-50 BPM) for the selected slot. */
+  /** Last loaded or stored working patch (chain, stomps, volume, GP-50 BPM) for the selected slot. */
   private baseline: WorkingBaseline | null = null;
   /**
    * Download of an already edited patch keeps on-screen volume and BPM when the
@@ -293,6 +299,7 @@ export class DeviceSession {
         userIrNames: emptyUserIrNames(),
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
+        stomps: emptyStomps(model),
         chainSync: "idle",
         patchVolume: null,
         patchBpm: null,
@@ -312,6 +319,7 @@ export class DeviceSession {
         userIrNames: emptyUserIrNames(),
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
+        stomps: emptyStomps(model),
         chainSync: "idle",
         patchVolume: null,
         patchBpm: null,
@@ -574,6 +582,67 @@ export class DeviceSession {
       return;
     }
     this.setChain(chain);
+    for (const packet of packets) {
+      await this.sendBytes(packet);
+    }
+  }
+
+  /**
+   * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
+   * Sends family `114d` with **both** stomp masks (live `0D` field order; no foot byte).
+   */
+  async setStompAssignment(
+    stompIndex: number,
+    effect: EffectId,
+    assigned: boolean,
+  ): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Stomp assignment is not available on this link.");
+    }
+    const stomps = this.snapshot.stomps;
+    if (stompIndex < 0 || stompIndex >= stomps.length) {
+      return;
+    }
+    const current = stomps[stompIndex];
+    const has = current.includes(effect);
+    if (assigned === has) {
+      return;
+    }
+    const nextList = assigned
+      ? [...current, effect]
+      : current.filter((id) => id !== effect);
+    // Pedal allows at most three effects per footswitch (operator Log).
+    if (assigned && nextList.length > 3) {
+      return;
+    }
+    const nextStomps = stomps.map((list, index) =>
+      index === stompIndex ? nextList : [...list],
+    );
+    // Dual-mask SET always carries A then B (GP-5: B empty).
+    const wireStomps: EffectId[][] =
+      this.snapshot.model === "gp50"
+        ? [nextStomps[0] ?? [], nextStomps[1] ?? []]
+        : [nextStomps[0] ?? [], []];
+    const packets = encodeStompAssignment(this.snapshot.linkMode, wireStomps);
+    if (!packets) {
+      return;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      stomps: nextStomps,
+      modified: this.isWorkingModified(
+        this.snapshot.chain,
+        this.snapshot.chainSync,
+        nextStomps,
+      ),
+    };
+    this.emitSnapshot();
     for (const packet of packets) {
       await this.sendBytes(packet);
     }
@@ -1098,6 +1167,7 @@ export class DeviceSession {
     if (this.captureBaselineFromDump) {
       this.baseline = {
         chain: cloneChain(chain),
+        stomps: cloneStomps(result.stomps),
         patchVolume: globals.patchVolume,
         patchBpm: globals.patchBpm,
       };
@@ -1113,6 +1183,7 @@ export class DeviceSession {
     this.setChain(chain, {
       chainSync: holdBusyForConfirm ? "syncing" : "idle",
       canExportPatch: !holdBusyForConfirm,
+      stomps: result.stomps,
     });
     this.releaseWaiters(this.chainWaiters);
     this.queuePostChainDeviceAsks(generation);
@@ -1179,7 +1250,10 @@ export class DeviceSession {
     if (edited) {
       if (finishBusy) {
         this.clearChainRefreshTimer();
-        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+        this.setChain(this.snapshot.chain, {
+          chainSync: "idle",
+          canExportPatch: true,
+        });
       }
       return;
     }
@@ -1195,16 +1269,26 @@ export class DeviceSession {
     if (chainSlotsEqual(chain, this.snapshot.chain)) {
       this.baseline = {
         chain: this.baseline?.chain ?? cloneChain(this.snapshot.chain),
+        stomps: this.baseline?.stomps ?? cloneStomps(result.stomps),
         patchVolume: globals.patchVolume,
         patchBpm: globals.patchBpm,
       };
       if (finishBusy) {
         this.clearChainRefreshTimer();
-        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+        this.setChain(this.snapshot.chain, {
+          chainSync: "idle",
+          canExportPatch: true,
+          stomps: result.stomps,
+        });
       } else {
         this.snapshot = {
           ...this.snapshot,
-          modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
+          stomps: result.stomps,
+          modified: this.isWorkingModified(
+            this.snapshot.chain,
+            this.snapshot.chainSync,
+            result.stomps,
+          ),
         };
         this.emitSnapshot();
       }
@@ -1212,11 +1296,16 @@ export class DeviceSession {
     }
     this.baseline = {
       chain: cloneChain(chain),
+      stomps: cloneStomps(result.stomps),
       patchVolume: globals.patchVolume,
       patchBpm: globals.patchBpm,
     };
     this.clearChainRefreshTimer();
-    this.setChain(chain, { chainSync: "idle", canExportPatch: true });
+    this.setChain(chain, {
+      chainSync: "idle",
+      canExportPatch: true,
+      stomps: result.stomps,
+    });
   }
 
   private liveFollowHost(): LiveFollowHost | null {
@@ -1385,13 +1474,18 @@ export class DeviceSession {
     return patchDiffersFromBaseline(
       this.baseline,
       this.snapshot.chain,
+      this.snapshot.stomps,
       this.snapshot.patchVolume,
       this.snapshot.patchBpm,
       this.snapshot.model,
     );
   }
 
-  private isWorkingModified(chain: AudioChain, chainSync: ChainSync): boolean {
+  private isWorkingModified(
+    chain: AudioChain,
+    chainSync: ChainSync,
+    stomps?: StompAssignment,
+  ): boolean {
     if (this.snapshot.status !== "connected") {
       return false;
     }
@@ -1399,6 +1493,7 @@ export class DeviceSession {
       this.baseline,
       chain,
       chainSync,
+      stomps ?? this.snapshot.stomps,
       this.snapshot.patchVolume,
       this.snapshot.patchBpm,
       this.snapshot.model,
@@ -1407,18 +1502,24 @@ export class DeviceSession {
 
   private setChain(
     chain: AudioChain,
-    extra: { chainSync?: ChainSync; canExportPatch?: boolean } = {},
+    extra: {
+      chainSync?: ChainSync;
+      canExportPatch?: boolean;
+      stomps?: StompAssignment;
+    } = {},
   ): void {
     if (this.snapshot.status !== "connected") {
       return;
     }
     const chainSync = extra.chainSync ?? this.snapshot.chainSync;
+    const stomps = extra.stomps ?? this.snapshot.stomps;
     this.snapshot = {
       ...this.snapshot,
       ...extra,
       chain,
       chainSync,
-      modified: this.isWorkingModified(chain, chainSync),
+      stomps,
+      modified: this.isWorkingModified(chain, chainSync, stomps),
     };
     this.emitSnapshot();
   }
@@ -1452,6 +1553,7 @@ export class DeviceSession {
     if (dest === this.snapshot.patch) {
       this.baseline = {
         chain: cloneChain(this.snapshot.chain),
+        stomps: cloneStomps(this.snapshot.stomps),
         patchVolume: this.snapshot.patchVolume,
         patchBpm: this.snapshot.patchBpm,
       };
