@@ -23,3 +23,9 @@ export {
   type SessionSync,
   type UploadPatchResult,
 } from "./device-session";
+export type {
+  DeviceGlobals,
+  FootswitchMode,
+  GlobalSysexKey,
+  RecMode,
+} from "@/device/globals";

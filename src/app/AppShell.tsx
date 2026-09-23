@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
+import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import MainMenu from "@/components/main-menu";
 
 export function AppShell() {
@@ -16,7 +17,10 @@ export function AppShell() {
         <Link to="/" className="w-fit text-lg font-semibold tracking-tight">
           GP Studio
         </Link>
-        <ConnectionStatus />
+        <div className="flex items-center gap-2">
+          <ConnectionStatus />
+          <GlobalSettingsControl />
+        </div>
         <div className="flex items-center justify-end gap-3">
           <MainMenu />
           <ThemeToggle />

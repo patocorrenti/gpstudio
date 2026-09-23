@@ -16,6 +16,13 @@ import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
 import { encodeIrNameRequest } from "@/device/ir-names";
+import {
+  encodeGlobalsRequest,
+  encodeGlobalSysex,
+  type FootswitchMode,
+  type GlobalSysexKey,
+  type RecMode,
+} from "@/device/globals";
 import type { LinkMode } from "@/device/link";
 
 function midiCc(controller: number, value: number): Uint8Array {
@@ -77,6 +84,44 @@ export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
 /** IR-name dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
 export function encodeIrNames(linkMode: LinkMode): Uint8Array {
   return encodeLinkMidi(linkMode, encodeIrNameRequest());
+}
+
+/** GP-50 globals dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
+export function encodeGlobals(linkMode: LinkMode): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeGlobalsRequest());
+}
+
+/** Parameter-write global SysEx SET (family `1111`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+export function encodeGlobalSetting(
+  linkMode: LinkMode,
+  key: GlobalSysexKey,
+  value: number | boolean | RecMode,
+): Uint8Array[] | null {
+  const midi = encodeGlobalSysex(key, value);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+/** Official GP-50 master volume CC 1 (0–100). Not the relative step CC 17. */
+export function encodeMasterVolumeCc(
+  linkMode: LinkMode,
+  volume: number,
+): Uint8Array[] | null {
+  if (!Number.isInteger(volume) || volume < 0 || volume > 100) {
+    return null;
+  }
+  return [encodeLinkMidi(linkMode, midiCc(gp50Cc.masterVolume, volume))];
+}
+
+/** Official GP-50 Patch | Stomp CC 28. Patch = 0, Stomp = 127. */
+export function encodeFootswitchModeCc(
+  linkMode: LinkMode,
+  mode: FootswitchMode,
+): Uint8Array[] | null {
+  const value = mode === "patch" ? 0 : 127;
+  return [encodeLinkMidi(linkMode, midiCc(gp50Cc.patchStompMode, value))];
 }
 
 /** Parameter-write chain-order SET. Same MIDI body on USB and Bluetooth. */
@@ -234,12 +279,25 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleTempoLsb = bleTempo && bleTempo.length === 2 ? unwrapBlePacket(bleTempo[1]) : null;
   const usbIr = encodeIrNames("usb");
   const bleIr = encodeIrNames("bluetooth");
+  const usbGlobals = encodeGlobals("usb");
+  const bleGlobals = encodeGlobals("bluetooth");
+  const usbMaster = encodeMasterVolumeCc("usb", 63);
+  const bleMaster = encodeMasterVolumeCc("bluetooth", 63);
+  const usbFoot = encodeFootswitchModeCc("usb", "stomp");
+  const bleFoot = encodeFootswitchModeCc("bluetooth", "stomp");
+  const usbGlobalSet = encodeGlobalSetting("usb", "inputLevel", 0);
+  const bleGlobalSet = encodeGlobalSetting("bluetooth", "inputLevel", 0);
   const bleModelMidi = bleModel && bleModel.length === 1 ? unwrapBlePacket(bleModel[0]) : null;
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
   const bleIrMidi = unwrapBlePacket(bleIr);
+  const bleGlobalsMidi = unwrapBlePacket(bleGlobals);
+  const bleMasterMidi = bleMaster && bleMaster.length === 1 ? unwrapBlePacket(bleMaster[0]) : null;
+  const bleFootMidi = bleFoot && bleFoot.length === 1 ? unwrapBlePacket(bleFoot[0]) : null;
+  const bleGlobalSetMidi =
+    bleGlobalSet && bleGlobalSet.length === 1 ? unwrapBlePacket(bleGlobalSet[0]) : null;
   const nameList = encodeIdentity("usb", "name-list");
   const currentPatch = encodeIdentity("usb", "current-patch");
   const currentPreset = encodeChainRequest("usb");
@@ -307,6 +365,33 @@ function assertUsbBluetoothWrapOnly(): void {
     userCab[0].length > 80
   ) {
     throw new Error("IR-name request must differ from other asks only by the BLE-MIDI wrap, and user IR select stays a model SET");
+  }
+  if (
+    !bleGlobalsMidi ||
+    !usbMaster ||
+    !bleMaster ||
+    !usbFoot ||
+    !bleFoot ||
+    !usbGlobalSet ||
+    !bleGlobalSet ||
+    !bleMasterMidi ||
+    !bleFootMidi ||
+    !bleGlobalSetMidi ||
+    !sameBytes(usbGlobals, bleGlobalsMidi) ||
+    !sameBytes(usbMaster[0], bleMasterMidi) ||
+    !sameBytes(usbFoot[0], bleFootMidi) ||
+    !sameBytes(usbGlobalSet[0], bleGlobalSetMidi) ||
+    sameBytes(usbGlobals, usbIr) ||
+    sameBytes(usbGlobals, nameList) ||
+    sameBytes(usbGlobals, currentPatch) ||
+    sameBytes(usbGlobals, currentPreset) ||
+    usbMaster[0][1] !== gp50Cc.masterVolume ||
+    usbMaster[0][2] !== 63 ||
+    usbFoot[0][1] !== gp50Cc.patchStompMode ||
+    usbFoot[0][2] !== 127 ||
+    encodeMasterVolumeCc("usb", 101) !== null
+  ) {
+    throw new Error("Globals ask and master/foot CCs must differ from other asks only by the BLE-MIDI wrap");
   }
 }
 
