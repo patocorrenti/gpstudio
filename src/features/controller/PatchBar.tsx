@@ -31,6 +31,7 @@ import {
   PATCH_COUNT,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
 import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
 import { toast } from "sonner";
@@ -141,6 +142,8 @@ export function PatchBar({
   canExportPatch,
   modified,
   model,
+  patchVolume,
+  patchBpm,
 }: {
   patch: number;
   patchNames: (string | null)[];
@@ -148,6 +151,8 @@ export function PatchBar({
   canExportPatch: boolean;
   modified: boolean;
   model: DeviceModel;
+  patchVolume: number | null;
+  patchBpm: number | null;
 }) {
   const session = useDeviceSession();
   const currentName = patchNames[patch];
@@ -403,6 +408,7 @@ export function PatchBar({
           }}
         />
       </div>
+      <PatchLevels model={model} volume={patchVolume} bpm={patchBpm} disabled={busy} />
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {

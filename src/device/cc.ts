@@ -29,10 +29,15 @@ export const gp50Cc = {
   masterVolume: 1,
   exp: 11,
   expOnOff: 13,
-  extra17: 17,
-  extra19: 19,
-  bpm: 21,
+  /** Relative master step. Unused; the patch bar does not send it. */
+  masterStep: 17,
+  /** Relative BPM step. Unused; absolute tempo is tempoMsb then tempoLsb. */
+  bpmStep: 19,
+  /** Relative patch-volume step. Unused; absolute patch volume is CC 7. */
+  volumeStep: 21,
   patchStompMode: 28,
+  tempoMsb: 73,
+  tempoLsb: 74,
 } as const;
 
 /** Official module switches: NR…RVB are CC 48–57. */

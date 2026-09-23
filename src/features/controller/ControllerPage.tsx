@@ -61,6 +61,8 @@ function ConnectedController() {
         canExportPatch={snapshot.canExportPatch}
         modified={snapshot.modified}
         model={snapshot.model}
+        patchVolume={snapshot.patchVolume}
+        patchBpm={snapshot.patchBpm}
       />
       <PatchBody
         chain={snapshot.chain}

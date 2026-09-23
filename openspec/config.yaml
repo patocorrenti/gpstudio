@@ -81,8 +81,9 @@ context: |
     SET (Save / rename / duplicate), current-patch file export, current-patch
     .prst import onto the selected slot, and Controller drag are in scope.
     Read reference/ for SysEx shape; do not paste that JavaScript into src/.
-    Applying inbound volume, tuner, or Patch/Stomp mode
-    while the patch stays the same is not.
+    Applying inbound volume, BPM, tuner, or Patch/Stomp mode
+    while the patch stays the same is not. Patch-bar volume is CC 7 and
+    GP-50 tempo is CC 73 then CC 74; family 1142 stays the upload path.
     Protocol references: docs/protocol-references.md (behavioral only; no source drop).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
@@ -108,7 +109,7 @@ context: |
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
-  - GP-50: the above + master/EXP/BPM/Patch|Stomp mode (CC 1, 11, 13, 17, 19, 21, 28)
+  - GP-50: the above + master/EXP (CC 1, 11, 13), unused relative steps (CC 17, 19, 21), Patch|Stomp mode (CC 28), absolute tempo (CC 73 + CC 74)
   - Endpoint suggests model from the USB MIDI name (Valeton usually appears as GP-5 / GP-50).
     If ambiguous or the name does not match, the user confirms or corrects. Port name is not hardware identity.
 
@@ -131,7 +132,8 @@ context: |
     duplicate, download, and upload of the current patch; Reload is an icon
     with an English tooltip immediately left of Save and re-requests the
     current-preset dump without patch recall; Save before rename;
-    Save disabled until the working chain differs from the last loaded or stored
+    Save disabled until the working patch (chain, patch volume, and on GP-50
+    patch BPM) differs from the last loaded or stored
     baseline, then emerald; hovering previous / select / next warns in English
     that unsaved changes will be lost without blocking; snapshot `modified` stays available to other
     controls; no Modified label and no confirm-on-navigate; Reload/Save/rename/duplicate/download/upload
@@ -152,8 +154,11 @@ context: |
     hide while NS marks those slots bypassed. Slider numbers follow the drag;
     control SETs are throttled (~80 ms) and flushed on release so Bluetooth is
     not flooded. Toggles send on-change. EXP has no model panel.
-    Volume and tuner later.
-  - GP-50 also: master volume and Patch/Stomp mode
+    Volume (CC 7, 0–100) on the patch bar for GP-5 and GP-50, and BPM (CC 73/74,
+    40–260) for GP-50 only. Both wait for the current-preset dump, then edit
+    through the session on USB and Bluetooth. Inbound CC 7/73/74 are not applied.
+    Tuner later. Family 1142 stays the .prst upload path.
+  - GP-50 also: master volume and Patch/Stomp mode (not the patch bar)
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
 
@@ -164,13 +169,13 @@ context: |
     export and current-patch .prst import onto the selected slot are in scope;
     not the Library route and not GP-5/GP-50 conversion)
   - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
-  - Applying liveFromPedal inbound volume/tuner to the snapshot
+  - Applying liveFromPedal inbound volume/BPM/tuner to the snapshot
     while the patch stays the same (Bluetooth live-module SysEx, Stomp
     footswitch chain on/off, live chain-order, and live model/control
     for the ten effect slots are in scope. USB must not apply those reports.
     Current-patch model + control read/write for the ten effect slots is in scope)
   - GP-50 Patch/Stomp mode control or display
-  - Volume, tuner over Bluetooth
+  - Tuner, master volume, and relative step CCs (17, 19, 21). Patch volume and GP-50 BPM writes are in scope on USB and Bluetooth
   - Applying USB inbound live-module, Stomp footswitch, or live chain-order
     reports (USB is not duplex for those controls)
   - Stomp assignment edit (which modules each footswitch toggles). Paused
@@ -268,8 +273,9 @@ rules:
       file export, current-patch .prst load into the working patch, and
       Controller drag-and-drop of movable modules are in scope; read
       reference/ for SysEx (do not paste it into src/); Patch/Stomp
-      control is later; do not apply liveFromPedal volume/tuner
-      to the snapshot while the patch stays the same; Library import/reorder
+      control is later; do not apply liveFromPedal volume/BPM/tuner
+      to the snapshot while the patch stays the same; patch-bar volume is
+      CC 7 and GP-50 tempo is CC 73/74; family 1142 stays the upload path; Library import/reorder
       of .prst stay later (current-patch .prst export of the connected model
       and load into the working patch are in scope; no GP-5/GP-50 conversion)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"

@@ -444,6 +444,58 @@ function writePackedWord(dump: Uint8Array, at: number, value: number): void {
   dump[at + 1] = value & 0x0f;
 }
 
+/** Patch volume from the current-preset dump word `.prst` already uses. Out of 0–100 is null. */
+export function readDumpPatchVolume(model: DeviceModel, dump: Uint8Array): number | null {
+  const word = packedWord(dump, prstLayout(model).volAt);
+  if (word === null || word < 0 || word > PATCH_VOL_MAX) {
+    return null;
+  }
+  return word;
+}
+
+/**
+ * Patch BPM from the current-preset dump word `.prst` already uses.
+ * The word is one byte, so only 40–255 can round-trip; anything else is null.
+ */
+export function readDumpPatchBpm(model: DeviceModel, dump: Uint8Array): number | null {
+  const word = packedWord(dump, prstLayout(model).bpmAt);
+  if (word === null || word < PATCH_BPM_MIN || word > 255) {
+    return null;
+  }
+  return word;
+}
+
+/** Write patch volume into the dump word slot. No-op outside 0–100 or if the dump is short. */
+export function writeDumpPatchVolume(
+  model: DeviceModel,
+  dump: Uint8Array,
+  volume: number,
+): void {
+  if (!Number.isInteger(volume) || volume < 0 || volume > PATCH_VOL_MAX) {
+    return;
+  }
+  const at = prstLayout(model).volAt;
+  if (dump.length < at + 2) {
+    return;
+  }
+  writePackedWord(dump, at, volume);
+}
+
+/**
+ * Write patch BPM into the dump word slot. The slot is one byte, so 256–260
+ * (legal on CC 73/74) are left unchanged. No-op outside 40–255 or if the dump is short.
+ */
+export function writeDumpPatchBpm(model: DeviceModel, dump: Uint8Array, bpm: number): void {
+  if (!Number.isInteger(bpm) || bpm < PATCH_BPM_MIN || bpm > 255) {
+    return;
+  }
+  const at = prstLayout(model).bpmAt;
+  if (dump.length < at + 2) {
+    return;
+  }
+  writePackedWord(dump, at, bpm);
+}
+
 function tobDumpFromCapture(model: DeviceModel, capture: Uint8Array): Uint8Array {
   const layout = prstLayout(model);
   const descriptor = model === "gp50" ? GP50_DESCRIPTOR : GP5_DESCRIPTOR;
