@@ -7,7 +7,6 @@ import { AudioChainRow } from "@/features/controller/AudioChain";
 import { PatchBar } from "@/features/controller/PatchBar";
 import { PatchBodySkeleton } from "@/features/controller/PatchBodySkeleton";
 import { SlotControlPanels } from "@/features/controller/SlotControls";
-import { StompAssignmentPanel } from "@/features/controller/StompAssignment";
 
 function PatchBody({
   chain,
@@ -26,8 +25,12 @@ function PatchBody({
         <PatchBodySkeleton pedal={pedal} />
       ) : (
         <div className="flex w-full flex-col items-center">
-          <AudioChainRow chain={chain} disabled={busy} />
-          <StompAssignmentPanel stomps={stomps} pedal={pedal} disabled={busy} />
+          <AudioChainRow
+            chain={chain}
+            stomps={stomps}
+            pedal={pedal}
+            disabled={busy}
+          />
           <SlotControlPanels chain={chain} pedal={pedal} disabled={busy} />
         </div>
       )}

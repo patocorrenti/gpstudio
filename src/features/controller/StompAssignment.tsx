@@ -1,90 +1,144 @@
-import { Button } from "@/components/ui/button";
+import type { DeviceModel } from "@/device/models";
 import {
-  EFFECT_IDS,
   chainSlotLabel,
   type EffectId,
   type StompAssignment,
 } from "@/device/session";
-import type { DeviceModel } from "@/device/models";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { cn } from "@/lib/utils";
 
-function StompColumn({
-  label,
-  stompIndex,
-  assigned,
-  disabled,
-  onToggle,
-}: {
-  label: string;
-  stompIndex: number;
-  assigned: readonly EffectId[];
-  disabled: boolean;
-  onToggle: (stompIndex: number, effect: EffectId, next: boolean) => void;
-}) {
-  const assignedSet = new Set(assigned);
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2">
-      <h3 className="text-sm font-medium text-foreground">{label}</h3>
-      <div className="flex flex-wrap gap-1.5">
-        {EFFECT_IDS.map((effect) => {
-          const on = assignedSet.has(effect);
-          return (
-            <Button
-              key={effect}
-              type="button"
-              size="sm"
-              variant={on ? "default" : "outline"}
-              disabled={disabled}
-              aria-pressed={on}
-              aria-label={`${label}: ${chainSlotLabel(effect)}`}
-              className={cn("h-8 min-w-12 px-2 tabular-nums", on && "shadow-none")}
-              onClick={() => onToggle(stompIndex, effect, !on)}
-            >
-              {chainSlotLabel(effect)}
-            </Button>
-          );
-        })}
-      </div>
-    </div>
-  );
+const MAX_EFFECTS_PER_STOMP = 3;
+
+/** Which foot owns this effect for display. A wins if present on both. */
+export function stompMarkForEffect(
+  stomps: StompAssignment,
+  effect: EffectId,
+  pedal: DeviceModel,
+): "off" | "on" | "A" | "B" {
+  const onA = stomps[0]?.includes(effect) ?? false;
+  if (pedal === "gp5") {
+    return onA ? "on" : "off";
+  }
+  if (onA) {
+    return "A";
+  }
+  if (stomps[1]?.includes(effect)) {
+    return "B";
+  }
+  return "off";
 }
 
-export function StompAssignmentPanel({
+function footHasRoom(stomps: StompAssignment, stompIndex: number): boolean {
+  return (stomps[stompIndex]?.length ?? 0) < MAX_EFFECTS_PER_STOMP;
+}
+
+/**
+ * GP-5: empty ↔ filled. GP-50: off → A → B → off (exclusive per effect).
+ */
+export async function cycleSlotStomp(
+  setStompAssignment: (
+    stompIndex: number,
+    effect: EffectId,
+    assigned: boolean,
+  ) => Promise<void>,
+  stomps: StompAssignment,
+  effect: EffectId,
+  pedal: DeviceModel,
+): Promise<void> {
+  const mark = stompMarkForEffect(stomps, effect, pedal);
+  if (pedal === "gp5") {
+    if (mark === "off") {
+      if (!footHasRoom(stomps, 0)) {
+        return;
+      }
+      await setStompAssignment(0, effect, true);
+      return;
+    }
+    await setStompAssignment(0, effect, false);
+    return;
+  }
+
+  if (mark === "off") {
+    if (!footHasRoom(stomps, 0)) {
+      return;
+    }
+    await setStompAssignment(0, effect, true);
+    return;
+  }
+  if (mark === "A") {
+    const onBAlready = stomps[1]?.includes(effect) ?? false;
+    if (onBAlready) {
+      await setStompAssignment(0, effect, false);
+      return;
+    }
+    if (!footHasRoom(stomps, 1)) {
+      return;
+    }
+    await setStompAssignment(0, effect, false);
+    await setStompAssignment(1, effect, true);
+    return;
+  }
+  await setStompAssignment(1, effect, false);
+}
+
+export function SlotStompMark({
+  effect,
   stomps,
   pedal,
   disabled,
 }: {
+  effect: EffectId;
   stomps: StompAssignment;
   pedal: DeviceModel;
   disabled: boolean;
 }) {
   const session = useDeviceSession();
-  const labels =
-    pedal === "gp50" ? (["Footswitch A", "Footswitch B"] as const) : (["Stomp"] as const);
+  const mark = stompMarkForEffect(stomps, effect, pedal);
+  const filled = mark !== "off";
+  const label = chainSlotLabel(effect);
+  const aria =
+    pedal === "gp5"
+      ? filled
+        ? `${label} assigned to stomp`
+        : `${label} not assigned to stomp`
+      : mark === "A"
+        ? `${label} assigned to footswitch A`
+        : mark === "B"
+          ? `${label} assigned to footswitch B`
+          : `${label} not assigned to a footswitch`;
 
   return (
-    <section
-      className="mt-6 w-full max-w-3xl px-2"
-      aria-label="Stomp assignment"
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={aria}
+      aria-pressed={filled}
+      className={cn(
+        "cursor-pointer absolute top-1 right-1 z-20 flex size-4 items-center justify-center rounded-full border text-[0.8rem] font-bold leading-none transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+        filled
+          ? "border-primary bg-primary text-primary-foreground opacity-80"
+          : "border-muted-foreground/45 bg-background text-transparent",
+        disabled && "pointer-events-none opacity-50",
+      )}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (disabled) {
+          return;
+        }
+        void cycleSlotStomp(
+          (stompIndex, id, assigned) =>
+            session.setStompAssignment(stompIndex, id, assigned),
+          stomps,
+          effect,
+          pedal,
+        );
+      }}
     >
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-        Stomp assignment
-      </h2>
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-        {labels.map((label, index) => (
-          <StompColumn
-            key={label}
-            label={label}
-            stompIndex={index}
-            assigned={stomps[index] ?? []}
-            disabled={disabled}
-            onToggle={(stompIndex, effect, next) => {
-              void session.setStompAssignment(stompIndex, effect, next);
-            }}
-          />
-        ))}
-      </div>
-    </section>
+      {mark === "A" || mark === "B" ? mark : null}
+    </button>
   );
 }
