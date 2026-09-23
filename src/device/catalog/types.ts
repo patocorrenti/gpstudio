@@ -17,6 +17,8 @@ export type FxControl = {
   step: number;
   default: number;
   display: ControlDisplay;
+  /** Omit for both pedals. */
+  devices?: ReadonlySet<DeviceModel>;
 };
 
 /** Packed 4-byte wire identity from the current-preset dump / model SET. */

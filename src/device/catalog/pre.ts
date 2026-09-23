@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxModel } from "@/device/catalog/types";
 
 export const PRE_MODELS: readonly FxModel[] = [
@@ -308,6 +308,7 @@ export const PRE_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -317,7 +318,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     label: "C-Wah",
     description: "Based on legendary Dunlop® CryBaby®* wah pedal. ",
     basedOn: "Dunlop® CryBaby®",
-    devices: BOTH_PEDALS,
+    devices: GP50_ONLY,
     wire: [0x08, 0x00, 0x00, 0x05],
     controls: [
       {
@@ -492,7 +493,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "AC Sim",
     description: "An acoustic guitar simulator effect",
-    devices: BOTH_PEDALS,
+    devices: GP50_ONLY,
     wire: [0x01, 0x00, 0x00, 0x01],
     controls: [
       {

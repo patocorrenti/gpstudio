@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxModel } from "@/device/catalog/types";
 
 export const MOD_MODELS: readonly FxModel[] = [
@@ -46,6 +46,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -93,6 +94,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -148,6 +150,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -203,6 +206,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -232,6 +236,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -270,6 +275,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -308,6 +314,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -354,6 +361,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -392,6 +400,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -438,6 +447,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -484,6 +494,7 @@ export const MOD_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,

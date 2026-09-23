@@ -5,6 +5,7 @@ import type {
   BluetoothLink,
 } from "@/bluetooth/types";
 import {
+  controlByIndex,
   defaultValuesFor,
   modelById,
   modelsForKind,
@@ -604,7 +605,7 @@ export class DeviceSession {
     if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
       return;
     }
-    const control = model.controls.find((entry) => entry.index === controlIndex);
+    const control = controlByIndex(model, controlIndex, this.snapshot.model);
     if (!control) {
       return;
     }

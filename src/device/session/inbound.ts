@@ -1,5 +1,6 @@
 import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
+  controlByIndex,
   defaultValuesFor,
   modelById,
   modelByWire,
@@ -179,7 +180,7 @@ function applyLiveSlotControl(
   if (!model || model.kind !== kind) {
     return;
   }
-  const control = model.controls.find((entry) => entry.index === controlIndex);
+  const control = controlByIndex(model, controlIndex, host.snapshot.model);
   if (!control || controlIndex >= slot.values.length) {
     return;
   }
