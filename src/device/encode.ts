@@ -190,14 +190,13 @@ export function encodeSlotControl(
   return encodeLinkMidiPackets(linkMode, midi);
 }
 
-/** Parameter-write stomp-assignment SET (family `114d`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
+/** Parameter-write stomp-assignment SET (family `114d`). Full stomp mask. USB vs Bluetooth only differ by BLE-MIDI wrap. */
 export function encodeStompAssignment(
   linkMode: LinkMode,
   footswitch: 0 | 1,
-  effect: EffectId,
-  assigned: boolean,
+  effects: readonly EffectId[],
 ): Uint8Array[] | null {
-  const midi = encodeStompAssignmentSysex(footswitch, effect, assigned);
+  const midi = encodeStompAssignmentSysex(footswitch, effects);
   if (!midi) {
     return null;
   }
@@ -308,8 +307,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleModel = encodeSlotModel("bluetooth", "amp", [0x01, 0x00, 0x00, 0x07]);
   const usbControl = encodeSlotControl("usb", "amp", 0, 45);
   const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
-  const usbStomp = encodeStompAssignment("usb", 0, "dst", true);
-  const bleStomp = encodeStompAssignment("bluetooth", 0, "dst", true);
+  const usbStomp = encodeStompAssignment("usb", 0, ["dst"]);
+  const bleStomp = encodeStompAssignment("bluetooth", 0, ["dst"]);
   const usbStore = encodePatchStore("usb", 5, "Flow");
   const bleStore = encodePatchStore("bluetooth", 5, "Flow");
   const usbVol = encodePatchVolume("usb", 50);

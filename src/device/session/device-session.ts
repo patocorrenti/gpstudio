@@ -589,7 +589,7 @@ export class DeviceSession {
 
   /**
    * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
-   * Sends family `114d` (not live `0D`) — one effect bit, not the whole stomp mask.
+   * Sends family `114d` with the **full** new mask for that stomp (not a single effect bit).
    * GP-50 UI A/B map to wire foot 1/0; GP-5 uses wire foot 0.
    */
   async setStompAssignment(
@@ -628,8 +628,7 @@ export class DeviceSession {
     const packets = encodeStompAssignment(
       this.snapshot.linkMode,
       footswitch,
-      effect,
-      assigned,
+      nextList,
     );
     if (!packets) {
       return;

@@ -58,9 +58,8 @@ const MODEL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x47] as const;
 const CONTROL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x48] as const;
 /**
  * Packed SET header: size `0x05`, path `01 01 04`, family `114d` (stomp assignment).
- * Body: wire footswitch, effect index (DUMP_MODULE_IDS / CTL; NS=9), value 0|1.
- * GP-50 UI Footswitch A is wire `1`, B is wire `0` (operator 2026-09-23).
- * One effect bit per SET — not a full stomp mask.
+ * Body: wire footswitch + live-style mask pack (`low` / `high`) for the **whole** stomp.
+ * GP-50 UI A → wire `1`, B → wire `0`. Per-effect index+0|1 was ignored (always NR; off broken).
  */
 const STOMP_ASSIGN_SET_PREFIX = [0x01, 0x00, 0x05, 0x11, 0x4d] as const;
 
@@ -115,6 +114,36 @@ function decodeStompMask(data: Uint8Array, base: number): EffectId[] {
   return EFFECT_IDS.filter((id) => bitOn(data, bits[id][0], bits[id][1]));
 }
 
+/**
+ * Dump-style mask bytes for one stomp (relative offsets 0 / 1 / 3), then the live
+ * pack used in pedal `0D` notifies: `low = (m0 << 4) | m1`, `high = m3`.
+ */
+export function packStompAssignmentMask(effects: readonly EffectId[]): {
+  low: number;
+  high: number;
+} {
+  const bits = stompEnableBits(0);
+  let m0 = 0;
+  let m1 = 0;
+  let m3 = 0;
+  for (const id of effects) {
+    const pair = bits[id];
+    if (!pair) {
+      continue;
+    }
+    const [offset, bit] = pair;
+    const flag = 1 << bit;
+    if (offset === 0) {
+      m0 |= flag;
+    } else if (offset === 1) {
+      m1 |= flag;
+    } else if (offset === 3) {
+      m3 |= flag;
+    }
+  }
+  return { low: ((m0 & 0x0f) << 4) | (m1 & 0x0f), high: m3 & 0x0f };
+}
+
 /** Decode stomp assignment from a merged current-preset dump. Short dumps yield empty lists. */
 export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): StompAssignment {
   const bases = model === "gp50" ? GP50_STOMP_BASES : GP5_STOMP_BASES;
@@ -126,24 +155,28 @@ export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): Stom
 }
 
 /**
- * App→pedal stomp-assignment SET (family `114d`). One effect bit per call.
+ * App→pedal stomp-assignment SET (family `114d`). Replaces the whole stomp mask.
  * Path `01 01 04`, CRC-8 ATM, nibble-expand. Bluetooth wrap is one GATT write.
- * `footswitch` is the wire index from {@link stompWireFootswitch}, not the UI column.
+ * `footswitch` is the wire index from {@link stompWireFootswitch}.
  */
 export function encodeStompAssignmentSysex(
   footswitch: 0 | 1,
-  effect: EffectId,
-  assigned: boolean,
+  effects: readonly EffectId[],
 ): Uint8Array | null {
-  const effectIndex = DUMP_MODULE_IDS.indexOf(effect);
-  if (effectIndex < 0 || (footswitch !== 0 && footswitch !== 1)) {
+  if (footswitch !== 0 && footswitch !== 1) {
     return null;
   }
+  for (const id of effects) {
+    if (DUMP_MODULE_IDS.indexOf(id) < 0) {
+      return null;
+    }
+  }
+  const { low, high } = packStompAssignmentMask(effects);
   const packed = Uint8Array.from([
     ...STOMP_ASSIGN_SET_PREFIX,
     footswitch,
-    effectIndex,
-    assigned ? 1 : 0,
+    low,
+    high,
   ]);
   return framePackedSet(packed);
 }
@@ -985,10 +1018,11 @@ function assertPresetDumpFixtures(): void {
     throw new Error("Short GP-50 dump must yield two empty stomp lists");
   }
 
-  const dstOn = encodeStompAssignmentSysex(1, "dst", true);
-  const nsOff = encodeStompAssignmentSysex(0, "ns", false);
+  const dstOn = encodeStompAssignmentSysex(1, ["dst"]);
+  const nsOff = encodeStompAssignmentSysex(0, []);
+  const nrPre = packStompAssignmentMask(["nr", "pre"]);
   if (!dstOn || !nsOff) {
-    throw new Error("Stomp assignment SET must encode DST and NS");
+    throw new Error("Stomp assignment SET must encode DST mask and empty clear");
   }
   if (stompWireFootswitch("gp50", 0) !== 1 || stompWireFootswitch("gp50", 1) !== 0) {
     throw new Error("GP-50 UI A must wire foot 1 and UI B must wire foot 0");
@@ -996,22 +1030,25 @@ function assertPresetDumpFixtures(): void {
   if (stompWireFootswitch("gp5", 0) !== 0) {
     throw new Error("GP-5 must wire foot 0");
   }
-  // Packed: 01 00 05 11 4d foot effect val — UI A DST on → wire foot 1 effect 2
-  const dstPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x01, 0x02, 0x01];
-  const nsPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x00, 0x09, 0x00];
+  if (nrPre.low !== 0x03 || nrPre.high !== 0) {
+    throw new Error("NR+PRE mask must pack low 0x03");
+  }
+  // DST-only: m1 bit2 → low 0x04. UI A → wire foot 1.
+  const dstPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x01, 0x04, 0x00];
+  const clearPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x00, 0x00, 0x00];
   const dstCrc = crc8Atm(Uint8Array.from(dstPacked));
-  const nsCrc = crc8Atm(Uint8Array.from(nsPacked));
+  const clearCrc = crc8Atm(Uint8Array.from(clearPacked));
   const expectDst = nibbleExpand(Uint8Array.from([dstCrc, ...dstPacked]));
-  const expectNs = nibbleExpand(Uint8Array.from([nsCrc, ...nsPacked]));
+  const expectClear = nibbleExpand(Uint8Array.from([clearCrc, ...clearPacked]));
   if (
     dstOn[0] !== 0xf0 ||
     dstOn[dstOn.length - 1] !== 0xf7 ||
     !expectDst.every((byte, index) => dstOn[index + 1] === byte)
   ) {
-    throw new Error("DST stomp SET must match family 114d wire foot 1 effect 2 on");
+    throw new Error("DST stomp SET must match family 114d wire foot 1 mask low 04");
   }
-  if (!expectNs.every((byte, index) => nsOff[index + 1] === byte)) {
-    throw new Error("NS stomp SET must match family 114d wire foot 0 effect 9 off");
+  if (!expectClear.every((byte, index) => nsOff[index + 1] === byte)) {
+    throw new Error("Empty stomp SET must clear mask on wire foot 0");
   }
 
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.cab, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));

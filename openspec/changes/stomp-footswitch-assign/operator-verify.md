@@ -30,14 +30,13 @@ Do **not** retry envelopes in `openspec/changes/stomp-assignment/spike-assignmen
 - [ ] Pass
 - [ ] Fail — notes:
 
-## Hypothesis H9 (2026-09-23) — wire foot inverted + short body
+## Hypothesis H10 (2026-09-23) — full stomp mask
 
-Operator on padded `0E`: A-app wrote only to B-pedal; B-app NR lit NR on A-pedal (clean). So UI A ⇔ wire `1`, UI B ⇔ wire `0`.
+Operator: B-NR on works; every other B button also lit NR; B-NR off did nothing. That matches treating the old third byte as a 0|1 flag (always bit0/NR) and ignoring effect index — not a full replace.
 
-Multi-module lights are from mis-parsed frames, not a full-stomp payload: each click still sends one `(foot, effect, 0|1)`.
+**Under test:** `114d` body `foot | low | high` with live-style pack of the **entire** stomp after the toggle (`low = (m0<<4)|m1`, `high = m3`). Off sends mask without that bit (or empty).
 
-**Under test:** short size-`05` `114d` again, with GP-50 foot map A→1 / B→0.
+Retest B: NR on → only NR; PRE on → PRE (or NR+PRE if both); NR off → clears NR.
 
-Retest: A-NR on/off (expect only NR on A); A-PRE; B-NR.
 
 
