@@ -61,6 +61,13 @@ export function AboutPage() {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Changelog</h2>
         <h3 className="text-sm font-medium text-muted-foreground">
+          <span className="text-foreground font-mono">Version 0.2.2</span>
+        </h3>
+        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+          <li>Fixed Bluetooth disconnecting after the first preset dump</li>
+          <li>Fixed console errors on app load</li>
+        </ul>
+        <h3 className="text-sm font-medium text-muted-foreground">
           <span className="text-foreground font-mono">Version 0.2.1</span>
         </h3>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
