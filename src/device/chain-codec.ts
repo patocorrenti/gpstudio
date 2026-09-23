@@ -58,9 +58,8 @@ const MODEL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x47] as const;
 const CONTROL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x48] as const;
 /**
  * Packed SET header: size `0x0A`, path `01 01 04`, family `114d` (stomp assignment).
- * Body is **both** stomp masks (no foot index), same fields as live `0D`:
- * A: m0, m1, 00, m3 then B: m0, m1, 00, m3.
- * Operator: a leading foot byte was misread (foot=1 → NR on A; m0 → m3).
+ * Body is both stomp masks (no foot index): A then B as m0, m1, m2, m3.
+ * m2 is writable (dump gap); do not hardcode 00.
  */
 const STOMP_ASSIGN_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x4d] as const;
 
@@ -108,20 +107,22 @@ function stompDumpBits(base: number): Record<EffectId, EnableBit> {
 }
 
 /**
- * Hand-edit SET write bits here. `[maskByte, bit]` per effect:
- * `0` = m0, `1` = m1, `3` = m3. Dump read uses {@link stompDumpBits} — leave it alone.
+ * Hand-edit SET write bits here. `[packedByte, bit]` per effect, bits `0`–`7`.
+ * After nibble-expand, bit 0–3 = MIDI low nibble, bit 4–7 = MIDI high nibble
+ * (the byte the pedal reads like live `0D`). Dump read uses {@link stompDumpBits}.
  *
- * Operator: RVB click works at `[1, 0]`. Edit any row; dump read stays on stompDumpBits.
+ * Foot A locked: NR/PRE/DST/AMP = packed 0 bits 0–3; RVB/NS = packed 1 bits 0–1.
+ * CAB/EQ/MOD/DLY are dump m0 (live byte 0) = high nibble of packed 0 (bits 4–7).
  */
-const STOMP_SET_BITS: Record<EffectId, readonly [0 | 1 | 3, number]> = {
+const STOMP_SET_BITS: Record<EffectId, readonly [0 | 1 | 2 | 3, number]> = {
   nr: [0, 0],
   pre: [0, 1],
   dst: [0, 2],
   amp: [0, 3],
-  cab: [0, 0],
-  eq: [0, 1],
-  mod: [0, 2],
-  dly: [0, 3],
+  cab: [0, 4],
+  eq: [0, 5],
+  mod: [0, 6],
+  dly: [0, 7],
   rvb: [1, 0],
   ns: [1, 1],
 };
@@ -151,17 +152,18 @@ function decodeStompMask(data: Uint8Array, base: number): EffectId[] {
 }
 
 /**
- * SET `114d` mask bytes for one stomp (relative 0 / 1 / 3). Not the dump map:
- * RVB SET uses dump-NR's slot. Live `0D` / dump still use {@link stompDumpBits}.
+ * SET `114d` mask bytes for one stomp (relative 0 / 1 / 2 / 3).
  */
 export function packStompAssignmentMask(effects: readonly EffectId[]): {
   m0: number;
   m1: number;
+  m2: number;
   m3: number;
 } {
   const bits = stompSetBits(0);
   let m0 = 0;
   let m1 = 0;
+  let m2 = 0;
   let m3 = 0;
   for (const id of effects) {
     const pair = bits[id];
@@ -174,11 +176,13 @@ export function packStompAssignmentMask(effects: readonly EffectId[]): {
       m0 |= flag;
     } else if (offset === 1) {
       m1 |= flag;
+    } else if (offset === 2) {
+      m2 |= flag;
     } else if (offset === 3) {
       m3 |= flag;
     }
   }
-  return { m0: m0 & 0x0f, m1: m1 & 0x0f, m3: m3 & 0x0f };
+  return { m0: m0 & 0xff, m1: m1 & 0xff, m2: m2 & 0xff, m3: m3 & 0xff };
 }
 
 /** Decode stomp assignment from a merged current-preset dump. Short dumps yield empty lists. */
@@ -193,7 +197,7 @@ export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): Stom
 
 /**
  * App→pedal stomp-assignment SET (family `114d`). Replaces both stomp masks.
- * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0,m1,00,m3 each.
+ * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0, m1, m2, m3.
  * Packs with {@link stompSetBits}, not the dump / live-`0D` map.
  */
 export function encodeStompAssignmentSysex(
@@ -215,11 +219,11 @@ export function encodeStompAssignmentSysex(
     ...STOMP_ASSIGN_SET_PREFIX,
     a.m0,
     a.m1,
-    0x00,
+    a.m2,
     a.m3,
     b.m0,
     b.m1,
-    0x00,
+    b.m2,
     b.m3,
   ]);
   return framePackedSet(packed);
@@ -1077,8 +1081,12 @@ function assertPresetDumpFixtures(): void {
   }
   const dstMask = packStompAssignmentMask(["dst"]);
   const rvbSet = packStompAssignmentMask(["rvb"]);
+  const cabSet = packStompAssignmentMask(["cab"]);
+  if (cabSet.m0 < 0x10) {
+    throw new Error("CAB SET must use packed high nibble (bit 4+), not dump-style 0x0f");
+  }
   const dumpRvb = stompDumpBits(0).rvb;
-  if (rvbSet.m0 === 0 && rvbSet.m1 === 0 && rvbSet.m3 === 0) {
+  if (rvbSet.m0 === 0 && rvbSet.m1 === 0 && rvbSet.m2 === 0 && rvbSet.m3 === 0) {
     throw new Error("RVB SET must set at least one mask bit");
   }
   if (dumpRvb[0] === 3 && dumpRvb[1] === 0 && rvbSet.m3 === 1 && rvbSet.m0 === 0 && rvbSet.m1 === 0) {
@@ -1093,7 +1101,7 @@ function assertPresetDumpFixtures(): void {
     0x4d,
     dstMask.m0,
     dstMask.m1,
-    0x00,
+    dstMask.m2,
     dstMask.m3,
     0x00,
     0x00,
