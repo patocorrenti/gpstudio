@@ -52,7 +52,7 @@ Alternative: encode the dump already in memory and skip the re-request. Rejected
 
 ### 5. Controls sit in the patch bar
 
-`PatchBar` (or a sibling file under `src/features/controller/` if the dialogs make the bar hard to read) renders shadcn `Slider`s labeled `Volume` and `BPM`. Pass the snapshot fields in from `ControllerPage`. Disabled when the value is `null` or the patch is syncing. No `src/components/` domain folder. Layout inside the bar is provisional.
+`PatchBar` (or a sibling file under `src/features/controller/` if the dialogs make the bar hard to read) renders shadcn `Slider`s labeled `P-Vol` and `BPM`. Pass the snapshot fields in from `ControllerPage`. Disabled when the value is `null` or the patch is syncing. No `src/components/` domain folder. Layout inside the bar is provisional.
 
 ## Risks / Trade-offs
 

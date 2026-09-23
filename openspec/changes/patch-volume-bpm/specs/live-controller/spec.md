@@ -2,27 +2,27 @@
 
 ### Requirement: Patch bar edits patch volume and patch BPM
 
-After the patch bar is shown, Controller SHALL show a patch-volume control for GP-5 and GP-50 and a patch-BPM control for GP-50 only. Labels MUST be in English (`Volume` and `BPM`). The volume control MUST cover 0–100. The BPM control MUST cover 40–260. GP-5 MUST NOT show a BPM control. Placement inside the patch bar is enough; a later layout pass may move them within that bar.
+After the patch bar is shown, Controller SHALL show a patch-volume control for GP-5 and GP-50 and a patch-BPM control for GP-50 only. Labels MUST be in English (`P-Vol` and `BPM`). The volume control MUST cover 0–100. The BPM control MUST cover 40–260. GP-5 MUST NOT show a BPM control. Placement inside the patch bar is enough; a later layout pass may move them within that bar.
 
 Each control MUST show the value from the current-preset dump once that value is known, and MUST NOT be usable before then. It MUST NOT send a write while it is unusable, including while the current patch is syncing. Dragging MUST update the displayed number on-change. Writes for that drag MUST be throttled so the session does not send a value for every intermediate step. Releasing MUST send the last value if it was not already sent. Setting a value MUST go through the device session and MUST NOT send raw MIDI from React. The same controls MUST be used on USB and Bluetooth. Disconnecting MUST hide them with the patch bar.
 
 #### Scenario: GP-50 bar shows volume and BPM from the dump
 - **WHEN** a GP-50 session is showing the patch bar and the current-preset dump has patch volume 80 and patch BPM 120
-- **THEN** Controller shows Volume at 80 and BPM at 120
+- **THEN** Controller shows P-Vol at 80 and BPM at 120
 
 #### Scenario: GP-5 bar shows volume and hides BPM
 - **WHEN** a GP-5 session is showing the patch bar and the current-preset dump has patch volume 80
-- **THEN** Controller shows Volume at 80
+- **THEN** Controller shows P-Vol at 80
 - **AND** Controller does not show a BPM control
 
 #### Scenario: Unknown dump keeps the controls unusable
 - **WHEN** the patch bar is shown and the current-preset dump has not supplied patch volume
-- **THEN** Volume cannot be used
+- **THEN** P-Vol cannot be used
 - **AND** no patch-volume write is sent
 
 #### Scenario: User sets patch volume through the session
-- **WHEN** Volume is showing 80 and the user sets it to 60
-- **THEN** Volume shows 60
+- **WHEN** P-Vol is showing 80 and the user sets it to 60
+- **THEN** P-Vol shows 60
 - **AND** that change is sent through the device session
 
 #### Scenario: User sets GP-50 patch BPM through the session
@@ -31,28 +31,28 @@ Each control MUST show the value from the current-preset dump once that value is
 - **AND** that change is sent through the device session
 
 #### Scenario: Slider drag does not send every step
-- **WHEN** Volume is showing 80 and the user drags it toward 40 without releasing
-- **THEN** Volume follows the dragged value
+- **WHEN** P-Vol is showing 80 and the user drags it toward 40 without releasing
+- **THEN** P-Vol follows the dragged value
 - **AND** the session does not send a patch-volume write for every intermediate value
 
 #### Scenario: Slider release sends the last value
-- **WHEN** the user releases the Volume control after dragging
+- **WHEN** the user releases the P-Vol control after dragging
 - **THEN** the last displayed volume is sent through the device session if it was not already sent
 
 #### Scenario: Syncing blocks volume and BPM
 - **WHEN** the user has selected another patch and the new current-preset dump has not arrived yet
-- **THEN** Volume cannot be used
+- **THEN** P-Vol cannot be used
 - **AND** on GP-50, BPM cannot be used
 - **AND** no patch-volume or patch-BPM write is sent
 
 #### Scenario: USB and Bluetooth share the controls
-- **WHEN** a Bluetooth session is showing Volume from a current-preset dump and the user sets a new volume
-- **THEN** Controller uses the same Volume control as USB
+- **WHEN** a Bluetooth session is showing P-Vol from a current-preset dump and the user sets a new volume
+- **THEN** Controller uses the same P-Vol control as USB
 - **AND** that change is sent through the device session
 
 #### Scenario: Disconnect hides volume and BPM
-- **WHEN** the user disconnects while Volume is showing
-- **THEN** Volume is hidden
+- **WHEN** the user disconnects while P-Vol is showing
+- **THEN** P-Vol is hidden
 - **AND** BPM is hidden
 
 ## MODIFIED Requirements
@@ -75,7 +75,7 @@ A patch-volume edit, and on GP-50 a patch-BPM edit, that differs from the baseli
 - **AND** Save appears before Rename
 
 #### Scenario: A volume edit enables emerald Save
-- **WHEN** the session is ready with dumped patch volume 80 and the user sets Volume to 60
+- **WHEN** the session is ready with dumped patch volume 80 and the user sets P-Vol to 60
 - **THEN** Save can be used
 - **AND** Save uses an emerald style
 
@@ -89,7 +89,7 @@ A patch-volume edit, and on GP-50 a patch-BPM edit, that differs from the baseli
 - **THEN** Save cannot be used
 
 #### Scenario: Restoring patch volume disables Save
-- **WHEN** Save is usable only because Volume was set away from the dumped value and the user sets Volume back to that dumped value
+- **WHEN** Save is usable only because P-Vol was set away from the dumped value and the user sets P-Vol back to that dumped value
 - **THEN** Save cannot be used
 
 #### Scenario: Restoring GP-50 patch BPM disables Save

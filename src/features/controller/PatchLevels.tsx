@@ -4,6 +4,7 @@ import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 
 function LevelSlider({
   label,
+  ariaLabel,
   min,
   max,
   value,
@@ -12,6 +13,7 @@ function LevelSlider({
   onCommit,
 }: {
   label: string;
+  ariaLabel: string;
   min: number;
   max: number;
   value: number | null;
@@ -20,8 +22,8 @@ function LevelSlider({
   onCommit: (value: number) => void;
 }) {
   return (
-    <div className="flex w-44 items-center gap-2">
-      <span className="w-12 shrink-0 text-sm text-foreground/70">{label}</span>
+    <div className="flex w-40 items-center gap-1.5">
+      <span className="w-9 shrink-0 text-sm text-foreground/70">{label}</span>
       <Slider
         className="min-w-0 flex-1"
         min={min}
@@ -29,7 +31,7 @@ function LevelSlider({
         step={1}
         value={[value ?? min]}
         disabled={disabled || value === null}
-        aria-label={label}
+        aria-label={ariaLabel}
         onValueChange={(next) => {
           const nextValue = next[0];
           if (nextValue === undefined || value === null) {
@@ -45,7 +47,7 @@ function LevelSlider({
           onCommit(nextValue);
         }}
       />
-      <span className="w-8 shrink-0 text-right text-sm font-medium tabular-nums">
+      <span className="w-7 shrink-0 text-right text-sm font-medium tabular-nums">
         {value === null ? "—" : value}
       </span>
     </div>
@@ -67,7 +69,8 @@ export function PatchLevels({
   return (
     <div className="ml-2 flex flex-wrap items-center justify-center gap-3">
       <LevelSlider
-        label="Volume"
+        label="P-Vol"
+        ariaLabel="Patch volume"
         min={0}
         max={100}
         value={volume}
@@ -82,6 +85,7 @@ export function PatchLevels({
       {model === "gp50" ? (
         <LevelSlider
           label="BPM"
+          ariaLabel="BPM"
           min={40}
           max={260}
           value={bpm}

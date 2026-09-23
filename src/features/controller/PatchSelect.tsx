@@ -188,7 +188,7 @@ export function PatchSelect({
       {wrapTrigger ? wrapTrigger(triggerWithPopover) : triggerWithPopover}
       <PopoverContent
         align="center"
-        className="w-72 gap-0 p-0"
+        className="w-56 gap-0 p-0"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           const input = (event.currentTarget as HTMLElement).querySelector(

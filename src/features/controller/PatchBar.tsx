@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,6 +9,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -164,6 +169,7 @@ export function PatchBar({
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<Uint8Array | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const destIndex = Number.parseInt(duplicateDest, 10);
   const destName =
     Number.isInteger(destIndex) && destIndex !== patch ? patchNames[destIndex] : null;
@@ -308,7 +314,7 @@ export function PatchBar({
           patch={patch}
           patchNames={patchNames}
           disabled={busy}
-          triggerClassName={`${patchChipClass} h-8 w-72 min-w-72 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+          triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
           wrapTrigger={(trigger) => (
             <PatchNavTooltip enabled={modified}>{trigger}</PatchNavTooltip>
           )}
@@ -350,52 +356,83 @@ export function PatchBar({
           <Save className={modified && !busy ? "size-3" : patchActionIconClass} />
           Save
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className={patchActionClass}
-          aria-label="Rename patch"
-          onClick={openRename}
-        >
-          <Pencil className={patchActionIconClass} />
-          Rename
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className={patchActionClass}
-          aria-label="Duplicate patch"
-          onClick={openDuplicate}
-        >
-          <Copy className={patchActionIconClass} />
-          Duplicate
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy || !canExportPatch}
-          className={patchActionClass}
-          aria-label="Download patch"
-          onClick={() => void downloadPatch()}
-        >
-          <Download className={patchActionIconClass} />
-          Download
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          className={patchActionClass}
-          aria-label="Upload patch"
-          onClick={() => {
-            fileInputRef.current?.click();
+        <Popover
+          open={optionsOpen}
+          onOpenChange={(next) => {
+            if (busy && next) {
+              return;
+            }
+            setOptionsOpen(next);
           }}
         >
-          <Upload className={patchActionIconClass} />
-          Upload
-        </Button>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              className={patchActionClass}
+              aria-label="Patch options"
+              aria-expanded={optionsOpen}
+            >
+              Patch Options
+              <ChevronDown className={patchActionIconClass} />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-44 gap-0.5 p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+              onClick={() => {
+                setOptionsOpen(false);
+                openRename();
+              }}
+            >
+              <Pencil className={patchActionIconClass} />
+              Rename
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+              onClick={() => {
+                setOptionsOpen(false);
+                openDuplicate();
+              }}
+            >
+              <Copy className={patchActionIconClass} />
+              Duplicate
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy || !canExportPatch}
+              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+              onClick={() => {
+                setOptionsOpen(false);
+                void downloadPatch();
+              }}
+            >
+              <Download className={patchActionIconClass} />
+              Download
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+              onClick={() => {
+                setOptionsOpen(false);
+                fileInputRef.current?.click();
+              }}
+            >
+              <Upload className={patchActionIconClass} />
+              Upload
+            </Button>
+          </PopoverContent>
+        </Popover>
         <input
           ref={fileInputRef}
           type="file"
