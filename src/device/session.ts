@@ -25,6 +25,7 @@ import {
   ChainDecoder,
   decodeLiveChainOrder,
   decodeLiveOnOffChanges,
+  decodeLivePatchVolume,
   decodeLiveSlotControl,
   decodeLiveSlotModel,
   decodePresetDump,
@@ -867,10 +868,12 @@ export class DeviceSession {
       return;
     }
     for (const message of this.sysex.push(bytes)) {
+      const liveVolume = this.applyLivePatchVolume(message);
       const liveOnOff = this.applyLiveModule(message);
       const liveOrder = this.applyLiveChainOrder(message);
       const liveSlot = this.applyLiveSlot(message);
       if (
+        !liveVolume &&
         !liveOnOff &&
         !liveOrder &&
         !liveSlot &&
@@ -1064,6 +1067,39 @@ export class DeviceSession {
     };
     this.clearChainRefreshTimer();
     this.setChain(chain, { chainSync: "idle", canExportPatch: true });
+  }
+
+  private applyLivePatchVolume(message: Uint8Array): boolean {
+    if (this.snapshot.status !== "connected") {
+      return false;
+    }
+    const volume = decodeLivePatchVolume(message);
+    if (volume === null) {
+      return false;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
+      return true;
+    }
+    if (this.snapshot.chainSync === "syncing") {
+      return true;
+    }
+    this.dropPatchWrite(PATCH_VOLUME_WRITE_KEY, volume);
+    if (this.snapshot.patchVolume === volume) {
+      return true;
+    }
+    if (this.currentPatchDump) {
+      writeDumpPatchVolume(this.snapshot.model, this.currentPatchDump, volume);
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      patchVolume: volume,
+    };
+    this.snapshot = {
+      ...this.snapshot,
+      modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
+    };
+    this.emitSnapshot();
+    return true;
   }
 
   private applyLiveModule(message: Uint8Array): boolean {
@@ -1659,6 +1695,17 @@ export class DeviceSession {
       this.controlWriteTimers.delete(key);
     }
     this.pendingControlWrites.delete(key);
+    this.lastControlWriteAt.delete(key);
+    this.lastControlSentValue.set(key, sentValue);
+  }
+
+  private dropPatchWrite(key: string, sentValue: number): void {
+    const timer = this.controlWriteTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.controlWriteTimers.delete(key);
+    }
+    this.pendingPatchWrites.delete(key);
     this.lastControlWriteAt.delete(key);
     this.lastControlSentValue.set(key, sentValue);
   }

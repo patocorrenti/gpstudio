@@ -6,7 +6,7 @@ After a USB or Bluetooth session is ready and a current-preset dump has supplied
 
 Changing patch volume MUST update the snapshot on-change and MUST send official MIDI CC 7 with that value (0–100) through the open link. Changing GP-50 patch BPM MUST update the snapshot on-change and MUST send official tempo as CC 73 then CC 74: BPM 40–127 is CC 73 = 0 and CC 74 = BPM; BPM 128–255 is CC 73 = 1 and CC 74 = BPM − 128; BPM 256–260 is CC 73 = 2 and CC 74 = BPM − 256. Slider drags MUST coalesce those writes (throttle, flush on release) so Bluetooth is not flooded. The session MUST NOT send a value outside those ranges. The session MUST NOT send the GP-50 relative step controllers (CC 17, CC 19, or CC 21) for these edits. The session MUST NOT send extra patch recall or an audio-chain dump solely because volume or BPM changed.
 
-A current-preset dump for a newly selected patch, a user reload, or a dump applied while the working patch is not modified MUST set the snapshot volume and, on GP-50, BPM from that dump. A dump discarded because the user already edited MUST leave the edited volume and BPM on the snapshot. Download of a patch the user has edited MUST carry that edited patch volume and, on GP-50, that edited patch BPM. Inbound CC 7, CC 73, and CC 74 MUST NOT update snapshot volume, BPM, or the chain while the selected patch stays the same, on USB and on Bluetooth. Disconnect MUST drop those values.
+A current-preset dump for a newly selected patch, a user reload, or a dump applied while the working patch is not modified MUST set the snapshot volume and, on GP-50, BPM from that dump. A dump discarded because the user already edited MUST leave the edited volume and BPM on the snapshot. Download of a patch the user has edited MUST carry that edited patch volume and, on GP-50, that edited patch BPM. Inbound CC 7, CC 73, and CC 74 MUST NOT update snapshot volume, BPM, or the chain while the selected patch stays the same, on USB and on Bluetooth. On Bluetooth, an inbound live patch-volume SysEx notify (identity-family, size `0x07`, path `01 02 04`, preset-volume body) MUST update snapshot patch volume and MUST update `modified` when that value differs from the baseline. USB MUST NOT apply that notify to the snapshot. Disconnect MUST drop those values.
 
 #### Scenario: USB volume sends CC 7
 - **WHEN** a USB session is ready with dumped patch volume 80 and the user sets patch volume to 60
@@ -66,6 +66,15 @@ A current-preset dump for a newly selected patch, a user reload, or a dump appli
 - **THEN** the snapshot patch volume stays 80
 - **AND** the snapshot chain does not change from that CC
 
+#### Scenario: Bluetooth live volume SysEx updates the snapshot
+- **WHEN** a Bluetooth session is ready with patch volume 50 and an inbound live patch-volume SysEx for 51 arrives while the selected patch stays the same
+- **THEN** the snapshot patch volume is 51
+- **AND** no patch recall or chain dump is sent solely because that notify arrived
+
+#### Scenario: USB ignores live volume SysEx
+- **WHEN** a USB session is ready with patch volume 50 and an inbound live patch-volume SysEx for 51 arrives
+- **THEN** the snapshot patch volume stays 50
+
 #### Scenario: Disconnect drops volume and BPM
 - **WHEN** the user disconnects while the snapshot has a patch volume
 - **THEN** that patch volume and patch BPM are dropped
@@ -76,7 +85,7 @@ A current-preset dump for a newly selected patch, a user reload, or a dump appli
 
 After a USB or Bluetooth session is ready, the connected snapshot MUST report whether the current working patch differs from a baseline kept for the selected patch. That comparison MUST include the working chain (module order, on/off, factory model, and control values), patch volume on GP-5 and GP-50, and patch BPM on GP-50. GP-5 MUST NOT include BPM in that comparison. The session MUST capture that baseline from the current-preset dump that lands for a newly selected patch (connect, user recall, or pedal-initiated patch change) and MUST report not modified then. A dump that matches the chain already shown MUST still capture that baseline and MUST still report not modified. A matching confirmation dump MUST NOT recapture the baseline and MUST leave modified unchanged. A mismatched confirmation that replaces the chain MUST recapture the baseline and MUST report not modified. A confirmation discarded because the user already edited MUST leave modified as it was. A user reload of the selected patch MUST re-request that patch's current-preset dump, MUST NOT send patch recall, MUST capture the baseline from the dump that lands, and MUST report not modified then. The session MUST recapture that baseline from the current working patch after a successful Save or rename of the current slot and MUST report not modified then.
 
-Any later working-patch change that still differs from the baseline (module on/off, reorder, model, control, patch volume, GP-50 patch BPM, Bluetooth live follow of chain fields, or a successful upload whose dump does not match the baseline) MUST report modified. A later working-patch change that matches the baseline again MUST report not modified. Duplicate onto another slot MUST NOT recapture the current-slot baseline. A dump refresh that is not a newly selected patch (download, upload) MUST NOT recapture the baseline as the stored patch. While the current patch is syncing, or when no dump has been captured for the selected patch, the snapshot MUST report not modified. Changing patch MUST drop the baseline. Disconnect MUST drop that working state. Inbound patch-volume or tempo CC MUST NOT by itself report modified while the selected patch stays the same.
+Any later working-patch change that still differs from the baseline (module on/off, reorder, model, control, patch volume, GP-50 patch BPM, Bluetooth live follow of chain fields, or a successful upload whose dump does not match the baseline) MUST report modified. A later working-patch change that matches the baseline again MUST report not modified. Duplicate onto another slot MUST NOT recapture the current-slot baseline. A dump refresh that is not a newly selected patch (download, upload) MUST NOT recapture the baseline as the stored patch. While the current patch is syncing, or when no dump has been captured for the selected patch, the snapshot MUST report not modified. Changing patch MUST drop the baseline. Disconnect MUST drop that working state. Inbound patch-volume or tempo CC MUST NOT by itself report modified while the selected patch stays the same. A Bluetooth live patch-volume SysEx that leaves the baseline MUST report modified.
 
 #### Scenario: Dump of the selected patch starts clean
 - **WHEN** a USB or Bluetooth session is ready and a current-preset dump for the selected patch is decoded
@@ -146,6 +155,10 @@ Any later working-patch change that still differs from the baseline (module on/o
 #### Scenario: Inbound volume CC does not mark modified
 - **WHEN** a session has a baseline patch volume of 80 and inbound CC 7 value 40 arrives while the selected patch stays the same
 - **THEN** the snapshot reports not modified
+
+#### Scenario: Bluetooth live volume SysEx can mark modified
+- **WHEN** a Bluetooth session has a baseline patch volume of 50 and an inbound live patch-volume SysEx for 51 arrives
+- **THEN** the snapshot reports modified
 
 #### Scenario: Save recaptures the baseline
 - **WHEN** the snapshot is modified and the user Saves the current slot

@@ -14,7 +14,7 @@ See proposal.md for why. The patch bar already edits the working patch through `
 
 - Switching `.prst` upload off family `1142`.
 - Sending CC 17, CC 19, or CC 21.
-- Following inbound CC 7 / 73 / 74.
+- Following inbound CC 7 / 73 / 74. Bluetooth live patch-volume SysEx is applied.
 
 ## Decisions
 

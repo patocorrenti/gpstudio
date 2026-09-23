@@ -81,8 +81,9 @@ context: |
     SET (Save / rename / duplicate), current-patch file export, current-patch
     .prst import onto the selected slot, and Controller drag are in scope.
     Read reference/ for SysEx shape; do not paste that JavaScript into src/.
-    Applying inbound volume, BPM, tuner, or Patch/Stomp mode
-    while the patch stays the same is not. Patch-bar volume is CC 7 and
+    Applying inbound volume CC, BPM CC, tuner, or Patch/Stomp mode
+    while the patch stays the same is not. Bluetooth live patch-volume SysEx
+    is applied. Patch-bar volume is CC 7 and
     GP-50 tempo is CC 73 then CC 74; family 1142 stays the upload path.
     Protocol references: docs/protocol-references.md (behavioral only; no source drop).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
@@ -157,7 +158,9 @@ context: |
     Volume (CC 7, 0–100) on the patch bar for GP-5 and GP-50, and BPM (CC 73/74,
     40–260) for GP-50 only. Both wait for the current-preset dump, then edit
     through the session on USB and Bluetooth. Inbound CC 7/73/74 are not applied.
-    Tuner later. Family 1142 stays the .prst upload path.
+    Bluetooth live patch-volume SysEx updates Volume (and modified when it differs
+    from the baseline); USB ignores that notify. Tuner later. Family 1142 stays
+    the .prst upload path.
   - GP-50 also: master volume and Patch/Stomp mode (not the patch bar)
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
@@ -169,8 +172,9 @@ context: |
     export and current-patch .prst import onto the selected slot are in scope;
     not the Library route and not GP-5/GP-50 conversion)
   - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
-  - Applying liveFromPedal inbound volume/BPM/tuner to the snapshot
-    while the patch stays the same (Bluetooth live-module SysEx, Stomp
+  - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
+    while the patch stays the same (Bluetooth live patch-volume SysEx,
+    live-module SysEx, Stomp
     footswitch chain on/off, live chain-order, and live model/control
     for the ten effect slots are in scope. USB must not apply those reports.
     Current-patch model + control read/write for the ten effect slots is in scope)
@@ -273,8 +277,9 @@ rules:
       file export, current-patch .prst load into the working patch, and
       Controller drag-and-drop of movable modules are in scope; read
       reference/ for SysEx (do not paste it into src/); Patch/Stomp
-      control is later; do not apply liveFromPedal volume/BPM/tuner
-      to the snapshot while the patch stays the same; patch-bar volume is
+      control is later; do not apply liveFromPedal volume/BPM CC or tuner
+      to the snapshot while the patch stays the same; Bluetooth live
+      patch-volume SysEx is applied; patch-bar volume is
       CC 7 and GP-50 tempo is CC 73/74; family 1142 stays the upload path; Library import/reorder
       of .prst stay later (current-patch .prst export of the connected model
       and load into the working patch are in scope; no GP-5/GP-50 conversion)
