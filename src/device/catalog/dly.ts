@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxModel } from "@/device/catalog/types";
 
 export const DLY_MODELS: readonly FxModel[] = [
@@ -6,6 +6,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-pure",
     kind: "dly",
     label: "Pure",
+    description: "Produce pure, precised delay sound.",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x0b],
     controls: [
@@ -44,6 +45,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -60,6 +62,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-analog",
     kind: "dly",
     label: "Analog",
+    description: "Produciing warm delay sound with analog feel.",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x0b],
     controls: [
@@ -98,6 +101,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -114,6 +118,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-slapback",
     kind: "dly",
     label: "Slapback",
+    description: "Simulates the classic slapback echo effect.",
     devices: BOTH_PEDALS,
     wire: [0x05, 0x00, 0x00, 0x0b],
     controls: [
@@ -159,6 +164,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-sweet-echo",
     kind: "dly",
     label: "Sweet Echo",
+    description: "This analog delay pedal was sold from 1981 to 1984 and is still sought after thanks to its warm, natural sound. The original only produced a delay time ranging from 20 to 300 milliseconds.",
     devices: BOTH_PEDALS,
     wire: [0x0d, 0x00, 0x00, 0x0b],
     controls: [
@@ -197,6 +203,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -213,6 +220,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-tape",
     kind: "dly",
     label: "Tape",
+    description: "Simulates solid-state tape echo sound.",
     devices: BOTH_PEDALS,
     wire: [0x02, 0x00, 0x00, 0x0b],
     controls: [
@@ -251,6 +259,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -267,6 +276,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-tube",
     kind: "dly",
     label: "Tube",
+    description: "Simulates tube-driven tape echo sound.",
     devices: BOTH_PEDALS,
     wire: [0x0b, 0x00, 0x00, 0x0b],
     controls: [
@@ -305,6 +315,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -321,6 +332,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-rev-echo",
     kind: "dly",
     label: "Rev Echo",
+    description: "Producing a special delay effect with reversed feedback.",
     devices: BOTH_PEDALS,
     wire: [0x13, 0x00, 0x00, 0x0b],
     controls: [
@@ -359,6 +371,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,
@@ -375,6 +388,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-ring-echo",
     kind: "dly",
     label: "Ring Echo",
+    description: "Producing a delay effect with ring modulated repeats.",
     devices: BOTH_PEDALS,
     wire: [0x09, 0x00, 0x00, 0x0b],
     controls: [
@@ -440,6 +454,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 7,
@@ -456,6 +471,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-sweep-echo",
     kind: "dly",
     label: "Sweep Echo",
+    description: "Producing a delay effect with sweeping filter modulated repeats.",
     devices: BOTH_PEDALS,
     wire: [0x06, 0x00, 0x00, 0x0b],
     controls: [
@@ -512,6 +528,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 6,
@@ -521,6 +538,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 7,
@@ -537,6 +555,7 @@ export const DLY_MODELS: readonly FxModel[] = [
     id: "dly-ping-pong",
     kind: "dly",
     label: "Ping Pong",
+    description: "A ping-pong delay producing stereo feedbadk bounces back and forth between left and right channels.",
     devices: BOTH_PEDALS,
     wire: [0x04, 0x00, 0x00, 0x0b],
     controls: [
@@ -575,6 +594,7 @@ export const DLY_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
       {
         index: 4,

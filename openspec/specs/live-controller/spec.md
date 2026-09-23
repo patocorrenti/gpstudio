@@ -8,18 +8,19 @@ Shows Controller as the live home: an empty state with no pedal, a loading state
 
 ### Requirement: Disconnected Controller shows an empty state
 
-When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Reload, Save, rename, duplicate, download, upload, a syncing state, or an audio chain.
+When no pedal session is connected, Controller SHALL tell the user that no pedals are connected. The empty state MUST be in English. It MUST NOT show patch previous, patch next, a patch selector, Reload, Save, rename, duplicate, download, upload, a Global settings control, a syncing state, or an audio chain.
 
 #### Scenario: Open Controller with no pedal
 - **WHEN** the user opens Controller while disconnected
 - **THEN** the screen states that no pedals are connected
 - **AND** no patch controls are shown
+- **AND** no Global settings control is shown
 - **AND** no syncing state is shown
 - **AND** no audio chain is shown
 
 ### Requirement: Controller syncs patch identity after connect
 
-After a pedal session becomes connected, Controller SHALL show an English loading state while the session requests the pedal's current patch index and onboard patch names. The loading state MUST NOT wait for the audio-chain dump. The loading state MUST NOT send patch recall (official CC 0) solely because the session connected or Controller opened. Disconnecting during sync MUST return to the empty state. Controller MUST NOT send raw MIDI.
+After a pedal session becomes connected, Controller SHALL show an English loading state while the session requests the pedal's current patch index and onboard patch names. The loading state MUST NOT wait for the audio-chain dump. The loading state MUST NOT wait for the IR-name dump. The loading state MUST NOT wait for the globals dump. The loading state MUST NOT send patch recall (official CC 0) solely because the session connected or Controller opened. Disconnecting during sync MUST return to the empty state. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Loading after USB connect
 - **WHEN** a USB session becomes connected and patch identity is not yet known
@@ -27,6 +28,8 @@ After a pedal session becomes connected, Controller SHALL show an English loadin
 - **AND** the patch bar is not shown yet
 - **AND** the audio chain is not shown yet
 - **AND** no patch recall is sent solely because the session connected
+- **AND** that loading state does not wait for the IR-name dump
+- **AND** that loading state does not wait for the globals dump
 
 #### Scenario: Loading after Bluetooth connect
 - **WHEN** a Bluetooth session becomes connected and patch identity is not yet known
@@ -34,6 +37,8 @@ After a pedal session becomes connected, Controller SHALL show an English loadin
 - **AND** the patch bar is not shown yet
 - **AND** the audio chain is not shown yet
 - **AND** no patch recall is sent solely because the session connected
+- **AND** that loading state does not wait for the IR-name dump
+- **AND** that loading state does not wait for the globals dump
 
 #### Scenario: Patch bar appears before the audio chain
 - **WHEN** a session has received patch identity and the audio-chain dump has not arrived yet
@@ -355,9 +360,9 @@ When NS is on, Controller MUST mark the AMP and CAB slots as disabled with a pro
 
 ### Requirement: Controller shows enabled slot control panels
 
-After the audio chain is shown, Controller SHALL show a control panel below the chain for each enabled effect slot (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) whose loaded model and control values are known from the device session. Panels MUST be laid out in two columns when width allows. Each panel MUST show that slot's kind, the loaded model's English label, and that model's visible controls (label, current value, and the catalog min / max / step). When a kind has more than one factory model for the connected pedal, the panel MUST offer a model select. A kind with only one factory model MUST still show its controls and MUST NOT require a select. GP-50 EXP MUST NOT get a control panel. Disabled effect slots MUST NOT show a panel. AMP and CAB panels MUST NOT appear while NS marks those slots bypassed. Labels MUST be in English.
+After the audio chain is shown, Controller SHALL show a control panel below the chain for each enabled effect slot (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) whose loaded model and control values are known from the device session. Panels MUST be laid out in two columns when width allows. Each panel MUST show that slot's kind, the loaded model's English label, and that model's visible controls for the connected pedal (label, current value, and the catalog min / max / step). The model select MUST list only factory models that exist on the connected pedal. When a kind has more than one such model, the panel MUST offer a model select. A kind with only one factory model MUST still show its controls and MUST NOT require a select. GP-5 PRE MUST NOT list C-Wah or AC Sim. GP-50 PRE MUST list C-Wah and AC Sim. GP-5 CAB MUST NOT list AC. GP-50 CAB MUST list AC. GP-5 panels MUST NOT show Sync, S-Sync, or D-Sync. A B-Boost panel MUST show Gain, VOL, Bass, and Treble on both pedals and MUST NOT show Tone. GP-50 EXP MUST NOT get a control panel. Disabled effect slots MUST NOT show a panel. AMP and CAB panels MUST NOT appear while NS marks those slots bypassed. Labels MUST be in English.
 
-Changing the selected model or a control value MUST go through the device session and MUST NOT send raw MIDI from React. Dragging a slider MUST update the displayed value on-change. Control writes for that drag MUST be throttled so the session does not send a SET for every intermediate value. Releasing the slider MUST send the last value if it was not already sent. Toggles and model selects MUST send on-change. The same panels MUST be used on USB and Bluetooth. While the chain-refresh busy overlay is shown, those panels MUST be covered with it and MUST NOT be usable. Disconnecting MUST hide the panels. If the chain dump did not supply a slot's model and values, Controller MUST NOT show an editable panel for that slot.
+Changing the selected model or a control value MUST go through the device session and MUST NOT send raw MIDI from React. Dragging a slider MUST update the displayed value on-change. Control writes for that drag MUST be throttled so the session does not send a SET for every intermediate value. Releasing the slider MUST send the last value if it was not already sent. Toggles and model selects MUST send on-change. The same panels MUST be used on USB and Bluetooth for a given pedal. While the chain-refresh busy overlay is shown, those panels MUST be covered with it and MUST NOT be usable. Disconnecting MUST hide the panels. If the chain dump did not supply a slot's model and values, Controller MUST NOT show an editable panel for that slot.
 
 #### Scenario: Enabled AMP shows its panel
 - **WHEN** a session is showing the audio chain with AMP on and a dump that loaded Tweedy with Gain at 30
@@ -389,6 +394,37 @@ Changing the selected model or a control value MUST go through the device sessio
 - **THEN** the AMP panel lists Bellman 59N
 - **AND** that panel shows Bellman 59N's controls
 - **AND** that change is sent through the device session
+
+#### Scenario: GP-5 PRE omits GP-50-only models
+- **WHEN** a GP-5 session is showing the audio chain with PRE on and a known PRE model
+- **THEN** the PRE model select does not list C-Wah
+- **AND** the PRE model select does not list AC Sim
+
+#### Scenario: GP-50 PRE lists its extra models
+- **WHEN** a GP-50 session is showing the audio chain with PRE on and a known PRE model
+- **THEN** the PRE model select lists C-Wah
+- **AND** the PRE model select lists AC Sim
+
+#### Scenario: GP-5 CAB omits AC
+- **WHEN** a GP-5 session is showing a CAB panel
+- **THEN** the CAB model select does not list AC
+
+#### Scenario: GP-50 CAB lists AC
+- **WHEN** a GP-50 session is showing a CAB panel
+- **THEN** the CAB model select lists AC
+
+#### Scenario: B-Boost panel shows Bass and Treble
+- **WHEN** a session is showing PRE on B-Boost
+- **THEN** the PRE panel shows Gain, VOL, Bass, and Treble
+- **AND** the PRE panel does not show Tone
+
+#### Scenario: GP-5 panel omits Sync
+- **WHEN** a GP-5 session is showing a panel for a model that has Sync on GP-50
+- **THEN** that panel does not show Sync, S-Sync, or D-Sync
+
+#### Scenario: GP-50 A-Chorus shows Sync
+- **WHEN** a GP-50 session is showing MOD on A-Chorus
+- **THEN** that panel shows Sync
 
 #### Scenario: NR has no model select
 - **WHEN** a session is showing the audio chain with NR on and a known NR model
@@ -427,6 +463,41 @@ Changing the selected model or a control value MUST go through the device sessio
 - **WHEN** the user disconnects while Controller is showing slot control panels
 - **THEN** the panels are hidden
 - **AND** the screen states that no pedals are connected
+
+### Requirement: CAB panel lists onboard user IR slots
+
+When Controller is showing a CAB control panel, the model select MUST include the twenty onboard user IR slots together with the factory CAB models for the connected pedal. Until IR names are known, those slots MUST use the English fallback labels `User IR 01` through `User IR 20`. When the session has a name for a slot, the select MUST show that name instead of the fallback. A blank or missing name MUST keep the fallback. The same labels MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+
+Selecting a user IR slot MUST go through the device session the same way as selecting a factory CAB model. Identity loading and chain refresh MUST NOT wait for IR names. If names arrive after the CAB panel is already shown, the select MUST update those labels without hiding the panel or sending patch recall.
+
+#### Scenario: User IR dump shows the CAB panel
+- **WHEN** a session is showing the audio chain with CAB on and a dump that loaded User IR 03 with VOL at 50
+- **THEN** Controller shows a CAB panel
+- **AND** that panel lists User IR 03 or that slot's dumped name
+- **AND** that panel shows VOL at 50
+
+#### Scenario: Fallback labels before names arrive
+- **WHEN** a session is showing a CAB panel whose loaded model is a user IR slot and IR names have not arrived
+- **THEN** that panel's model select lists `User IR 01` through `User IR 20`
+
+#### Scenario: Dumped name replaces the fallback
+- **WHEN** a CAB panel is listing `User IR 03` and the session receives the name `Greenback 412` for that slot
+- **THEN** that panel's model select lists `Greenback 412` for that slot
+- **AND** the panel stays shown
+- **AND** no patch recall is sent solely because the name arrived
+
+#### Scenario: Blank IR name keeps the fallback
+- **WHEN** a session receives a blank name for user IR slot 07
+- **THEN** the CAB model select still lists `User IR 07` for that slot
+
+#### Scenario: User selects a user IR slot
+- **WHEN** the CAB panel is showing a factory CAB model and the user selects User IR 03
+- **THEN** the CAB panel lists User IR 03 or that slot's dumped name
+- **AND** that change is sent through the device session
+
+#### Scenario: USB and Bluetooth share user IR labels
+- **WHEN** a Bluetooth session is showing a CAB panel with dumped IR names
+- **THEN** Controller shows the same CAB user IR labels as USB for that pedal
 
 ### Requirement: Controller saves, renames, duplicates, and downloads the current patch
 
@@ -520,12 +591,69 @@ While the current patch is syncing, Reload, Save, rename, duplicate, download, u
 - **THEN** Controller uses the same Save presentation as USB
 - **AND** that store is sent through the device session
 
+### Requirement: Patch bar edits patch volume and patch BPM
+
+After the patch bar is shown, Controller SHALL show a patch-volume control for GP-5 and GP-50 and a patch-BPM control for GP-50 only. Labels MUST be in English (`P-Vol` and `BPM`). The volume control MUST cover 0–100. The BPM control MUST cover 40–260. GP-5 MUST NOT show a BPM control. Placement inside the patch bar is enough; a later layout pass may move them within that bar.
+
+Each control MUST show the value from the current-preset dump once that value is known, and MUST NOT be usable before then. It MUST NOT send a write while it is unusable, including while the current patch is syncing. Dragging MUST update the displayed number on-change. Writes for that drag MUST be throttled so the session does not send a value for every intermediate step. Releasing MUST send the last value if it was not already sent. Setting a value MUST go through the device session and MUST NOT send raw MIDI from React. The same controls MUST be used on USB and Bluetooth. Disconnecting MUST hide them with the patch bar.
+
+#### Scenario: GP-50 bar shows volume and BPM from the dump
+- **WHEN** a GP-50 session is showing the patch bar and the current-preset dump has patch volume 80 and patch BPM 120
+- **THEN** Controller shows P-Vol at 80 and BPM at 120
+
+#### Scenario: GP-5 bar shows volume and hides BPM
+- **WHEN** a GP-5 session is showing the patch bar and the current-preset dump has patch volume 80
+- **THEN** Controller shows P-Vol at 80
+- **AND** Controller does not show a BPM control
+
+#### Scenario: Unknown dump keeps the controls unusable
+- **WHEN** the patch bar is shown and the current-preset dump has not supplied patch volume
+- **THEN** P-Vol cannot be used
+- **AND** no patch-volume write is sent
+
+#### Scenario: User sets patch volume through the session
+- **WHEN** P-Vol is showing 80 and the user sets it to 60
+- **THEN** P-Vol shows 60
+- **AND** that change is sent through the device session
+
+#### Scenario: User sets GP-50 patch BPM through the session
+- **WHEN** a GP-50 session is showing BPM at 120 and the user sets it to 140
+- **THEN** BPM shows 140
+- **AND** that change is sent through the device session
+
+#### Scenario: Slider drag does not send every step
+- **WHEN** P-Vol is showing 80 and the user drags it toward 40 without releasing
+- **THEN** P-Vol follows the dragged value
+- **AND** the session does not send a patch-volume write for every intermediate value
+
+#### Scenario: Slider release sends the last value
+- **WHEN** the user releases the P-Vol control after dragging
+- **THEN** the last displayed volume is sent through the device session if it was not already sent
+
+#### Scenario: Syncing blocks volume and BPM
+- **WHEN** the user has selected another patch and the new current-preset dump has not arrived yet
+- **THEN** P-Vol cannot be used
+- **AND** on GP-50, BPM cannot be used
+- **AND** no patch-volume or patch-BPM write is sent
+
+#### Scenario: USB and Bluetooth share the controls
+- **WHEN** a Bluetooth session is showing P-Vol from a current-preset dump and the user sets a new volume
+- **THEN** Controller uses the same P-Vol control as USB
+- **AND** that change is sent through the device session
+
+#### Scenario: Disconnect hides volume and BPM
+- **WHEN** the user disconnects while P-Vol is showing
+- **THEN** P-Vol is hidden
+- **AND** BPM is hidden
+
 ### Requirement: Controller Save follows the working modified state
 
 After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be usable when the current working patch is not modified, and MUST NOT be usable while the current patch is syncing. When the working patch is modified and synced, Save MUST be usable and MUST use an emerald style distinct from the other patch-bar actions. Hovering previous, next, or the patch selector MUST show an English tooltip that unsaved changes will be lost. That tooltip MUST NOT block choosing or stepping to another patch. Controller MUST NOT show a separate Modified label. The same presentation MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
+A patch-volume edit, and on GP-50 a patch-BPM edit, that differs from the baseline MUST make Save usable with that same emerald style. Restoring patch volume, and on GP-50 patch BPM, to the baseline while the rest of the working patch also matches MUST make Save unusable.
+
 #### Scenario: Loaded patch cannot Save
-- **WHEN** the session is ready, a current-preset dump for the selected patch has landed, and the user has not changed the working chain
+- **WHEN** the session is ready, a current-preset dump for the selected patch has landed, and the user has not changed the working patch (chain, patch volume, and on GP-50 patch BPM)
 - **THEN** Save cannot be used
 - **AND** Controller does not show a Modified label
 
@@ -535,8 +663,26 @@ After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be u
 - **AND** Save uses an emerald style
 - **AND** Save appears before Rename
 
+#### Scenario: A volume edit enables emerald Save
+- **WHEN** the session is ready with dumped patch volume 80 and the user sets P-Vol to 60
+- **THEN** Save can be used
+- **AND** Save uses an emerald style
+
+#### Scenario: A GP-50 BPM edit enables emerald Save
+- **WHEN** a GP-50 session is ready with dumped patch BPM 120 and the user sets BPM to 140
+- **THEN** Save can be used
+- **AND** Save uses an emerald style
+
 #### Scenario: Restoring the baseline disables Save
 - **WHEN** Save is usable because DST was turned off and the user turns DST on again so the working chain matches the dumped patch
+- **THEN** Save cannot be used
+
+#### Scenario: Restoring patch volume disables Save
+- **WHEN** Save is usable only because P-Vol was set away from the dumped value and the user sets P-Vol back to that dumped value
+- **THEN** Save cannot be used
+
+#### Scenario: Restoring GP-50 patch BPM disables Save
+- **WHEN** Save is usable only because BPM was set away from the dumped value and the user sets BPM back to that dumped value
 - **THEN** Save cannot be used
 
 #### Scenario: Save after an edit stores and disables Save
@@ -564,7 +710,7 @@ After the patch bar is shown, Save MUST appear before Rename. Save MUST NOT be u
 - **THEN** Save cannot be used for the newly selected patch after that patch's dump lands
 
 #### Scenario: Identical patch dump keeps Save disabled until an edit
-- **WHEN** the user selects another patch after sync, that patch's dump matches the chain already shown, and the user has not changed the working chain
+- **WHEN** the user selects another patch after sync, that patch's dump matches the chain already shown, and the user has not changed the working patch
 - **THEN** Save cannot be used
 - **AND** after the user turns DST off, Save can be used
 
@@ -647,3 +793,44 @@ If the session becomes disconnected while Save, rename, duplicate, or upload is 
 - **WHEN** the session is ready with a current-preset dump and the user activates download
 - **THEN** a Valeton `.prst` is produced through the device session
 - **AND** no toast is shown solely because download ran
+
+### Requirement: Shell offers reachable global settings in a modal
+
+When a pedal session is connected and exposes at least one reachable global setting, the chrome next to the connection status SHALL offer an English Global control (gear icon) that opens a Global settings modal. The control MUST NOT be a route, MUST NOT be a main-menu item, and MUST NOT sit on the patch bar. The chain-sync overlay MUST NOT block that control. The modal title MUST read Global settings. Master volume MUST be listed first when the session exposes it. The modal MUST list only settings the device session exposes for the connected model, in English, and MUST NOT list a setting the session does not expose. There MUST be no Save control in the modal. Each edit MUST be sent immediately through the device session and MUST NOT send raw MIDI from React. A control whose value is not yet known MUST NOT be usable and MUST NOT send a write. Slider drags MUST update the displayed number on-change and MUST throttle writes the same way effect sliders do; release MUST send the last value if it was not already sent. Toggles and selects MUST send on-change. Closing the modal MUST NOT revert a value already sent. Disconnecting MUST close the modal and hide the control. Changing the current patch MUST NOT clear the modal's global values and MUST NOT close it solely because the patch changed.
+
+GP-50 MUST be able to show: master volume (0 to 100), input level (−20 to +20 dB), No CAB (off or on), REC level (−20 to +20 dB), BT REC (−20 to +20 dB), monitor level (−20 to +20 dB), REC mode left (Dry or Wet), REC mode right (Dry or Wet), and footswitch mode (Patch or Stomp). GP-5 MUST NOT show master volume, REC mode left, REC mode right, or footswitch mode. GP-5 MUST show input level, No CAB, REC level, BT REC, and monitor level only when the session exposes them, and MUST NOT show the Global control when the session exposes none.
+
+#### Scenario: GP-50 opens the modal with dumped values
+- **WHEN** a GP-50 session is connected and the globals snapshot has input level 0, No CAB off, and master volume 63
+- **THEN** the chrome shows a Global control next to the connection status
+- **AND** opening it shows those values with master volume first
+- **AND** the modal has no Save control
+
+#### Scenario: GP-5 hides the control when no global is exposed
+- **WHEN** a GP-5 session is connected and the session exposes no global settings
+- **THEN** the chrome does not show a Global control
+
+#### Scenario: GP-5 does not show GP-50-only rows
+- **WHEN** a GP-5 session exposes input level and the user opens Global settings
+- **THEN** the modal can show input level
+- **AND** the modal does not show master volume, REC mode, or footswitch mode
+
+#### Scenario: Unknown value stays unusable
+- **WHEN** the user opens Global settings before master volume is known
+- **THEN** master volume cannot be used
+- **AND** no master-volume write is sent
+
+#### Scenario: An edit is sent without Save
+- **WHEN** No CAB is off and the user turns it on
+- **THEN** No CAB shows on
+- **AND** that change is sent through the device session
+- **AND** the modal does not ask the user to save
+
+#### Scenario: Disconnect closes the modal
+- **WHEN** Global settings is open and the user disconnects
+- **THEN** the modal is closed
+- **AND** the Global control is hidden
+
+#### Scenario: A patch change keeps global values
+- **WHEN** Global settings is showing input level 6 and the user selects another patch
+- **THEN** input level still shows 6

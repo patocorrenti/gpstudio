@@ -1,11 +1,39 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
-import type { FxModel } from "@/device/catalog/types";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
+import type { FxControl, FxModel, WireIdentity } from "@/device/catalog/types";
+
+const CAB_VOL: FxControl = {
+  index: 0,
+  label: "VOL",
+  min: 0,
+  max: 100,
+  step: 1,
+  default: 50,
+  display: "percent",
+};
+
+/** Twenty onboard cabinet IR slots. Byte 0 is the slot index; byte 2 is the user-IR marker. */
+const USER_IR_CAB_MODELS: readonly FxModel[] = Array.from({ length: 20 }, (_, index) => {
+  const slot = index + 1;
+  const nn = String(slot).padStart(2, "0");
+  const wire: WireIdentity = [index, 0x00, 0x10, 0x0a];
+  return {
+    id: `cab-user-ir-${nn}`,
+    kind: "cab",
+    label: `User IR ${nn}`,
+    devices: BOTH_PEDALS,
+    wire,
+    userIrSlot: slot,
+    controls: [CAB_VOL],
+  };
+});
 
 export const CAB_MODELS: readonly FxModel[] = [
   {
     id: "cab-twd-cp-1x8",
     kind: "cab",
     label: "TWD CP 1x8",
+    description: "Vintage Fender® Champ* 1x8\" cabinet.",
+    basedOn: "Fender Champ 1x8\"",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x0a],
     controls: [
@@ -24,6 +52,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-dark-vit-1x12",
     kind: "cab",
     label: "Dark VIT 1x12",
+    description: "Vintage Fender® Vibrolux* 1x12\" cabinet.",
+    basedOn: "Fender Vibrolux 1x12\"",
     devices: BOTH_PEDALS,
     wire: [0x04, 0x00, 0x00, 0x0a],
     controls: [
@@ -42,6 +72,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-foxy-1x12",
     kind: "cab",
     label: "Foxy 1x12",
+    description: "Vintage VOX® AC15* 1x12\" cabinet.",
+    basedOn: "VOX AC15 1x12\"",
     devices: BOTH_PEDALS,
     wire: [0x08, 0x00, 0x00, 0x0a],
     controls: [
@@ -60,6 +92,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-l-star-1x12",
     kind: "cab",
     label: "L-Star 1x12",
+    description: "Mesa/Boogie® Lonestar* 1x12\" cabinet.",
+    basedOn: "Mesa/Boogie Lonestar 1x12\"",
     devices: BOTH_PEDALS,
     wire: [0x09, 0x00, 0x00, 0x0a],
     controls: [
@@ -78,6 +112,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-dark-cs-2x12",
     kind: "cab",
     label: "Dark CS 2x12",
+    description: "Custom modified Fender®* 2x12\" cabinet.",
+    basedOn: "Fender 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x1b, 0x00, 0x00, 0x0a],
     controls: [
@@ -96,6 +132,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-dark-twin-2x12",
     kind: "cab",
     label: "Dark Twin 2x12",
+    description: "Vintage Fender® '65 Twin Reverb* 2x12\" cabinet.",
+    basedOn: "Fender '65 Twin Reverb 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x12, 0x00, 0x00, 0x0a],
     controls: [
@@ -114,6 +152,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-sup-star-2x12",
     kind: "cab",
     label: "SUP Star 2x12",
+    description: "Mesa/Boogie® Lonestar* 2x12\" cabinet.",
+    basedOn: "Mesa/Boogie Lonestar 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x19, 0x00, 0x00, 0x0a],
     controls: [
@@ -132,6 +172,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-j-120-2x12",
     kind: "cab",
     label: "J-120 2x12",
+    description: "Legendary \"Jazz Chorus\" 2x12\" cabinet.",
+    basedOn: "\"Jazz Chorus\" 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x11, 0x00, 0x00, 0x0a],
     controls: [
@@ -150,6 +192,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-foxy-2x12",
     kind: "cab",
     label: "Foxy 2x12",
+    description: "Vintage VOX® AC30* 2x12\" cabinet.",
+    basedOn: "VOX AC30 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x0f, 0x00, 0x00, 0x0a],
     controls: [
@@ -168,6 +212,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-uk-grn-2x12",
     kind: "cab",
     label: "UK GRN 2x12",
+    description: "Small Cab Marshall® 2550* 2x12\" cabinet.",
+    basedOn: "Small Cab Marshall 2550 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x13, 0x00, 0x00, 0x0a],
     controls: [
@@ -186,6 +232,7 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-uk-grn-4x12",
     kind: "cab",
     label: "UK GRN 4x12",
+    description: "Vintage Marshall® 4x12\" cabinet with Celestion® Greenback®* speakers.",
     devices: BOTH_PEDALS,
     wire: [0x22, 0x00, 0x00, 0x0a],
     controls: [
@@ -204,6 +251,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-bog-4x12",
     kind: "cab",
     label: "Bog 4x12",
+    description: "Bogner®* 4x12\" cabinet.",
+    basedOn: "Bogner 4x12\" cabinet.",
     devices: BOTH_PEDALS,
     wire: [0x25, 0x00, 0x00, 0x0a],
     controls: [
@@ -222,6 +271,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-dizz-4x12",
     kind: "cab",
     label: "Dizz 4x12",
+    description: "Diezel®* 4x12\" cabinet.",
+    basedOn: "Diezel 4x12\" cabinet.",
     devices: BOTH_PEDALS,
     wire: [0x2e, 0x00, 0x00, 0x0a],
     controls: [
@@ -240,6 +291,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-ev-4x12",
     kind: "cab",
     label: "EV 4x12",
+    description: "Peavey® 6505* 4x12\" cabinet.",
+    basedOn: "Peavey 6505 4x12\" cabinet.",
     devices: BOTH_PEDALS,
     wire: [0x20, 0x00, 0x00, 0x0a],
     controls: [
@@ -258,6 +311,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-solo-4x12",
     kind: "cab",
     label: "Solo 4x12",
+    description: "Soldano®* 4x12\" cabinet.",
+    basedOn: "Soldano 4x12\"",
     devices: BOTH_PEDALS,
     wire: [0x28, 0x00, 0x00, 0x0a],
     controls: [
@@ -276,6 +331,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-mess-4x12",
     kind: "cab",
     label: "Mess 4x12",
+    description: "Mesa/Boogie® Rectifier®* 4x12\" cabinet.",
+    basedOn: "Mesa/Boogie Rectifier 4x12\"",
     devices: BOTH_PEDALS,
     wire: [0x24, 0x00, 0x00, 0x0a],
     controls: [
@@ -294,6 +351,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-eagle-4x12",
     kind: "cab",
     label: "Eagle 4x12",
+    description: "ENGL®* 4x12\" cabinet.",
+    basedOn: "ENGL 4x12\" cabinet.",
     devices: BOTH_PEDALS,
     wire: [0x26, 0x00, 0x00, 0x0a],
     controls: [
@@ -312,6 +371,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-juice-4x12",
     kind: "cab",
     label: "Juice 4x12",
+    description: "Orange® PPC412* 4x12\" cabinet.",
+    basedOn: "Orange PPC412 4x12\"",
     devices: BOTH_PEDALS,
     wire: [0x29, 0x00, 0x00, 0x0a],
     controls: [
@@ -330,6 +391,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-bellman-2x12",
     kind: "cab",
     label: "Bellman 2x12",
+    description: "Vintgae Fender® \"Piggyback\" Bassman®* 2x12\" cabinet.",
+    basedOn: "Fender \"Piggyback\" Bassman 2x12\"",
     devices: BOTH_PEDALS,
     wire: [0x16, 0x00, 0x00, 0x0a],
     controls: [
@@ -348,6 +411,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-ampg-4x10",
     kind: "cab",
     label: "AMPG 4x10",
+    description: "Ampeg® SVT-410HE* 4x10\" bass cabinet.",
+    basedOn: "Ampeg SVT-410HE 4x10\" bass",
     devices: BOTH_PEDALS,
     wire: [0x38, 0x00, 0x00, 0x0a],
     controls: [
@@ -366,7 +431,8 @@ export const CAB_MODELS: readonly FxModel[] = [
     id: "cab-ac",
     kind: "cab",
     label: "AC",
-    devices: BOTH_PEDALS,
+    description: "",
+    devices: GP50_ONLY,
     wire: [0x3c, 0x00, 0x00, 0x0a],
     controls: [
       {
@@ -380,4 +446,5 @@ export const CAB_MODELS: readonly FxModel[] = [
       },
     ],
   },
+  ...USER_IR_CAB_MODELS,
 ];

@@ -1,0 +1,21 @@
+---
+description: DeviceSession façade under src/device/session; UI imports only that barrel
+alwaysApply: true
+---
+
+# Device session placement
+
+- `DeviceSession` is the single public façade. UI, Connect, and Controller import `@/device/session` only.
+- Live inbound follow, throttled command-out writes, and current-patch file I/O live as siblings under `src/device/session/`.
+- Codecs stay in `src/device/*.ts` (`encode.ts`, `chain-codec.ts`, `patch-store.ts`). Do not grow the orchestrator with another inbound, write, or file-I/O cluster.
+- Extract a new sibling when adding an inbound family, a throttled write family, or a file-I/O planner. Do not extract a lone helper or a second session per link.
+
+```text
+# ❌ BAD
+src/features/controller/writes.ts
+src/device/session.ts   (god file)
+
+# ✅ GOOD
+src/device/session/writes.ts
+src/device/session/inbound.ts
+```

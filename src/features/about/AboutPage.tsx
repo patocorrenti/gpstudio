@@ -61,6 +61,18 @@ export function AboutPage() {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Changelog</h2>
         <h3 className="text-sm font-medium text-muted-foreground">
+          <span className="text-foreground font-mono">Version 0.2.0</span>
+        </h3>
+        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+          <li>Removed the blink when changing patches over Bluetooth</li>
+          <li>Global settings control for GP-50</li>
+          <li>Patch volume (GP-5 and GP-50) and patch BPM (GP-50) on the patch bar</li>
+          <li>Separate module catalogs for GP-5 and GP-50</li>
+          <li>User IR support for CAB slots</li>
+          <li>Patch search</li>
+          <li>Model search with description and Based on</li>
+        </ul>
+        <h3 className="text-sm font-medium text-muted-foreground">
           <span className="text-foreground font-mono">Version 0.1.1</span>
         </h3>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">

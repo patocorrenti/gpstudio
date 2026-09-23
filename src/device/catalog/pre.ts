@@ -1,4 +1,4 @@
-import { BOTH_PEDALS } from "@/device/catalog/shared";
+import { BOTH_PEDALS, GP50_ONLY } from "@/device/catalog/shared";
 import type { FxModel } from "@/device/catalog/types";
 
 export const PRE_MODELS: readonly FxModel[] = [
@@ -6,6 +6,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-comp",
     kind: "pre",
     label: "COMP",
+    description: "Based on the legendary Ross™ Compressor. This is the originator of the guitar compression effect. It brings the guitar compression effect to the public and becomes an important element in the future. It has a very natural and mellow compression effect.",
+    basedOn: "Ross™ Compressor",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x00],
     controls: [
@@ -33,6 +35,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-comp4",
     kind: "pre",
     label: "COMP4",
+    description: "Based on the Keeley® C4 4-knob compressor*. A recording studio - level compression effect. Clear sense of hierarchy, the right amount of high frequency makes your guitar sound brighter.",
+    basedOn: "Keeley® C4 4-knob compressor",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x00],
     controls: [
@@ -78,6 +82,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-boost",
     kind: "pre",
     label: "Boost",
+    description: "Based on famous Xotic® EP Booster* pedal. Provides +20DB of pure stimulation lift, strong low frequency, bright high frequency, making clear sound more pleasant.",
+    basedOn: "Xotic® EP Booster*",
     devices: BOTH_PEDALS,
     wire: [0x1a, 0x00, 0x00, 0x00],
     controls: [
@@ -114,6 +120,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-micro-boost",
     kind: "pre",
     label: "Micro Boost",
+    description: "Based on the legendary MXR® M133 Micro Amp2 pedal. Providing up to 20dB of gain, the Micro Boost elevates your amp sound without changing its tonal character.",
+    basedOn: "MXR® M133 Micro Amp2 pedal",
     devices: BOTH_PEDALS,
     wire: [0x14, 0x00, 0x00, 0x00],
     controls: [
@@ -132,6 +140,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-b-boost",
     kind: "pre",
     label: "B-Boost",
+    description: "Any guitarist can benefit from the Xotic® BB Preamp* overdrive pedal. The pedal works equally well for getting thick and creamy overdrive tones with great sustain as it does for pushing the clean front end of an already driven amp with up to 30dB of boost.",
+    basedOn: "Xotic® BB Preamp",
     devices: BOTH_PEDALS,
     wire: [0x0b, 0x00, 0x00, 0x00],
     controls: [
@@ -177,6 +187,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-toucher",
     kind: "pre",
     label: "Toucher",
+    description: "Control the wah sound by playing intensity. A wide range d envelope filter (a.k.a. touch wah) designed for guitarists and bassists that is touch-sensitive and flexible.",
     devices: BOTH_PEDALS,
     wire: [0x0f, 0x00, 0x00, 0x01],
     controls: [
@@ -231,6 +242,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-crier",
     kind: "pre",
     label: "Crier",
+    description: "Set the rate to make the wah pedal work regularly. Providing a variable auto wah effect for both guitars and basses.",
     devices: BOTH_PEDALS,
     wire: [0x15, 0x00, 0x00, 0x01],
     controls: [
@@ -296,6 +308,7 @@ export const PRE_MODELS: readonly FxModel[] = [
         step: 1,
         default: 0,
         display: "toggle",
+        devices: GP50_ONLY,
       },
     ],
   },
@@ -303,7 +316,9 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-c-wah",
     kind: "pre",
     label: "C-Wah",
-    devices: BOTH_PEDALS,
+    description: "Based on legendary Dunlop® CryBaby®* wah pedal. ",
+    basedOn: "Dunlop® CryBaby®",
+    devices: GP50_ONLY,
     wire: [0x08, 0x00, 0x00, 0x05],
     controls: [
       {
@@ -348,6 +363,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-octa",
     kind: "pre",
     label: "OCTA",
+    description: "Provides polyphonic octave effect.",
     devices: BOTH_PEDALS,
     wire: [0x21, 0x00, 0x00, 0x01],
     controls: [
@@ -384,6 +400,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-pitch",
     kind: "pre",
     label: "Pitch",
+    description: "Polyphonic pitch shifter/harmonizer. High/Low: Controls the high/low pitch shifting range by semitones",
     devices: BOTH_PEDALS,
     wire: [0x23, 0x00, 0x00, 0x01],
     controls: [
@@ -438,6 +455,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-detune",
     kind: "pre",
     label: "Detune",
+    description: "This is a detuning effect that combines a slightly shifted signal with the original signal to create a chorus-like tone.",
     devices: BOTH_PEDALS,
     wire: [0x29, 0x00, 0x00, 0x01],
     controls: [
@@ -474,7 +492,8 @@ export const PRE_MODELS: readonly FxModel[] = [
     id: "pre-ac-sim",
     kind: "pre",
     label: "AC Sim",
-    devices: BOTH_PEDALS,
+    description: "An acoustic guitar simulator effect",
+    devices: GP50_ONLY,
     wire: [0x01, 0x00, 0x00, 0x01],
     controls: [
       {

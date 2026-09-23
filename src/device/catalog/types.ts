@@ -17,6 +17,8 @@ export type FxControl = {
   step: number;
   default: number;
   display: ControlDisplay;
+  /** Omit for both pedals. */
+  devices?: ReadonlySet<DeviceModel>;
 };
 
 /** Packed 4-byte wire identity from the current-preset dump / model SET. */
@@ -26,7 +28,13 @@ export type FxModel = {
   id: string;
   kind: EffectId;
   label: string;
+  /** Manual / factory blurb for this model. */
+  description?: string;
+  /** Named gear this model is based on, when the description identifies one. */
+  basedOn?: string;
   devices: ReadonlySet<DeviceModel>;
   wire: WireIdentity;
+  /** Onboard user-IR slot 1–20. Catalog label stays the English fallback. */
+  userIrSlot?: number;
   controls: readonly FxControl[];
 };

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
+import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import MainMenu from "@/components/main-menu";
 
 export function AppShell() {
@@ -16,7 +17,10 @@ export function AppShell() {
         <Link to="/" className="w-fit text-lg font-semibold tracking-tight">
           GP Studio
         </Link>
-        <ConnectionStatus />
+        <div className="flex items-center gap-2">
+          <ConnectionStatus />
+          <GlobalSettingsControl />
+        </div>
         <div className="flex items-center justify-end gap-3">
           <MainMenu />
           <ThemeToggle />
@@ -28,7 +32,7 @@ export function AppShell() {
       <footer className="flex items-center gap-4 border-t py-2 pr-24 pl-6 text-[11px] leading-none text-muted-foreground/60">
         <p className="min-w-0 flex-1 text-center">
           <span className="font-bold">GP Studio</span>
-          {" · Independent controller for Valeton GP5/50 · Version 0.1.1 [ Beta Testing ] · "}
+          {" · Independent controller for Valeton GP5/50 · Version 0.2.0 [ Beta Testing ] · "}
           <Link to="/about" className="text-foreground/60">
             Pato Correnti
           </Link>

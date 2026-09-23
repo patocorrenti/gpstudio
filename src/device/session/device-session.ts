@@ -4,18 +4,15 @@ import type {
   BluetoothEndpoint,
   BluetoothLink,
 } from "@/bluetooth/types";
-import { effectIdForModuleCc, gp50Cc, moduleEnabledFromCc } from "@/device/cc";
 import {
+  controlByIndex,
   defaultValuesFor,
   modelById,
-  modelByWire,
   modelsForKind,
   snapControlValue,
-  type WireIdentity,
 } from "@/device/catalog";
 import {
   defaultChain,
-  isEffectSlot,
   reorderChain,
   type AudioChain,
   type ChainSlotId,
@@ -23,30 +20,22 @@ import {
 } from "@/device/chain";
 import {
   ChainDecoder,
-  decodeLiveChainOrder,
-  decodeLiveOnOffChanges,
-  decodeLiveSlotControl,
-  decodeLiveSlotModel,
   decodePresetDump,
   type ChainDumpResult,
 } from "@/device/chain-codec";
+import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import {
-  encodeChainOrder,
-  encodeChainRequest,
-  encodeIdentity,
-  encodeModule,
-  encodePatch,
-  encodePatchBpm,
-  encodePatchStore,
-  encodePatchVolume,
-  encodeSlotControl,
-  encodeSlotModel,
-} from "@/device/encode";
-import type { LinkEndpoint } from "@/device/endpoint";
+  emptyGp50Globals,
+  GlobalsDumpDecoder,
+  isGlobalsDump,
+  type DeviceGlobals,
+  type FootswitchMode,
+  type GlobalSysexKey,
+  type RecMode,
+} from "@/device/globals";
 import {
   emptyPatchNames,
   IdentityDecoder,
-  PATCH_COUNT,
   SysexAssembler,
   type IdentityEvent,
 } from "@/device/identity";
@@ -57,50 +46,72 @@ import {
   currentPatchFilename,
   decodePrstFile,
   encodePrstFile,
+  readDumpPatchBpm,
+  readDumpPatchVolume,
   sanitizePatchName,
+  writeDumpPatchBpm,
+  writeDumpPatchVolume,
 } from "@/device/patch-store";
-import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
+import {
+  applyDecodedGlobals,
+  applyLiveGlobal,
+  mergeGlobalField,
+  type GlobalsHost,
+} from "@/device/session/globals";
+import {
+  applyLiveChainOrder,
+  applyLiveModule,
+  applyLivePatchVolume,
+  applyLiveSlot,
+  type ConnectedSnapshot,
+  type LiveFollowHost,
+} from "@/device/session/inbound";
+import {
+  encodeUploadedPatchWrites,
+  overlayDumpPatchGlobals,
+  UPLOAD_COMMIT_GAP_MS,
+  UPLOAD_MODEL_GAP_MS,
+  UPLOAD_WRITE_GAP_MS,
+} from "@/device/session/patch-io";
+import {
+  clampPatch,
+  cloneChain,
+  chainSlotsEqual,
+  isWorkingModified as workingPatchIsModified,
+  patchDiffersFromBaseline,
+  preserveExpEnabled,
+  wrapPatch,
+  type WorkingBaseline,
+} from "@/device/session/working-patch";
+import {
+  controlWriteKey,
+  FOOTSWITCH_MODE_WRITE_KEY,
+  globalSysexWriteKey,
+  MASTER_VOLUME_WRITE_KEY,
+  PATCH_BPM_WRITE_KEY,
+  PATCH_VOLUME_WRITE_KEY,
+  SessionWriteQueue,
+} from "@/device/session/writes";
+import {
+  encodeChainOrder,
+  encodeChainRequest,
+  encodeGlobals,
+  encodeIdentity,
+  encodeIrNames,
+  encodeModule,
+  encodePatch,
+  encodePatchStore,
+  encodeSlotModel,
+} from "@/device/encode";
+import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
 import type { MidiEndpoint, MidiTransport } from "@/midi/types";
 
-export type { LinkMode, LinkCapabilities } from "@/device/link";
-export { capabilitiesForLink } from "@/device/link";
-export type { InboundMidiEvent } from "@/device/midi-log";
-export type { LinkEndpoint } from "@/device/endpoint";
-export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
-export {
-  chainSlotBypassed,
-  chainSlotLabel,
-  defaultChain,
-  isEffectSlot,
-  isMovableEffect,
-  type AudioChain,
-  type AudioChainSlot,
-  type ChainSlotId,
-  type EffectId,
-} from "@/device/chain";
-
 const EMPTY_INBOUND: InboundMidiEvent[] = [];
 const INBOUND_LIMIT = 40;
-/** Coalesce slider SETs so BLE-MIDI is not flooded. Toggles flush immediately. */
-const CONTROL_WRITE_THROTTLE_MS = 80;
-/**
- * Upload paces SETs. USB `output.send` and BLE `writeValueWithoutResponse`
- * both return before the pedal has applied the previous SysEx; a burst drops
- * trailing writes (often store `114a`). Gaps are apply-only, not the slider throttle.
- */
-const UPLOAD_WRITE_GAP_MS = { usb: 20, bluetooth: 40 } as const;
-const UPLOAD_MODEL_GAP_MS = { usb: 50, bluetooth: 80 } as const;
-const UPLOAD_COMMIT_GAP_MS = { usb: 80, bluetooth: 120 } as const;
-
-type UploadApplyStep = {
-  kind: "model" | "control" | "order" | "module" | "global";
-  bytes: Uint8Array;
-};
-
-function controlWriteKey(kind: EffectId, index: number): string {
-  return `${kind}:${index}`;
-}
+const PATCH_VOLUME_MAX = 100;
+const PATCH_BPM_MIN = 40;
+const PATCH_BPM_MAX = 260;
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
@@ -116,71 +127,18 @@ export type SessionSnapshot =
       model: DeviceModel;
       patch: number;
       patchNames: (string | null)[];
+      userIrNames: (string | null)[];
+      /** GP-50 device globals; null on GP-5 until that model locks a read. */
+      globals: DeviceGlobals | null;
       chain: AudioChain;
       chainSync: ChainSync;
+      patchVolume: number | null;
+      patchBpm: number | null;
       canExportPatch: boolean;
       modified: boolean;
       sync: SessionSync;
       linkMode: LinkMode;
     };
-
-function clampPatch(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.min(PATCH_COUNT - 1, Math.max(0, Math.trunc(value)));
-}
-
-function wrapPatch(value: number): number {
-  return ((value % PATCH_COUNT) + PATCH_COUNT) % PATCH_COUNT;
-}
-
-function preserveExpEnabled(previous: AudioChain, next: AudioChain): AudioChain {
-  const previousExp = previous.find((slot) => slot.id === "exp");
-  if (!previousExp) {
-    return next;
-  }
-  return next.map((slot) =>
-    slot.id === "exp" ? { ...slot, enabled: previousExp.enabled } : slot,
-  );
-}
-
-function chainSlotsEqual(left: AudioChain, right: AudioChain): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index];
-    const b = right[index];
-    if (a.id !== b.id || a.enabled !== b.enabled || a.modelId !== b.modelId) {
-      return false;
-    }
-    const aValues = a.values;
-    const bValues = b.values;
-    if (aValues === undefined || bValues === undefined) {
-      if (aValues !== bValues) {
-        return false;
-      }
-      continue;
-    }
-    if (aValues.length !== bValues.length) {
-      return false;
-    }
-    for (let valueIndex = 0; valueIndex < aValues.length; valueIndex += 1) {
-      if (aValues[valueIndex] !== bValues[valueIndex]) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-function cloneChain(chain: AudioChain): AudioChain {
-  return chain.map((slot) => ({
-    ...slot,
-    values: slot.values ? slot.values.slice() : undefined,
-  }));
-}
 
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
@@ -198,6 +156,8 @@ export class DeviceSession {
   private readonly logListeners = new Set<() => void>();
   private readonly identity = new IdentityDecoder();
   private readonly chainDump = new ChainDecoder();
+  private readonly irNames = new IrNameDecoder();
+  private readonly globalsDump = new GlobalsDumpDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
   private namesWaiters = new Set<() => void>();
@@ -206,8 +166,13 @@ export class DeviceSession {
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
-  /** Last loaded or stored working chain for the selected patch. */
-  private baseline: AudioChain | null = null;
+  /** Last loaded or stored working patch (chain, volume, GP-50 BPM) for the selected slot. */
+  private baseline: WorkingBaseline | null = null;
+  /**
+   * Download of an already edited patch keeps on-screen volume and BPM when the
+   * refreshed dump arrives. Cleared once that dump is applied.
+   */
+  private keepPatchGlobalsOnDump = false;
   /** Next current-preset dump of a newly selected patch becomes the baseline. */
   private captureBaselineFromDump = false;
   /**
@@ -216,15 +181,14 @@ export class DeviceSession {
    * a mismatch is applied once and does not arm another request.
    */
   private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
+  /**
+   * IR-name and GP-50 globals asks after the first current-preset dump.
+   * USB overlaps those dumps with the preset dump if asked in the same burst
+   * (`_reference/GP50-USB.html` waits for preset info before globals).
+   */
+  private postChainDeviceAsks = false;
   private dropping = false;
-  private readonly pendingControlWrites = new Map<
-    string,
-    { kind: EffectId; index: number; value: number }
-  >();
-  private readonly controlWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly lastControlWriteAt = new Map<string, number>();
-  private readonly lastControlSentValue = new Map<string, number>();
-  private controlSendTail: Promise<void> = Promise.resolve();
+  private readonly writes: SessionWriteQueue;
 
   constructor(
     transport: MidiTransport = createMidiTransport(),
@@ -232,6 +196,13 @@ export class DeviceSession {
   ) {
     this.transport = transport;
     this.bluetooth = bluetooth;
+    this.writes = new SessionWriteQueue(
+      (bytes) => this.sendBytes(bytes),
+      () =>
+        this.snapshot.status === "connected"
+          ? { linkMode: this.snapshot.linkMode, model: this.snapshot.model }
+          : null,
+    );
     this.transport.subscribe((bytes) => this.handleInbound(bytes));
     this.bluetooth.subscribe((bytes) => this.handleInbound(bytes));
     this.transport.subscribeDisconnect(() => {
@@ -297,8 +268,11 @@ export class DeviceSession {
     this.inboundLog = EMPTY_INBOUND;
     this.identity.reset();
     this.chainDump.reset();
+    this.irNames.reset();
+    this.globalsDump.reset();
     this.sysex.reset();
-    this.clearControlWrites();
+    this.writes.clear();
+    this.postChainDeviceAsks = false;
     this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -309,8 +283,12 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        userIrNames: emptyUserIrNames(),
+        globals: model === "gp50" ? emptyGp50Globals() : null,
         chain: defaultChain(model),
         chainSync: "idle",
+        patchVolume: null,
+        patchBpm: null,
         canExportPatch: false,
         modified: false,
         sync: "syncing",
@@ -324,8 +302,12 @@ export class DeviceSession {
         model,
         patch: 0,
         patchNames: emptyPatchNames(),
+        userIrNames: emptyUserIrNames(),
+        globals: model === "gp50" ? emptyGp50Globals() : null,
         chain: defaultChain(model),
         chainSync: "idle",
+        patchVolume: null,
+        patchBpm: null,
         canExportPatch: false,
         modified: false,
         sync: "syncing",
@@ -350,7 +332,10 @@ export class DeviceSession {
       this.inboundLog = EMPTY_INBOUND;
       this.identity.reset();
       this.chainDump.reset();
+      this.irNames.reset();
+      this.globalsDump.reset();
       this.sysex.reset();
+      this.postChainDeviceAsks = false;
       this.dropPatchDump();
       this.dropping = false;
       this.emitSnapshot();
@@ -378,20 +363,6 @@ export class DeviceSession {
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
     this.refreshChain(true, true);
-  }
-
-  /** Re-request the current patch dump. Does not send patch recall. */
-  reloadCurrentPatch(): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
-      return;
-    }
-    this.refreshChain(true);
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -442,9 +413,10 @@ export class DeviceSession {
     const generation = this.syncGeneration;
     this.patchConfirm = "off";
     this.captureBaselineFromDump = false;
-    this.clearControlWrites();
+    this.writes.clear();
     this.chainDump.reset();
     this.beginChainRefresh();
+    this.keepPatchGlobalsOnDump = this.workingDiffersFromBaseline();
     await this.sendChainRequest(generation);
     await this.waitFor(this.chainWaiters, CHAIN_TIMEOUT_MS[this.snapshot.linkMode], generation);
     if (
@@ -455,10 +427,19 @@ export class DeviceSession {
       return null;
     }
     const name = this.snapshot.patchNames[this.snapshot.patch] ?? "";
+    let dump = this.currentPatchDump;
+    if (this.snapshot.modified) {
+      dump = overlayDumpPatchGlobals(
+        this.snapshot.model,
+        this.currentPatchDump,
+        this.snapshot.patchVolume,
+        this.snapshot.patchBpm,
+      );
+    }
     const bytes = encodePrstFile({
       model: this.snapshot.model,
       name,
-      dump: this.currentPatchDump,
+      dump,
     });
     if (!bytes) {
       return null;
@@ -499,7 +480,13 @@ export class DeviceSession {
       modified: false,
     };
     this.emitSnapshot();
-    const steps = this.encodeUploadedPatchWrites(chain, parsed.volume, parsed.bpm);
+    const steps = encodeUploadedPatchWrites(
+      this.snapshot.model,
+      this.snapshot.linkMode,
+      chain,
+      parsed.volume,
+      parsed.bpm,
+    );
     if (!steps) {
       if (this.snapshot.status === "connected") {
         this.snapshot = {
@@ -512,7 +499,7 @@ export class DeviceSession {
       }
       return { ok: false, reason: "invalid" };
     }
-    this.clearControlWrites();
+    this.writes.clear();
     const linkMode = this.snapshot.linkMode;
     for (let index = 0; index < steps.length; index += 1) {
       if (this.snapshot.status !== "connected") {
@@ -614,7 +601,7 @@ export class DeviceSession {
     if (!packets) {
       return;
     }
-    this.clearControlWritesForKind(kind);
+    this.writes.clearForKind(kind);
     const values = defaultValuesFor(model);
     const chain = this.snapshot.chain.map((entry, slotIndex) =>
       slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
@@ -652,7 +639,7 @@ export class DeviceSession {
     if (!model || model.kind !== kind || !model.devices.has(this.snapshot.model)) {
       return;
     }
-    const control = model.controls.find((entry) => entry.index === controlIndex);
+    const control = controlByIndex(model, controlIndex, this.snapshot.model);
     if (!control) {
       return;
     }
@@ -672,7 +659,7 @@ export class DeviceSession {
     if (unchanged && !options.flush) {
       return;
     }
-    this.queueControlWrite(kind, controlIndex, nextValue, options.flush === true);
+    this.writes.queueControlWrite(kind, controlIndex, nextValue, options.flush === true);
   }
 
   /** Send the latest queued value for this control now (slider pointer up). */
@@ -680,7 +667,144 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    this.flushControlWrite(controlWriteKey(kind, controlIndex));
+    this.writes.flush(controlWriteKey(kind, controlIndex));
+  }
+
+  async setPatchVolume(value: number, options: { flush?: boolean } = {}): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Patch control is not available on this link.");
+    }
+  if (!Number.isFinite(value)) {
+    return;
+  }
+  const next = Math.round(value);
+  if (next < 0 || next > PATCH_VOLUME_MAX) {
+    return;
+  }
+  this.stagePatchGlobal(PATCH_VOLUME_WRITE_KEY, next, options.flush === true);
+  }
+
+  async setPatchBpm(value: number, options: { flush?: boolean } = {}): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Patch control is not available on this link.");
+    }
+  if (!Number.isFinite(value)) {
+    return;
+  }
+  const next = Math.round(value);
+  if (next < PATCH_BPM_MIN || next > PATCH_BPM_MAX) {
+    return;
+  }
+  this.stagePatchGlobal(PATCH_BPM_WRITE_KEY, next, options.flush === true);
+  }
+
+  async setMasterVolume(value: number, options: { flush?: boolean } = {}): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const next = Math.round(value);
+    if (next < 0 || next > PATCH_VOLUME_MAX) {
+      return;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, "masterVolume", next),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      MASTER_VOLUME_WRITE_KEY,
+      { kind: "masterVolume", value: next },
+      options.flush === true,
+    );
+  }
+
+  async setFootswitchMode(mode: FootswitchMode): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, "footswitchMode", mode),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      FOOTSWITCH_MODE_WRITE_KEY,
+      { kind: "footswitchMode", value: mode },
+      true,
+    );
+  }
+
+  async setGlobalSysex(
+    key: GlobalSysexKey,
+    value: number | boolean | RecMode,
+    options: { flush?: boolean } = {},
+  ): Promise<void> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      globals: mergeGlobalField(this.snapshot.globals, key, value),
+    };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      globalSysexWriteKey(key),
+      { kind: "sysex", key, value },
+      options.flush === true,
+    );
+  }
+
+  flushGlobalSetting(key: "masterVolume" | GlobalSysexKey): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const writeKey = key === "masterVolume" ? MASTER_VOLUME_WRITE_KEY : globalSysexWriteKey(key);
+    this.writes.flush(writeKey);
   }
 
   private async runIdentitySync(generation: number): Promise<void> {
@@ -715,6 +839,7 @@ export class DeviceSession {
     this.chainDump.reset();
     this.patchConfirm = "off";
     this.captureBaselineFromDump = true;
+    this.postChainDeviceAsks = true;
     this.armChainRefreshTimer();
     await this.sendChainRequest(generation);
   }
@@ -745,6 +870,25 @@ export class DeviceSession {
       return;
     }
     await this.sendBytes(encodeChainRequest(this.snapshot.linkMode));
+  }
+
+  /** Device-global IR names. Sent once per connect, after the current-preset ask, without a waiter. */
+  private async sendIrNameRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.sendBytes(encodeIrNames(this.snapshot.linkMode));
+  }
+
+  /** GP-50 device globals. Once per connect after the current-preset ask; not on GP-5. */
+  private async sendGlobalsRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    if (this.snapshot.model !== "gp50") {
+      return;
+    }
+    await this.sendBytes(encodeGlobals(this.snapshot.linkMode));
   }
 
   private async sendBytes(bytes: Uint8Array): Promise<void> {
@@ -782,19 +926,36 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
+    const host = this.liveFollowHost();
+    if (!host) {
+      return;
+    }
     for (const message of this.sysex.push(bytes)) {
-      const liveOnOff = this.applyLiveModule(message);
-      const liveOrder = this.applyLiveChainOrder(message);
-      const liveSlot = this.applyLiveSlot(message);
+      const liveVolume = applyLivePatchVolume(host, message);
+      const liveOnOff = applyLiveModule(host, message);
+      const liveOrder = applyLiveChainOrder(host, message);
+      const liveSlot = applyLiveSlot(host, message);
+      const globalsHost = this.globalsHost();
+      const liveGlobal = globalsHost ? applyLiveGlobal(globalsHost, message) : false;
+      const globalsMessage = isGlobalsDump(message);
+      if (globalsHost) {
+        applyDecodedGlobals(globalsHost, this.globalsDump.push(message));
+      }
       if (
+        !liveVolume &&
         !liveOnOff &&
         !liveOrder &&
         !liveSlot &&
+        !liveGlobal &&
+        !globalsMessage &&
         this.snapshot.status === "connected"
       ) {
         this.applyIdentity(this.identity.push(message));
       }
       if (this.snapshot.status === "connected") {
+        this.applyIrNames(this.irNames.push(message));
+      }
+      if (this.snapshot.status === "connected" && !globalsMessage) {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
       }
       if (!this.inboundCapture) {
@@ -855,12 +1016,21 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
+    this.keepPatchGlobalsOnDump = false;
     this.patchConfirm = confirmPatch ? "after-apply" : "off";
     this.captureBaselineFromDump = captureBaseline;
-    this.clearControlWrites();
+    this.writes.clear();
     this.chainDump.reset();
     this.beginChainRefresh();
     void this.sendChainRequest(this.syncGeneration);
+  }
+
+  private applyIrNames(names: (string | null)[] | null): void {
+    if (!names || this.snapshot.status !== "connected") {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, userIrNames: names };
+    this.emitSnapshot();
   }
 
   private applyChain(result: ChainDumpResult | null): void {
@@ -873,30 +1043,70 @@ export class DeviceSession {
     }
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
     const armConfirmation = this.patchConfirm === "after-apply";
+    // Bluetooth often gets a stale first dump; keep the busy overlay until confirm.
+    const holdBusyForConfirm =
+      armConfirmation && this.snapshot.linkMode === "bluetooth";
     const patch = this.snapshot.patch;
     const generation = this.syncGeneration;
     this.pendingPatchLoad = null;
-    this.clearChainRefreshTimer();
+    if (!holdBusyForConfirm) {
+      this.clearChainRefreshTimer();
+    }
+    const globals = this.patchGlobalsFromDump(result.dump);
+    const keepGlobals = this.keepPatchGlobalsOnDump && !this.captureBaselineFromDump;
+    this.keepPatchGlobalsOnDump = false;
     this.currentPatchDump = result.dump;
     if (this.captureBaselineFromDump) {
-      this.baseline = cloneChain(chain);
+      this.baseline = {
+        chain: cloneChain(chain),
+        patchVolume: globals.patchVolume,
+        patchBpm: globals.patchBpm,
+      };
       this.captureBaselineFromDump = false;
     }
-    this.setChain(chain, { chainSync: "idle", canExportPatch: true });
+    if (!keepGlobals) {
+      this.snapshot = {
+        ...this.snapshot,
+        patchVolume: globals.patchVolume,
+        patchBpm: globals.patchBpm,
+      };
+    }
+    this.setChain(chain, {
+      chainSync: holdBusyForConfirm ? "syncing" : "idle",
+      canExportPatch: !holdBusyForConfirm,
+    });
     this.releaseWaiters(this.chainWaiters);
+    this.queuePostChainDeviceAsks(generation);
     if (
       armConfirmation &&
       this.patchConfirm === "after-apply" &&
       this.snapshot.status === "connected" &&
       this.snapshot.patch === patch &&
       this.syncGeneration === generation &&
-      this.snapshot.chainSync === "idle"
+      this.snapshot.chainSync === (holdBusyForConfirm ? "syncing" : "idle")
     ) {
       this.requestPatchConfirmation();
+      if (holdBusyForConfirm) {
+        this.armChainRefreshTimer();
+      }
     }
   }
 
-  /** One current-preset request. Does not refresh, recall, or cover the chain. */
+  /** Once per connect: IR names and GP-50 globals after the first preset dump. */
+  private queuePostChainDeviceAsks(generation: number): void {
+    if (!this.postChainDeviceAsks) {
+      return;
+    }
+    this.postChainDeviceAsks = false;
+    this.globalsDump.reset();
+    void this.sendIrNameRequest(generation);
+    void this.sendGlobalsRequest(generation);
+  }
+
+  /**
+   * One current-preset request after a patch-change dump.
+   * USB: no overlay. Bluetooth: overlay stays until the confirmation dump arrives.
+   */
   private requestPatchConfirmation(): void {
     if (this.snapshot.status !== "connected") {
       this.patchConfirm = "off";
@@ -912,187 +1122,92 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
+    const finishBusy = this.snapshot.chainSync === "syncing";
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
-    if (
-      chainSlotsEqual(chain, this.snapshot.chain) ||
-      this.snapshot.modified ||
-      this.pendingControlWrites.size > 0
-    ) {
+    const edited =
+      this.snapshot.modified || this.writes.hasPending();
+    if (edited) {
+      if (finishBusy) {
+        this.clearChainRefreshTimer();
+        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+      }
       return;
     }
+    // First dump on Bluetooth is often stale for volume/BPM even when the chain
+    // already matches. Always take those globals from the confirmation dump.
+    const globals = this.patchGlobalsFromDump(result.dump);
     this.currentPatchDump = result.dump;
-    this.baseline = cloneChain(chain);
+    this.snapshot = {
+      ...this.snapshot,
+      patchVolume: globals.patchVolume,
+      patchBpm: globals.patchBpm,
+    };
+    if (chainSlotsEqual(chain, this.snapshot.chain)) {
+      this.baseline = {
+        chain: this.baseline?.chain ?? cloneChain(this.snapshot.chain),
+        patchVolume: globals.patchVolume,
+        patchBpm: globals.patchBpm,
+      };
+      if (finishBusy) {
+        this.clearChainRefreshTimer();
+        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+      } else {
+        this.snapshot = {
+          ...this.snapshot,
+          modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
+        };
+        this.emitSnapshot();
+      }
+      return;
+    }
+    this.baseline = {
+      chain: cloneChain(chain),
+      patchVolume: globals.patchVolume,
+      patchBpm: globals.patchBpm,
+    };
+    this.clearChainRefreshTimer();
     this.setChain(chain, { chainSync: "idle", canExportPatch: true });
   }
 
-  private applyLiveModule(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const fromCc = this.decodeLiveOnOffCc(message);
-    const reports = fromCc ? [fromCc] : decodeLiveOnOffChanges(message);
-    if (reports.length === 0) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    if (this.snapshot.chainSync === "syncing") {
-      return true;
-    }
-    for (const report of reports) {
-      this.setChainSlotEnabled(report.id, report.enabled);
-    }
-    return true;
-  }
-
-  private applyLiveChainOrder(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const order = decodeLiveChainOrder(message);
-    if (!order) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    if (this.snapshot.chainSync === "syncing") {
-      return true;
-    }
-    const previousById = new Map(this.snapshot.chain.map((slot) => [slot.id, slot] as const));
-    const exp = this.snapshot.chain.find((slot) => slot.id === "exp");
-    const chain: AudioChain = order.map((id) => {
-      const previous = previousById.get(id);
-      return {
-        id,
-        enabled: previous?.enabled ?? false,
-        modelId: previous?.modelId,
-        values: previous?.values,
-      };
-    });
-    if (exp) {
-      chain.push({ id: "exp", enabled: exp.enabled });
-    }
-    this.setChain(chain);
-    return true;
-  }
-
-  private applyLiveSlot(message: Uint8Array): boolean {
-    if (this.snapshot.status !== "connected") {
-      return false;
-    }
-    const modelChange = decodeLiveSlotModel(message);
-    if (modelChange) {
-      if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-        return true;
-      }
-      this.applyLiveSlotModel(modelChange.kind, modelChange.wire);
-      return true;
-    }
-    const controlChange = decodeLiveSlotControl(message);
-    if (!controlChange) {
-      return false;
-    }
-    if (!capabilitiesForLink(this.snapshot.linkMode).liveFromPedal) {
-      return true;
-    }
-    this.applyLiveSlotControl(controlChange.kind, controlChange.index, controlChange.value);
-    return true;
-  }
-
-  private applyLiveSlotModel(kind: EffectId, wire: WireIdentity): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
-    if (index < 0) {
-      return;
-    }
-    let model = modelByWire(kind, wire);
-    if (!model) {
-      const sole = modelsForKind(kind, this.snapshot.model);
-      if (sole.length !== 1) {
-        return;
-      }
-      model = sole[0];
-    }
-    if (!model.devices.has(this.snapshot.model)) {
-      return;
-    }
-    this.clearControlWritesForKind(kind);
-    const values = defaultValuesFor(model);
-    const chain = this.snapshot.chain.map((entry, slotIndex) =>
-      slotIndex === index ? { ...entry, modelId: model.id, values } : entry,
-    );
-    this.setChain(chain);
-  }
-
-  private applyLiveSlotControl(kind: EffectId, controlIndex: number, value: number): void {
-    if (this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
-      return;
-    }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === kind);
-    if (index < 0) {
-      return;
-    }
-    const slot = this.snapshot.chain[index];
-    if (slot.modelId === undefined || slot.values === undefined) {
-      return;
-    }
-    const model = modelById(slot.modelId);
-    if (!model || model.kind !== kind) {
-      return;
-    }
-    const control = model.controls.find((entry) => entry.index === controlIndex);
-    if (!control || controlIndex >= slot.values.length) {
-      return;
-    }
-    const nextValue = snapControlValue(control, value);
-    this.dropControlWrite(controlWriteKey(kind, controlIndex), nextValue);
-    if (slot.values[controlIndex] === nextValue) {
-      return;
-    }
-    const values = slot.values.slice();
-    values[controlIndex] = nextValue;
-    const chain = this.snapshot.chain.map((entry, slotIndex) =>
-      slotIndex === index ? { ...entry, values } : entry,
-    );
-    this.setChain(chain);
-  }
-
-  private decodeLiveOnOffCc(message: Uint8Array): { id: ChainSlotId; enabled: boolean } | null {
-    if ((message[0] & 0xf0) !== 0xb0 || message.length < 3) {
+  private liveFollowHost(): LiveFollowHost | null {
+    const session = this;
+    if (session.snapshot.status !== "connected") {
       return null;
     }
-    if (message[1] === gp50Cc.expOnOff) {
-      return { id: "exp", enabled: moduleEnabledFromCc(message[2]) };
-    }
-    const id = effectIdForModuleCc(message[1]);
-    if (!id) {
-      return null;
-    }
-    return { id, enabled: moduleEnabledFromCc(message[2]) };
+    return {
+      get snapshot() {
+        return session.snapshot as ConnectedSnapshot;
+      },
+      get currentPatchDump() {
+        return session.currentPatchDump;
+      },
+      dropPatchWrite: (key, value) => session.writes.dropPatchWrite(key, value),
+      dropControlWrite: (key, value) => session.writes.dropControlWrite(key, value),
+      clearControlWritesForKind: (kind) => session.writes.clearForKind(kind),
+      setChain: (chain) => session.setChain(chain),
+      isWorkingModified: (chain, chainSync) => session.isWorkingModified(chain, chainSync),
+      assignSnapshot: (next) => {
+        session.snapshot = next;
+      },
+      emitSnapshot: () => session.emitSnapshot(),
+    };
   }
 
-  private setChainSlotEnabled(id: ChainSlotId, enabled: boolean): void {
-    if (this.snapshot.status !== "connected") {
-      return;
+  private globalsHost(): GlobalsHost | null {
+    const session = this;
+    if (session.snapshot.status !== "connected" || !session.snapshot.globals) {
+      return null;
     }
-    const index = this.snapshot.chain.findIndex((slot) => slot.id === id);
-    if (index < 0 || this.snapshot.chain[index].enabled === enabled) {
-      return;
-    }
-    const chain = this.snapshot.chain.map((slot, slotIndex) =>
-      slotIndex === index ? { ...slot, enabled } : slot,
-    );
-    this.setChain(chain);
+    return {
+      get snapshot() {
+        return session.snapshot as ConnectedSnapshot;
+      },
+      dropGlobalWrite: (key, value) => session.writes.dropGlobalWrite(key, value),
+      assignSnapshot: (next) => {
+        session.snapshot = next;
+      },
+      emitSnapshot: () => session.emitSnapshot(),
+    };
   }
 
   private beginChainRefresh(): void {
@@ -1128,9 +1243,11 @@ export class DeviceSession {
         void this.dropLink();
         return;
       }
+      this.patchConfirm = "off";
       this.snapshot = {
         ...this.snapshot,
         chainSync: "idle",
+        canExportPatch: this.currentPatchDump !== null,
         modified: this.isWorkingModified(this.snapshot.chain, "idle"),
       };
       this.emitSnapshot();
@@ -1177,9 +1294,10 @@ export class DeviceSession {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
     this.patchConfirm = "off";
+    this.postChainDeviceAsks = false;
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
-    this.clearControlWrites();
+    this.writes.clear();
     this.dropPatchDump();
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
@@ -1193,13 +1311,48 @@ export class DeviceSession {
   private dropWorkingBaseline(): void {
     this.baseline = null;
     this.captureBaselineFromDump = false;
+    this.keepPatchGlobalsOnDump = false;
+  }
+
+  private patchGlobalsFromDump(dump: Uint8Array): {
+    patchVolume: number | null;
+    patchBpm: number | null;
+  } {
+    if (this.snapshot.status !== "connected") {
+      return { patchVolume: null, patchBpm: null };
+    }
+    return {
+      patchVolume: readDumpPatchVolume(this.snapshot.model, dump),
+      patchBpm:
+        this.snapshot.model === "gp50" ? readDumpPatchBpm(this.snapshot.model, dump) : null,
+    };
+  }
+
+  private workingDiffersFromBaseline(): boolean {
+    if (this.snapshot.status !== "connected" || this.baseline === null) {
+      return false;
+    }
+    return patchDiffersFromBaseline(
+      this.baseline,
+      this.snapshot.chain,
+      this.snapshot.patchVolume,
+      this.snapshot.patchBpm,
+      this.snapshot.model,
+    );
   }
 
   private isWorkingModified(chain: AudioChain, chainSync: ChainSync): boolean {
-    if (chainSync === "syncing" || this.baseline === null) {
+    if (this.snapshot.status !== "connected") {
       return false;
     }
-    return !chainSlotsEqual(chain, this.baseline);
+    return workingPatchIsModified(
+      this.baseline,
+      chain,
+      chainSync,
+      this.snapshot.patchVolume,
+      this.snapshot.patchBpm,
+      this.snapshot.model,
+    );
   }
 
   private setChain(
@@ -1218,77 +1371,6 @@ export class DeviceSession {
       modified: this.isWorkingModified(chain, chainSync),
     };
     this.emitSnapshot();
-  }
-
-  private encodeUploadedPatchWrites(
-    chain: AudioChain,
-    volume: number | null,
-    bpm: number | null,
-  ): UploadApplyStep[] | null {
-    if (this.snapshot.status !== "connected") {
-      return null;
-    }
-    const linkMode = this.snapshot.linkMode;
-    const steps: UploadApplyStep[] = [];
-    for (const slot of chain) {
-      if (!isEffectSlot(slot.id) || slot.modelId === undefined || slot.values === undefined) {
-        continue;
-      }
-      const model = modelById(slot.modelId);
-      if (!model || model.kind !== slot.id || !model.devices.has(this.snapshot.model)) {
-        continue;
-      }
-      const modelPackets = encodeSlotModel(linkMode, slot.id, model.wire);
-      if (!modelPackets) {
-        continue;
-      }
-      for (const bytes of modelPackets) {
-        steps.push({ kind: "model", bytes });
-      }
-      for (const control of model.controls) {
-        const value = slot.values[control.index];
-        if (value === undefined) {
-          continue;
-        }
-        const controlPackets = encodeSlotControl(linkMode, slot.id, control.index, value);
-        if (!controlPackets) {
-          continue;
-        }
-        for (const bytes of controlPackets) {
-          steps.push({ kind: "control", bytes });
-        }
-      }
-    }
-    const orderPackets = encodeChainOrder(linkMode, chain);
-    if (!orderPackets) {
-      return null;
-    }
-    for (const bytes of orderPackets) {
-      steps.push({ kind: "order", bytes });
-    }
-    for (const slot of chain) {
-      if (!isEffectSlot(slot.id)) {
-        continue;
-      }
-      steps.push({ kind: "module", bytes: encodeModule(linkMode, slot.id, slot.enabled) });
-    }
-    if (volume !== null) {
-      const volumePackets = encodePatchVolume(linkMode, volume);
-      if (volumePackets) {
-        for (const bytes of volumePackets) {
-          steps.push({ kind: "global", bytes });
-        }
-      }
-    }
-    if (bpm !== null) {
-      const bpmPackets = encodePatchBpm(linkMode, bpm);
-      if (bpmPackets) {
-        for (const bytes of bpmPackets) {
-          steps.push({ kind: "global", bytes });
-        }
-      }
-    }
-    return steps;
   }
 
   private delay(ms: number): Promise<void> {
@@ -1318,7 +1400,11 @@ export class DeviceSession {
     const patchNames = this.snapshot.patchNames.slice();
     patchNames[dest] = sanitized;
     if (dest === this.snapshot.patch) {
-      this.baseline = cloneChain(this.snapshot.chain);
+      this.baseline = {
+        chain: cloneChain(this.snapshot.chain),
+        patchVolume: this.snapshot.patchVolume,
+        patchBpm: this.snapshot.patchBpm,
+      };
       this.snapshot = { ...this.snapshot, patchNames, modified: false };
     } else {
       this.snapshot = { ...this.snapshot, patchNames };
@@ -1329,105 +1415,36 @@ export class DeviceSession {
     }
   }
 
-  private queueControlWrite(
-    kind: EffectId,
-    index: number,
-    value: number,
-    flush: boolean,
-  ): void {
-    const key = controlWriteKey(kind, index);
-    this.pendingControlWrites.set(key, { kind, index, value });
-    if (flush) {
-      this.flushControlWrite(key);
+  private stagePatchGlobal(key: string, value: number, flush: boolean): void {
+    if (this.snapshot.status !== "connected") {
       return;
     }
-    const elapsed = Date.now() - (this.lastControlWriteAt.get(key) ?? 0);
-    const wait = CONTROL_WRITE_THROTTLE_MS - elapsed;
-    if (wait <= 0) {
-      this.flushControlWrite(key);
-      return;
-    }
-    if (this.controlWriteTimers.has(key)) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      this.controlWriteTimers.delete(key);
-      this.flushControlWrite(key);
-    }, wait);
-    this.controlWriteTimers.set(key, timer);
-  }
-
-  private flushControlWrite(key: string): void {
-    const timer = this.controlWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.controlWriteTimers.delete(key);
-    }
-    this.lastControlWriteAt.set(key, Date.now());
-    this.controlSendTail = this.controlSendTail
-      .then(() => this.sendPendingControl(key))
-      .catch(() => undefined);
-  }
-
-  private async sendPendingControl(key: string): Promise<void> {
-    const pending = this.pendingControlWrites.get(key);
-    if (!pending || this.snapshot.status !== "connected") {
-      return;
-    }
-    this.pendingControlWrites.delete(key);
-    if (this.lastControlSentValue.get(key) === pending.value) {
-      return;
-    }
-    const packets = encodeSlotControl(
-      this.snapshot.linkMode,
-      pending.kind,
-      pending.index,
-      pending.value,
-    );
-    if (!packets) {
-      return;
-    }
-    this.lastControlSentValue.set(key, pending.value);
-    for (const packet of packets) {
-      await this.sendBytes(packet);
-    }
-  }
-
-  private dropControlWrite(key: string, sentValue: number): void {
-    const timer = this.controlWriteTimers.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      this.controlWriteTimers.delete(key);
-    }
-    this.pendingControlWrites.delete(key);
-    this.lastControlWriteAt.delete(key);
-    this.lastControlSentValue.set(key, sentValue);
-  }
-
-  private clearControlWritesForKind(kind: EffectId): void {
-    const prefix = `${kind}:`;
-    for (const key of [...this.pendingControlWrites.keys()]) {
-      if (key.startsWith(prefix)) {
-        const timer = this.controlWriteTimers.get(key);
-        if (timer) {
-          clearTimeout(timer);
-          this.controlWriteTimers.delete(key);
+    const current =
+      key === PATCH_VOLUME_WRITE_KEY ? this.snapshot.patchVolume : this.snapshot.patchBpm;
+    const unchanged = current === value;
+    if (!unchanged) {
+      this.snapshot = {
+        ...this.snapshot,
+        patchVolume: key === PATCH_VOLUME_WRITE_KEY ? value : this.snapshot.patchVolume,
+        patchBpm: key === PATCH_BPM_WRITE_KEY ? value : this.snapshot.patchBpm,
+      };
+      this.snapshot = {
+        ...this.snapshot,
+        modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
+      };
+      if (this.currentPatchDump) {
+        if (key === PATCH_VOLUME_WRITE_KEY) {
+          writeDumpPatchVolume(this.snapshot.model, this.currentPatchDump, value);
+        } else if (key === PATCH_BPM_WRITE_KEY && this.snapshot.model === "gp50") {
+          writeDumpPatchBpm(this.snapshot.model, this.currentPatchDump, value);
         }
-        this.pendingControlWrites.delete(key);
-        this.lastControlWriteAt.delete(key);
-        this.lastControlSentValue.delete(key);
       }
+      this.emitSnapshot();
     }
-  }
-
-  private clearControlWrites(): void {
-    for (const timer of this.controlWriteTimers.values()) {
-      clearTimeout(timer);
+    if (unchanged && !flush) {
+      return;
     }
-    this.controlWriteTimers.clear();
-    this.pendingControlWrites.clear();
-    this.lastControlWriteAt.clear();
-    this.lastControlSentValue.clear();
+    this.writes.queuePatchWrite(key, value, flush);
   }
 
   private isCurrentGeneration(generation: number): boolean {
@@ -1446,120 +1463,3 @@ export class DeviceSession {
     }
   }
 }
-
-function bytesFromHex(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function assertUploadSessionFixtures(): void {
-  const gp50 = bytesFromHex(GP50_TOB_PRST_HEX);
-  const gp5 = bytesFromHex(GP5_TOB_PRST_HEX);
-  const decoded = decodePrstFile(gp50);
-  if (!decoded) {
-    throw new Error("GP-50 TOB must decode for upload");
-  }
-  const chain = decodePresetDump(decoded.dump, "gp50", "gp50");
-  if (!chain) {
-    throw new Error("GP-50 TOB dump must decode as a chain");
-  }
-  const order = encodeChainOrder("usb", chain);
-  const store = encodePatchStore("usb", 5, decoded.name);
-  const recall = encodePatch("usb", 5);
-  if (!order || !store) {
-    throw new Error("Upload apply must encode chain-order and store 114a");
-  }
-  if (recall[0] !== 0xb0 || recall[1] !== 0x00) {
-    throw new Error("Patch recall fixture must be CC 0");
-  }
-  for (const packet of [...order, ...store]) {
-    if (packet[0] === 0xb0 && packet[1] === 0x00) {
-      throw new Error("Upload writes must not include extra patch recall");
-    }
-  }
-  if (decodePrstFile(gp5)?.model === "gp50") {
-    throw new Error("A GP-5 file must not classify as GP-50");
-  }
-}
-
-assertUploadSessionFixtures();
-
-function recordingUsb(): {
-  sent: Uint8Array[];
-  transport: MidiTransport;
-} {
-  const sent: Uint8Array[] = [];
-  let open = false;
-  return {
-    sent,
-    transport: {
-      discover: async () => [],
-      open: async () => {
-        open = true;
-      },
-      send: async (bytes) => {
-        sent.push(Uint8Array.from(bytes));
-      },
-      subscribe: () => () => undefined,
-      subscribeDisconnect: () => () => undefined,
-      isOpen: () => open,
-      close: async () => {
-        open = false;
-      },
-      sysexEnabled: () => false,
-    },
-  };
-}
-
-function stubBluetooth(): BluetoothLink {
-  let open = false;
-  return {
-    discover: async () => [],
-    open: async () => {
-      open = true;
-    },
-    send: async () => undefined,
-    subscribe: () => () => undefined,
-    subscribeDisconnect: () => () => undefined,
-    isOpen: () => open,
-    resetInbound: () => undefined,
-    close: async () => {
-      open = false;
-    },
-  };
-}
-
-async function assertUploadRejectsWithoutMidi(): Promise<void> {
-  const usb = recordingUsb();
-  const session = new DeviceSession(usb.transport, stubBluetooth());
-  await session.connect(
-    { id: "usb-1", label: "GP-50", kind: "usb-midi" },
-    "gp50",
-  );
-  const sentAfterConnect = usb.sent.length;
-  const invalid = await session.uploadCurrentPatch(new Uint8Array([0x00, 0x01, 0x02]));
-  const wrong = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
-  const disconnected = await new DeviceSession(
-    recordingUsb().transport,
-    stubBluetooth(),
-  ).uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
-  if (invalid.ok || invalid.reason !== "invalid") {
-    throw new Error("Invalid bytes must return without sending MIDI");
-  }
-  if (wrong.ok || wrong.reason !== "wrong-model") {
-    throw new Error("Wrong-model bytes must return without sending MIDI");
-  }
-  if (disconnected.ok || disconnected.reason !== "disconnected") {
-    throw new Error("Disconnected upload must no-op");
-  }
-  if (usb.sent.length !== sentAfterConnect) {
-    throw new Error("Rejected upload must not send MIDI");
-  }
-}
-
-void assertUploadRejectsWithoutMidi();
-
-

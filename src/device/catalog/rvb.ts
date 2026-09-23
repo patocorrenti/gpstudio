@@ -6,6 +6,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-air",
     kind: "rvb",
     label: "Air",
+    description: "An airy reverb effect with natural decays.",
     devices: BOTH_PEDALS,
     wire: [0x0b, 0x00, 0x00, 0x0c],
     controls: [
@@ -51,6 +52,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-room",
     kind: "rvb",
     label: "Room",
+    description: "Simulates the spaciousness of a room.",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x0c],
     controls: [
@@ -87,6 +89,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-hall",
     kind: "rvb",
     label: "Hall",
+    description: "Simulates the spaciousness of a performance hall.",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x0c],
     controls: [
@@ -123,6 +126,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-church",
     kind: "rvb",
     label: "Church",
+    description: "Simulates the spaciousness of a church.",
     devices: BOTH_PEDALS,
     wire: [0x02, 0x00, 0x00, 0x0c],
     controls: [
@@ -159,6 +163,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-plate-l",
     kind: "rvb",
     label: "Plate L",
+    description: "Simulates the sound character produced by a large plate reverberator.",
     devices: BOTH_PEDALS,
     wire: [0x10, 0x00, 0x00, 0x0c],
     controls: [
@@ -195,6 +200,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-plate",
     kind: "rvb",
     label: "Plate",
+    description: "Simulates the sound character produced by a vintage small plate reverberator.",
     devices: BOTH_PEDALS,
     wire: [0x0f, 0x00, 0x00, 0x0c],
     controls: [
@@ -240,6 +246,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-spring",
     kind: "rvb",
     label: "Spring",
+    description: "Simulates the sound character produced by a vintage spring reverberator.",
     devices: BOTH_PEDALS,
     wire: [0x04, 0x00, 0x00, 0x0c],
     controls: [
@@ -276,6 +283,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-n-star",
     kind: "rvb",
     label: "N-Star",
+    description: "Special-tuned reverb effect with lush, bright decays.",
     devices: BOTH_PEDALS,
     wire: [0x06, 0x00, 0x00, 0x0c],
     controls: [
@@ -312,6 +320,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-deepsea",
     kind: "rvb",
     label: "Deepsea",
+    description: "Special-tuned reverb effect with huge, deep decays.",
     devices: BOTH_PEDALS,
     wire: [0x07, 0x00, 0x00, 0x0c],
     controls: [
@@ -348,6 +357,7 @@ export const RVB_MODELS: readonly FxModel[] = [
     id: "rvb-sweet-space",
     kind: "rvb",
     label: "Sweet Space",
+    description: "Produces a modulated reverb effect that is lush and sweet.",
     devices: BOTH_PEDALS,
     wire: [0x15, 0x00, 0x00, 0x0c],
     controls: [

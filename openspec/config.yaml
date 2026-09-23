@@ -6,8 +6,20 @@ context: |
   Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
-  factory model and control values for the ten effect slots)
+  factory model and control values for the ten effect slots, plus the twenty
+  onboard user-IR CAB slots)
   is requested after connect and when the patch changes.
+  The IR-name dump is requested once per connect after the current-preset ask
+  and does not block identity or chain loading. Reload and patch change do not
+  re-request it. On GP-50 only, the globals dump is requested once per connect
+  after the first current-preset dump (no waiter; not in the same burst as the
+  preset ask—USB overlaps those dumps otherwise). Bluetooth returns one SysEx
+  (command 00 02); USB returns fragments (command 00 08 or 00 09, lengths 48 /
+  20–22) assembled in session. Field offsets follow the local GP-50 reference
+  editors (USB payload = Bluetooth absolute minus 9; No CAB is not the USB
+  editor's data[64]).
+  GP-5 does not send the GP-50 globals ask.
+  Selecting a user IR slot is the existing model SET (1147).
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
@@ -20,7 +32,7 @@ context: |
   Bluetooth live model (command 07) and live control (command 08) follow,
   and Controller drag-and-drop of movable modules are
   in scope on USB and Bluetooth. Library SysEx (browse / import / reorder),
-  IRs/NAM, and the Editor route come in later phases.
+  IR/NAM file upload, and the Editor route come in later phases.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -77,8 +89,10 @@ context: |
     SET (Save / rename / duplicate), current-patch file export, current-patch
     .prst import onto the selected slot, and Controller drag are in scope.
     Read reference/ for SysEx shape; do not paste that JavaScript into src/.
-    Applying inbound volume, tuner, or Patch/Stomp mode
-    while the patch stays the same is not.
+    Applying inbound volume CC, BPM CC, tuner, or Patch/Stomp mode
+    while the patch stays the same is not. Bluetooth live patch-volume SysEx
+    is applied. Patch-bar volume is CC 7 and
+    GP-50 tempo is CC 73 then CC 74; family 1142 stays the upload path.
     Protocol references: docs/protocol-references.md (behavioral only; no source drop).
   - If Bluetooth later cannot speak CC, the encoder (CC vs SysEx) is the seam —
     same hook the USB editor needs.
@@ -92,7 +106,7 @@ context: |
       src/features/editor      Phase 2 stub until its change
       src/features/library     Phase 3 stub until its change
       src/features/about       About GP Studio (no pedal; not a MIDI feature)
-      src/device/              models, profiles, official CC maps, identity/chain codecs, session
+      src/device/              models, profiles, official CC maps, identity/chain codecs, session/
       src/midi/                MidiTransport (endpoints + bytes), detect (USB web vs tauri), web.ts, tauri.ts
       src/bluetooth/           BluetoothLink (discover/open/send/subscribe/close), detect (web vs tauri), web.ts, tauri.ts
       src-tauri/               Tauri 2 + midir + btleplug
@@ -101,10 +115,15 @@ context: |
     Extract when one module mixes an orchestrator with two or more screens, JSX is
     pasted twice, or named inner functions already read as components.
     Promote to src/components/ only when a second feature imports the widget.
+    DeviceSession is the façade under src/device/session/; live inbound, throttled
+    writes, and current-patch file I/O are siblings. UI imports only @/device/session;
+    React does not import inbound.ts, writes.ts, patch-io.ts, working-patch.ts, or checks.ts.
+    Extract a new sibling for a new inbound family, throttled write family, or file-I/O
+    planner. Do not extract a lone helper or a second session per link.
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
-  - GP-50: the above + master/EXP/BPM/Patch|Stomp mode (CC 1, 11, 13, 17, 19, 21, 28)
+  - GP-50: the above + master/EXP (CC 1, 11, 13), unused relative steps (CC 17, 19, 21), Patch|Stomp mode (CC 28), absolute tempo (CC 73 + CC 74)
   - Endpoint suggests model from the USB MIDI name (Valeton usually appears as GP-5 / GP-50).
     If ambiguous or the name does not match, the user confirms or corrects. Port name is not hardware identity.
 
@@ -127,7 +146,8 @@ context: |
     duplicate, download, and upload of the current patch; Reload is an icon
     with an English tooltip immediately left of Save and re-requests the
     current-preset dump without patch recall; Save before rename;
-    Save disabled until the working chain differs from the last loaded or stored
+    Save disabled until the working patch (chain, patch volume, and on GP-50
+    patch BPM) differs from the last loaded or stored
     baseline, then emerald; hovering previous / select / next warns in English
     that unsaved changes will be lost without blocking; snapshot `modified` stays available to other
     controls; no Modified label and no confirm-on-navigate; Reload/Save/rename/duplicate/download/upload
@@ -143,12 +163,23 @@ context: |
     bypassed (prohibition overlay) without rewriting their enabled state.
     Enabled effect slots with a known model show a control panel below the chain
     in two columns when width allows (model select when that kind has more than
-    one factory model; sliders/toggles from the catalog). AMP and CAB panels
+    one model; CAB lists twenty user IR slots with dumped names or
+    User IR 01–20; sliders/toggles from the catalog). AMP and CAB panels
     hide while NS marks those slots bypassed. Slider numbers follow the drag;
     control SETs are throttled (~80 ms) and flushed on release so Bluetooth is
     not flooded. Toggles send on-change. EXP has no model panel.
-    Volume and tuner later.
-  - GP-50 also: master volume and Patch/Stomp mode
+    Volume (CC 7, 0–100) on the patch bar for GP-5 and GP-50, and BPM (CC 73/74,
+    40–260) for GP-50 only. Both wait for the current-preset dump, then edit
+    through the session on USB and Bluetooth. Inbound CC 7/73/74 are not applied.
+    Bluetooth live patch-volume SysEx updates Volume (and modified when it differs
+    from the baseline); USB ignores that notify. On GP-50, a Global control
+    (gear) beside the connection status opens a Global settings modal (not a
+    route) and edits device globals immediately without patch Save: master
+    volume via CC 1 first, then input / No CAB / REC / BT REC / monitor /
+    REC mode via family 1111 SETs, Patch|Stomp via CC 28. Bluetooth applies
+    live global reports; USB does not. GP-5 has no Global control until
+    a capture locks shared rows. Tuner later. Family 1142 stays
+    the .prst upload path.
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
 
@@ -158,16 +189,22 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot are in scope;
     not the Library route and not GP-5/GP-50 conversion)
-  - IR / SnapTone / NAM upload
-  - Applying liveFromPedal inbound volume/tuner to the snapshot
-    while the patch stays the same (Bluetooth live-module SysEx, Stomp
-    footswitch chain on/off, live chain-order, and live model/control
-    for the ten effect slots are in scope. USB must not apply those reports.
+  - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
+  - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
+    while the patch stays the same (Bluetooth live patch-volume SysEx,
+    live-module SysEx, Stomp
+    footswitch chain on/off, live chain-order, live model/control
+    for the ten effect slots, and live global reports including CC 1 / CC 28
+    are in scope. USB must not apply those reports.
     Current-patch model + control read/write for the ten effect slots is in scope)
-  - GP-50 Patch/Stomp mode control or display
-  - Volume, tuner over Bluetooth
-  - Applying USB inbound live-module, Stomp footswitch, or live chain-order
-    reports (USB is not duplex for those controls)
+  - Tuner and relative step CCs (17, 19, 21). Patch volume, GP-50 BPM,
+    GP-50 master volume (CC 1), and GP-50 Patch|Stomp (CC 28) writes are in
+    scope on USB and Bluetooth. GP-5 globals stay out until a capture locks them.
+  - Pedal GLOBAL rows with no MIDI path (EXP calibrate, bypass type, EXP/FS
+    assign, display, MIDI routing, Auto CAB, language, factory reset, About,
+    GP-5 footswitch modes 0-99 / 0-9 / A-Z / CTL / Tuner)
+  - Applying USB inbound live-module, Stomp footswitch, live chain-order,
+    or live global reports (USB is not duplex for those controls)
   - Stomp assignment edit (which modules each footswitch toggles). Paused
     lab: openspec/changes/stomp-assignment/ (GP-50 dump decode locked; SET
     not accepted). Do not treat that as in-scope product until a write works.
@@ -184,12 +221,13 @@ context: |
   3. device-connection — detect GP-5/GP-50, connect, session state
      (global shell control + modal, not a route)
   4. live-controller — patch, volume, module on/off, tuner via official CC
-  5. Later: preset-editor (SysEx), preset-library, IRs/NAM
+  5. Later: preset-editor (SysEx), preset-library, IR/NAM file upload
 
   Hard constraints:
-  - SysEx for editor/IRs is reverse-engineered in third-party projects. Do not copy that code.
-  - Patch identity SysEx (current index + names) and current-patch chain SysEx
-    (order + on/off + factory model/control decode, Bluetooth live chain-order
+  - SysEx for the editor and for IR/NAM file upload is reverse-engineered in third-party projects. Do not copy that code.
+    IR-name read and the user-IR CAB catalog are Patone-owned and in scope.
+  - Patch identity SysEx (current index + names), the IR-name dump, and current-patch chain SysEx
+    (order + on/off + factory model/control decode, including user-IR CAB wires, Bluetooth live chain-order
     decode, Bluetooth live model/control decode, the order-only SET, model/control SETs,
     and current-patch store SET 114a)
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
@@ -229,7 +267,8 @@ rules:
     - Always include a Non-goals section
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
     - Do not propose copied SysEx, Library browse/import/reorder, Library .prst
-      import, IRs, or mobile packaging in phase 1 changes
+      import, IR/NAM file upload, or mobile packaging in phase 1 changes.
+      IR-name read and user-IR CAB catalog/select are in scope.
     - Current-patch store SET of the existing parameter-write family and
       current-patch .prst export/import for the connected model are allowed; they are
       not the Library route and not cross-model conversion
@@ -252,18 +291,23 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off + factory model and control values) is in scope; Bluetooth inbound
+      current-patch chain (order + on/off + factory model and control values, including user-IR CAB slots)
+      and the IR-name dump are in scope; GP-50 globals ask is in scope (dump
+      decode fail-open until offsets are locked); Bluetooth inbound
       live-module SysEx, Stomp-originated chain on/off, live chain-order,
-      and live model/control (commands 07 / 08)
-      are in scope; USB must not apply those reports; chain-order SET writes,
-      slot model/control SETs, current-patch store SETs (114a), current-patch
-      file export, current-patch .prst load into the working patch, and
-      Controller drag-and-drop of movable modules are in scope; read
-      reference/ for SysEx (do not paste it into src/); Patch/Stomp
-      control is later; do not apply liveFromPedal volume/tuner
-      to the snapshot while the patch stays the same; Library import/reorder
-      of .prst stay later (current-patch .prst export of the connected model
-      and load into the working patch are in scope; no GP-5/GP-50 conversion)
+      live model/control (commands 07 / 08), and live global reports
+      (including CC 1 / CC 28) are in scope; USB must not apply those reports;
+      chain-order SET writes, slot model/control SETs, global 1111 SETs,
+      GP-50 master volume (CC 1) and Patch|Stomp (CC 28), current-patch store
+      SETs (114a), current-patch file export, current-patch .prst load into
+      the working patch, and Controller drag-and-drop of movable modules are
+      in scope; read reference/ for SysEx (do not paste it into src/); do not
+      apply liveFromPedal volume/BPM CC or tuner to the snapshot while the
+      patch stays the same; Bluetooth live patch-volume SysEx is applied;
+      patch-bar volume is CC 7 and GP-50 tempo is CC 73/74; family 1142 stays
+      the upload path; Library import/reorder of .prst stay later
+      (current-patch .prst export of the connected model and load into the
+      working patch are in scope; no GP-5/GP-50 conversion)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - NS on bypasses AMP/CAB visually (prohibition overlay); do not rewrite
