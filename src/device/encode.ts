@@ -19,8 +19,12 @@ import { encodeIrNameRequest } from "@/device/ir-names";
 import {
   encodeGlobalsRequest,
   encodeGlobalSysex,
+  encodeGp5Footswitch,
+  encodeGp5GlobalSysex,
   type FootswitchMode,
   type GlobalSysexKey,
+  type Gp5FootswitchMode,
+  type Gp5GlobalSysexKey,
   type RecMode,
 } from "@/device/globals";
 import type { LinkMode } from "@/device/link";
@@ -98,6 +102,31 @@ export function encodeGlobalSetting(
   value: number | boolean | RecMode,
 ): Uint8Array[] | null {
   const midi = encodeGlobalSysex(key, value);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+/** GP-5 parameter-write global SET. Not CC 1. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
+export function encodeGp5GlobalSetting(
+  linkMode: LinkMode,
+  key: Gp5GlobalSysexKey,
+  value: number | boolean,
+): Uint8Array[] | null {
+  const midi = encodeGp5GlobalSysex(key, value);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
+/** GP-5 footswitch SET (family `1115`). Not CC 28. */
+export function encodeGp5FootswitchMode(
+  linkMode: LinkMode,
+  mode: Gp5FootswitchMode,
+): Uint8Array[] | null {
+  const midi = encodeGp5Footswitch(mode);
   if (!midi) {
     return null;
   }

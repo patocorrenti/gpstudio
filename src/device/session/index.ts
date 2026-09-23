@@ -27,5 +27,9 @@ export type {
   DeviceGlobals,
   FootswitchMode,
   GlobalSysexKey,
+  Gp50Globals,
+  Gp5FootswitchMode,
+  Gp5Globals,
+  Gp5GlobalSysexKey,
   RecMode,
 } from "@/device/globals";

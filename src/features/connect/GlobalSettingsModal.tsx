@@ -19,7 +19,11 @@ import { Switch } from "@/components/ui/switch";
 import type {
   DeviceGlobals,
   FootswitchMode,
+  Gp5FootswitchMode,
+  Gp5Globals,
+  Gp50Globals,
   GlobalSysexKey,
+  Gp5GlobalSysexKey,
   RecMode,
 } from "@/device/session";
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
@@ -27,30 +31,35 @@ import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceS
 function LevelRow({
   label,
   value,
+  min = -20,
+  max = 20,
+  unit = "dB",
   disabled,
   onChange,
   onCommit,
 }: {
   label: string;
   value: number | null;
+  min?: number;
+  max?: number;
+  unit?: string;
   disabled: boolean;
   onChange: (value: number) => void;
   onCommit: (value: number) => void;
 }) {
   const usable = !disabled && value !== null;
+  const shown = value === null ? "—" : unit ? `${value} ${unit}` : `${value}`;
   return (
     <label className="flex flex-col gap-1.5">
       <span className="flex items-center justify-between text-sm">
         <span>{label}</span>
-        <span className="tabular-nums text-muted-foreground">
-          {value === null ? "—" : `${value} dB`}
-        </span>
+        <span className="tabular-nums text-muted-foreground">{shown}</span>
       </span>
       <Slider
-        min={-20}
-        max={20}
+        min={min}
+        max={max}
         step={1}
-        value={[value ?? 0]}
+        value={[value ?? Math.max(min, Math.min(max, 0))]}
         disabled={!usable}
         aria-label={label}
         onValueChange={(next) => {
@@ -72,7 +81,7 @@ function LevelRow({
   );
 }
 
-function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
+function Gp50GlobalSettingsForm({ globals }: { globals: Gp50Globals }) {
   const session = useDeviceSession();
 
   const setLevel = (key: GlobalSysexKey, value: number, flush: boolean) => {
@@ -221,6 +230,127 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
       </section>
     </div>
   );
+}
+
+const GP5_FOOT_MODES: Gp5FootswitchMode[] = ["0-99", "0-9", "A-Z", "CTL", "Tuner"];
+
+function Gp5GlobalSettingsForm({ globals }: { globals: Gp5Globals }) {
+  const session = useDeviceSession();
+
+  const setLevel = (key: Gp5GlobalSysexKey, value: number, flush: boolean) => {
+    void session.setGlobalSysex(key, value, { flush });
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-foreground">Master</h3>
+        <LevelRow
+          label="Global volume"
+          value={globals.globalVolume}
+          min={0}
+          max={100}
+          unit=""
+          disabled={false}
+          onChange={(value) => setLevel("globalVolume", value, false)}
+          onCommit={(value) => setLevel("globalVolume", value, true)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
+        <h3 className="text-sm font-medium text-foreground">Input / Output</h3>
+        <LevelRow
+          label="Input level"
+          value={globals.inputLevel}
+          disabled={false}
+          onChange={(value) => setLevel("inputLevel", value, false)}
+          onCommit={(value) => setLevel("inputLevel", value, true)}
+        />
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>No CAB mode</span>
+          <Switch
+            checked={globals.noCab === true}
+            disabled={globals.noCab === null}
+            aria-label="No CAB mode"
+            onCheckedChange={(checked) => {
+              void session.setGlobalSysex("noCab", checked, { flush: true });
+            }}
+          />
+        </label>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
+        <h3 className="text-sm font-medium text-foreground">USB Audio</h3>
+        <LevelRow
+          label="REC level"
+          value={globals.recLevel}
+          disabled={false}
+          onChange={(value) => setLevel("recLevel", value, false)}
+          onCommit={(value) => setLevel("recLevel", value, true)}
+        />
+        <LevelRow
+          label="BT REC"
+          value={globals.btRec}
+          disabled={false}
+          onChange={(value) => setLevel("btRec", value, false)}
+          onCommit={(value) => setLevel("btRec", value, true)}
+        />
+        <LevelRow
+          label="Monitor level"
+          value={globals.monLevel}
+          disabled={false}
+          onChange={(value) => setLevel("monLevel", value, false)}
+          onCommit={(value) => setLevel("monLevel", value, true)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
+        <h3 className="text-sm font-medium text-foreground">Display</h3>
+        <LevelRow
+          label="Screen brightness"
+          value={globals.screenBrightness}
+          min={1}
+          max={100}
+          unit="%"
+          disabled={false}
+          onChange={(value) => setLevel("screenBrightness", value, false)}
+          onCommit={(value) => setLevel("screenBrightness", value, true)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
+        <h3 className="text-sm font-medium text-foreground">Footswitch</h3>
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>Mode</span>
+          <Select
+            value={globals.footswitchMode ?? undefined}
+            disabled={globals.footswitchMode === null}
+            onValueChange={(next) => {
+              void session.setGp5FootswitchMode(next as Gp5FootswitchMode);
+            }}
+          >
+            <SelectTrigger size="sm" aria-label="Footswitch mode">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {GP5_FOOT_MODES.map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {mode}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </section>
+    </div>
+  );
+}
+
+function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
+  if (globals.model === "gp5") {
+    return <Gp5GlobalSettingsForm globals={globals} />;
+  }
+  return <Gp50GlobalSettingsForm globals={globals} />;
 }
 
 export function GlobalSettingsControl() {

@@ -11,14 +11,17 @@ context: |
   is requested after connect and when the patch changes.
   The IR-name dump is requested once per connect after the current-preset ask
   and does not block identity or chain loading. Reload and patch change do not
-  re-request it. On GP-50 only, the globals dump is requested once per connect
+  re-request it.   The globals dump is requested once per connect for GP-50 and GP-5
   after the first current-preset dump (no waiter; not in the same burst as the
-  preset ask—USB overlaps those dumps otherwise). Bluetooth returns one SysEx
-  (command 00 02); USB returns fragments (command 00 08 or 00 09, lengths 48 /
-  20–22) assembled in session. Field offsets follow the local GP-50 reference
-  editors (USB payload = Bluetooth absolute minus 9; No CAB is not the USB
-  editor's data[64]).
-  GP-5 does not send the GP-50 globals ask.
+  preset ask—USB overlaps those dumps otherwise). The ask is the same on both
+  models. GP-50 Bluetooth returns one SysEx (command 00 02); GP-50 USB returns
+  fragments (command 00 08 or 00 09, lengths 48 / 20–22) assembled in session.
+  Field offsets follow the local GP-50 reference editors (USB payload =
+  Bluetooth absolute minus 9; No CAB is not the USB editor's data[64]).
+  GP-5 Bluetooth returns one SysEx (command 00 01, length 164); GP-5 USB
+  returns fragments (command 00 05, lengths 48 / 12). GP-5 offsets follow
+  `_reference/GP5bluetooth.html` and `_reference/gp5usb.html` (editor index
+  minus 2; USB payload minus 9). A GP-50 payload must not decode as GP-5.
   Selecting a user IR slot is the existing model SET (1147).
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
@@ -172,13 +175,17 @@ context: |
     40–260) for GP-50 only. Both wait for the current-preset dump, then edit
     through the session on USB and Bluetooth. Inbound CC 7/73/74 are not applied.
     Bluetooth live patch-volume SysEx updates Volume (and modified when it differs
-    from the baseline); USB ignores that notify. On GP-50, a Global control
+    from the baseline); USB ignores that notify.   On GP-50, a Global control
     (gear) beside the connection status opens a Global settings modal (not a
     route) and edits device globals immediately without patch Save: master
     volume via CC 1 first, then input / No CAB / REC / BT REC / monitor /
-    REC mode via family 1111 SETs, Patch|Stomp via CC 28. Bluetooth applies
-    live global reports; USB does not. GP-5 has no Global control until
-    a capture locks shared rows. Tuner later. Family 1142 stays
+    REC mode via family 1111 SETs, Patch|Stomp via CC 28. On GP-5 the same
+    modal lists Global volume first (1111 effect 2 / flag 2, not CC 1), then
+    input / No CAB / REC / BT REC (effect 5 / flag 4) / monitor (effect 2 /
+    flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 / A-Z / CTL /
+    Tuner via family 1115, not CC 28. No REC mode and no Global BPM on GP-5.
+    Bluetooth applies live global reports for the connected model; USB does not.
+    Tuner later. Family 1142 stays
     the .prst upload path.
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
@@ -199,10 +206,12 @@ context: |
     Current-patch model + control read/write for the ten effect slots is in scope)
   - Tuner and relative step CCs (17, 19, 21). Patch volume, GP-50 BPM,
     GP-50 master volume (CC 1), and GP-50 Patch|Stomp (CC 28) writes are in
-    scope on USB and Bluetooth. GP-5 globals stay out until a capture locks them.
+    scope on USB and Bluetooth. GP-5 global volume, levels, screen brightness,
+    and footswitch modes are in scope via their SETs, not via CC 1 or CC 28.
   - Pedal GLOBAL rows with no MIDI path (EXP calibrate, bypass type, EXP/FS
-    assign, display, MIDI routing, Auto CAB, language, factory reset, About,
-    GP-5 footswitch modes 0-99 / 0-9 / A-Z / CTL / Tuner)
+    assign, GP-50 display, MIDI routing, Auto CAB, language, factory reset, About).
+    GP-5 screen brightness and footswitch modes 0-99 / 0-9 / A-Z / CTL / Tuner
+    are in scope
   - Applying USB inbound live-module, Stomp footswitch, live chain-order,
     or live global reports (USB is not duplex for those controls)
   - Stomp assignment edit (which modules each footswitch toggles). Paused
@@ -292,12 +301,14 @@ rules:
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
       current-patch chain (order + on/off + factory model and control values, including user-IR CAB slots)
-      and the IR-name dump are in scope; GP-50 globals ask is in scope (dump
-      decode fail-open until offsets are locked); Bluetooth inbound
+      and the IR-name dump are in scope; GP-50 and GP-5 globals asks are in
+      scope; Bluetooth inbound
       live-module SysEx, Stomp-originated chain on/off, live chain-order,
       live model/control (commands 07 / 08), and live global reports
-      (including CC 1 / CC 28) are in scope; USB must not apply those reports;
+      (including CC 1 / CC 28 on GP-50, and the GP-5 live map) are in scope;
+      USB must not apply those reports;
       chain-order SET writes, slot model/control SETs, global 1111 SETs,
+      GP-5 footswitch 1115 SETs,
       GP-50 master volume (CC 1) and Patch|Stomp (CC 28), current-patch store
       SETs (114a), current-patch file export, current-patch .prst load into
       the working patch, and Controller drag-and-drop of movable modules are

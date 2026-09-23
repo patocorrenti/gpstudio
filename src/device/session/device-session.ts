@@ -26,11 +26,16 @@ import {
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import {
   emptyGp50Globals,
+  emptyGp5Globals,
   GlobalsDumpDecoder,
   isGlobalsDump,
+  isGp50SysexKey,
+  isGp5SysexKey,
   type DeviceGlobals,
   type FootswitchMode,
   type GlobalSysexKey,
+  type Gp5FootswitchMode,
+  type Gp5GlobalSysexKey,
   type RecMode,
 } from "@/device/globals";
 import {
@@ -55,6 +60,8 @@ import {
 import {
   applyDecodedGlobals,
   applyLiveGlobal,
+  gp50SysexUpdate,
+  gp5SysexUpdate,
   mergeGlobalField,
   type GlobalsHost,
 } from "@/device/session/globals";
@@ -128,7 +135,7 @@ export type SessionSnapshot =
       patch: number;
       patchNames: (string | null)[];
       userIrNames: (string | null)[];
-      /** GP-50 device globals; null on GP-5 until that model locks a read. */
+      /** Device globals for the connected model. Null only while disconnected. */
       globals: DeviceGlobals | null;
       chain: AudioChain;
       chainSync: ChainSync;
@@ -182,7 +189,7 @@ export class DeviceSession {
    */
   private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
   /**
-   * IR-name and GP-50 globals asks after the first current-preset dump.
+   * IR-name and device-globals asks after the first current-preset dump.
    * USB overlaps those dumps with the preset dump if asked in the same burst
    * (`_reference/GP50-USB.html` waits for preset info before globals).
    */
@@ -284,7 +291,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
-        globals: model === "gp50" ? emptyGp50Globals() : null,
+        globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         chainSync: "idle",
         patchVolume: null,
@@ -303,7 +310,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
-        globals: model === "gp50" ? emptyGp50Globals() : null,
+        globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         chainSync: "idle",
         patchVolume: null,
@@ -714,10 +721,7 @@ export class DeviceSession {
   }
 
   async setMasterVolume(value: number, options: { flush?: boolean } = {}): Promise<void> {
-    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
-      return;
-    }
-    if (this.snapshot.model !== "gp50") {
+    if (this.snapshot.status !== "connected" || this.snapshot.globals?.model !== "gp50") {
       return;
     }
     if (this.snapshot.sync !== "ready") {
@@ -746,10 +750,7 @@ export class DeviceSession {
   }
 
   async setFootswitchMode(mode: FootswitchMode): Promise<void> {
-    if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
-      return;
-    }
-    if (this.snapshot.model !== "gp50") {
+    if (this.snapshot.status !== "connected" || this.snapshot.globals?.model !== "gp50") {
       return;
     }
     if (this.snapshot.sync !== "ready") {
@@ -771,14 +772,55 @@ export class DeviceSession {
   }
 
   async setGlobalSysex(
-    key: GlobalSysexKey,
+    key: GlobalSysexKey | Gp5GlobalSysexKey,
     value: number | boolean | RecMode,
     options: { flush?: boolean } = {},
   ): Promise<void> {
     if (this.snapshot.status !== "connected" || !this.snapshot.globals) {
       return;
     }
-    if (this.snapshot.model !== "gp50") {
+    if (this.snapshot.sync !== "ready") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Global settings are not available on this link.");
+    }
+    const globals = this.snapshot.globals;
+    if (globals.model === "gp50") {
+      if (!isGp50SysexKey(key)) {
+        return;
+      }
+      const next = gp50SysexUpdate(globals, key, value);
+      if (!next) {
+        return;
+      }
+      this.snapshot = { ...this.snapshot, globals: next.globals };
+      this.emitSnapshot();
+      this.writes.queueGlobalWrite(
+        globalSysexWriteKey(key),
+        { kind: "sysex", key, value: next.sent },
+        options.flush === true,
+      );
+      return;
+    }
+    if (!isGp5SysexKey(key) || typeof value === "string") {
+      return;
+    }
+    const next = gp5SysexUpdate(globals, key, value);
+    if (!next) {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, globals: next.globals };
+    this.emitSnapshot();
+    this.writes.queueGlobalWrite(
+      globalSysexWriteKey(key),
+      { kind: "gp5Sysex", key, value: next.sent },
+      options.flush === true,
+    );
+  }
+
+  async setGp5FootswitchMode(mode: Gp5FootswitchMode): Promise<void> {
+    if (this.snapshot.status !== "connected" || this.snapshot.globals?.model !== "gp5") {
       return;
     }
     if (this.snapshot.sync !== "ready") {
@@ -789,13 +831,13 @@ export class DeviceSession {
     }
     this.snapshot = {
       ...this.snapshot,
-      globals: mergeGlobalField(this.snapshot.globals, key, value),
+      globals: mergeGlobalField(this.snapshot.globals, "footswitchMode", mode),
     };
     this.emitSnapshot();
     this.writes.queueGlobalWrite(
-      globalSysexWriteKey(key),
-      { kind: "sysex", key, value },
-      options.flush === true,
+      FOOTSWITCH_MODE_WRITE_KEY,
+      { kind: "gp5Footswitch", value: mode },
+      true,
     );
   }
 
@@ -880,12 +922,9 @@ export class DeviceSession {
     await this.sendBytes(encodeIrNames(this.snapshot.linkMode));
   }
 
-  /** GP-50 device globals. Once per connect after the current-preset ask; not on GP-5. */
+  /** Device globals. Once per connect after the current-preset ask, GP-50 and GP-5. */
   private async sendGlobalsRequest(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
-      return;
-    }
-    if (this.snapshot.model !== "gp50") {
       return;
     }
     await this.sendBytes(encodeGlobals(this.snapshot.linkMode));
@@ -1092,7 +1131,7 @@ export class DeviceSession {
     }
   }
 
-  /** Once per connect: IR names and GP-50 globals after the first preset dump. */
+  /** Once per connect: IR names and device globals after the first preset dump. */
   private queuePostChainDeviceAsks(generation: number): void {
     if (!this.postChainDeviceAsks) {
       return;
