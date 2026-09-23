@@ -474,6 +474,7 @@ export type LiveOnOffChange = {
 /**
  * GP-50 Bluetooth EXP on/off (Patone capture). Identity-family template
  * (01 02 04), size 0x07, command 0x02. Enable is the last data byte (0 off, 1 on).
+ * Distinct from live patch-volume (same size, different body signature).
  */
 export function decodeLiveExp(bytes: Uint8Array): boolean | null {
   const midi = midiPayload(bytes);
@@ -503,6 +504,47 @@ export function decodeLiveExp(bytes: Uint8Array): boolean | null {
     return null;
   }
   return midi[22] !== 0;
+}
+
+/**
+ * Pedal→app live patch volume (Bluetooth). Identity-family, size `0x07`,
+ * path `01 02 04`, body signature `02 00 01 02 00 00 01 00 00` then the volume
+ * as a nibble pair (0–100). Same value encoding as preset_volume SETs; not a SET.
+ * Locked from a GP-50 Bluetooth notify after CC 7 (volume 50 → `03 02`, 51 → `03 03`).
+ */
+export function decodeLivePatchVolume(bytes: Uint8Array): number | null {
+  const midi = midiPayload(bytes);
+  if (midi.length !== 24 || midi[0] !== 0xf0 || midi[23] !== 0xf7) {
+    return null;
+  }
+  if (midi[3] !== 0 || midi[4] !== 1) {
+    return null;
+  }
+  if (
+    midi[8] !== 0x07 ||
+    midi[9] !== 1 ||
+    midi[10] !== 2 ||
+    midi[11] !== 4 ||
+    midi[12] !== 0x02 ||
+    midi[13] !== 0x00 ||
+    midi[14] !== 0x01 ||
+    midi[15] !== 0x02 ||
+    midi[16] !== 0x00 ||
+    midi[17] !== 0x00 ||
+    midi[18] !== 0x01 ||
+    midi[19] !== 0x00 ||
+    midi[20] !== 0x00
+  ) {
+    return null;
+  }
+  if (midi[21] > 0x0f || midi[22] > 0x0f) {
+    return null;
+  }
+  const volume = midi[21] * 16 + midi[22];
+  if (volume < 0 || volume > 100) {
+    return null;
+  }
+  return volume;
 }
 
 /**
@@ -879,6 +921,21 @@ function assertPresetDumpFixtures(): void {
   const resolved = liveUserIr ? modelByWire("cab", liveUserIr.wire) : undefined;
   if (liveUserIr?.kind !== "cab" || resolved?.id !== "cab-user-ir-03") {
     throw new Error("Live CAB user IR notify must decode User IR 03");
+  }
+
+  const liveVol50 = Uint8Array.from(
+    "F0 00 06 00 01 00 00 00 07 01 02 04 02 00 01 02 00 00 01 00 00 03 02 F7"
+      .split(" ")
+      .map((byte) => Number.parseInt(byte, 16)),
+  );
+  const liveVol51 = Uint8Array.from(liveVol50);
+  liveVol51[2] = 0x01;
+  liveVol51[22] = 0x03;
+  if (decodeLivePatchVolume(liveVol50) !== 50 || decodeLivePatchVolume(liveVol51) !== 51) {
+    throw new Error("Live patch-volume notify must decode 50 and 51");
+  }
+  if (decodeLiveExp(liveVol50) !== null) {
+    throw new Error("Live patch-volume notify must not decode as EXP");
   }
 }
 
