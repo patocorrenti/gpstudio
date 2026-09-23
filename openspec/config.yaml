@@ -172,11 +172,12 @@ context: |
     40–260) for GP-50 only. Both wait for the current-preset dump, then edit
     through the session on USB and Bluetooth. Inbound CC 7/73/74 are not applied.
     Bluetooth live patch-volume SysEx updates Volume (and modified when it differs
-    from the baseline); USB ignores that notify. On GP-50, a Global settings
-    modal (not a route) edits device globals immediately without patch Save:
-    input / No CAB / REC / BT REC / monitor / REC mode via family 1111 SETs,
-    Patch|Stomp via CC 28, master volume via CC 1. Bluetooth applies live
-    global reports; USB does not. GP-5 has no Global settings control until
+    from the baseline); USB ignores that notify. On GP-50, a Global control
+    (gear) beside the connection status opens a Global settings modal (not a
+    route) and edits device globals immediately without patch Save: master
+    volume via CC 1 first, then input / No CAB / REC / BT REC / monitor /
+    REC mode via family 1111 SETs, Patch|Stomp via CC 28. Bluetooth applies
+    live global reports; USB does not. GP-5 has no Global control until
     a capture locks shared rows. Tuner later. Family 1142 stays
     the .prst upload path.
   - Windows packaging: tauri build → NSIS/MSI

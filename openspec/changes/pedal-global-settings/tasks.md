@@ -13,8 +13,8 @@
 
 ## 3. Controller modal
 
-- [x] 3.1 Add an English Global settings control and modal under `src/features/controller/` (not `src/components/`). Show it with the patch bar on GP-50 only, including while the chain overlay is up. GP-5 shows no control while the session exposes no globals. The empty and identity-loading states show no control. Verify the modal is not a route and the main menu is unchanged
-- [x] 3.2 List only exposed GP-50 rows, in English, with no Save control. Disable a row whose value is unknown and do not send a write for it. Edits go through the session. Disconnect closes the modal. A patch change does not clear the shown globals. Verify typecheck
+- [x] 3.1 Add an English Global control and Global settings modal under `src/features/connect/` (not `src/components/`). Show it in the chrome next to the connection status on GP-50 only, including while identity or chain sync is up. GP-5 shows no control while the session exposes no globals. Disconnected chrome shows no control. Verify the modal is not a route and the main menu is unchanged
+- [x] 3.2 List only exposed GP-50 rows, in English, with master volume first and no Save control. Disable a row whose value is unknown and do not send a write for it. Edits go through the session. Disconnect closes the modal. A patch change does not clear the shown globals. Verify typecheck
 
 ## 4. Docs and check
 

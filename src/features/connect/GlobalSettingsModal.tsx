@@ -1,4 +1,4 @@
-import { Settings2 } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,6 +82,40 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-foreground">Master</h3>
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between text-sm">
+            <span>Master volume</span>
+            <span className="tabular-nums text-muted-foreground">
+              {globals.masterVolume === null ? "—" : globals.masterVolume}
+            </span>
+          </span>
+          <Slider
+            min={0}
+            max={100}
+            step={1}
+            value={[globals.masterVolume ?? 0]}
+            disabled={globals.masterVolume === null}
+            aria-label="Master volume"
+            onValueChange={(next) => {
+              const nextValue = next[0];
+              if (nextValue === undefined || globals.masterVolume === null) {
+                return;
+              }
+              void session.setMasterVolume(nextValue, { flush: false });
+            }}
+            onValueCommit={(next) => {
+              const nextValue = next[0];
+              if (nextValue === undefined || globals.masterVolume === null) {
+                return;
+              }
+              void session.setMasterVolume(nextValue, { flush: true });
+            }}
+          />
+        </label>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
         <h3 className="text-sm font-medium text-foreground">Input / Output</h3>
         <LevelRow
           label="Input level"
@@ -103,7 +137,7 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
         </label>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
         <h3 className="text-sm font-medium text-foreground">USB Audio</h3>
         <LevelRow
           label="REC level"
@@ -164,7 +198,7 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
         </label>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5">
         <h3 className="text-sm font-medium text-foreground">Footswitch</h3>
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>Mode</span>
@@ -185,40 +219,6 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
           </Select>
         </label>
       </section>
-
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-foreground">Master</h3>
-        <label className="flex flex-col gap-1.5">
-          <span className="flex items-center justify-between text-sm">
-            <span>Master volume</span>
-            <span className="tabular-nums text-muted-foreground">
-              {globals.masterVolume === null ? "—" : globals.masterVolume}
-            </span>
-          </span>
-          <Slider
-            min={0}
-            max={100}
-            step={1}
-            value={[globals.masterVolume ?? 0]}
-            disabled={globals.masterVolume === null}
-            aria-label="Master volume"
-            onValueChange={(next) => {
-              const nextValue = next[0];
-              if (nextValue === undefined || globals.masterVolume === null) {
-                return;
-              }
-              void session.setMasterVolume(nextValue, { flush: false });
-            }}
-            onValueCommit={(next) => {
-              const nextValue = next[0];
-              if (nextValue === undefined || globals.masterVolume === null) {
-                return;
-              }
-              void session.setMasterVolume(nextValue, { flush: true });
-            }}
-          />
-        </label>
-      </section>
     </div>
   );
 }
@@ -233,7 +233,7 @@ export function GlobalSettingsControl() {
     }
   }, [snapshot.status]);
 
-  if (snapshot.status !== "connected" || snapshot.sync !== "ready" || !snapshot.globals) {
+  if (snapshot.status !== "connected" || !snapshot.globals) {
     return null;
   }
 
@@ -244,10 +244,13 @@ export function GlobalSettingsControl() {
         variant="outline"
         size="sm"
         className="gap-1.5"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="Global settings"
         onClick={() => setOpen(true)}
       >
-        <Settings2 className="size-4" aria-hidden />
-        Global settings
+        <Settings className="size-4" aria-hidden />
+        Global
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md" showCloseButton>

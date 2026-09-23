@@ -47,21 +47,21 @@ After a pedal session becomes connected, Controller SHALL show an English loadin
 
 ## ADDED Requirements
 
-### Requirement: Controller edits reachable global settings in a modal
+### Requirement: Shell offers reachable global settings in a modal
 
-Once the patch bar is shown for a pedal that has at least one reachable global setting, Controller SHALL offer an English Global settings control that opens a modal. The control MUST NOT be a route and MUST NOT be a main-menu item. The chain-sync overlay MUST NOT block that control. The modal MUST list only settings the device session exposes for the connected model, in English, and MUST NOT list a setting the session does not expose. There MUST be no Save control in the modal. Each edit MUST be sent immediately through the device session and MUST NOT send raw MIDI from React. A control whose value is not yet known MUST NOT be usable and MUST NOT send a write. Slider drags MUST update the displayed number on-change and MUST throttle writes the same way effect sliders do; release MUST send the last value if it was not already sent. Toggles and selects MUST send on-change. Closing the modal MUST NOT revert a value already sent. Disconnecting MUST close the modal and hide the control. Changing the current patch MUST NOT clear the modal's global values and MUST NOT close it solely because the patch changed.
+When a pedal session is connected and exposes at least one reachable global setting, the chrome next to the connection status SHALL offer an English Global control (gear icon) that opens a Global settings modal. The control MUST NOT be a route, MUST NOT be a main-menu item, and MUST NOT sit on the patch bar. The chain-sync overlay MUST NOT block that control. The modal title MUST read Global settings. Master volume MUST be listed first when the session exposes it. The modal MUST list only settings the device session exposes for the connected model, in English, and MUST NOT list a setting the session does not expose. There MUST be no Save control in the modal. Each edit MUST be sent immediately through the device session and MUST NOT send raw MIDI from React. A control whose value is not yet known MUST NOT be usable and MUST NOT send a write. Slider drags MUST update the displayed number on-change and MUST throttle writes the same way effect sliders do; release MUST send the last value if it was not already sent. Toggles and selects MUST send on-change. Closing the modal MUST NOT revert a value already sent. Disconnecting MUST close the modal and hide the control. Changing the current patch MUST NOT clear the modal's global values and MUST NOT close it solely because the patch changed.
 
-GP-50 MUST be able to show: input level (−20 to +20 dB), No CAB (off or on), REC level (−20 to +20 dB), BT REC (−20 to +20 dB), monitor level (−20 to +20 dB), REC mode left (Dry or Wet), REC mode right (Dry or Wet), footswitch mode (Patch or Stomp), and master volume (0 to 100). GP-5 MUST NOT show master volume, REC mode left, REC mode right, or footswitch mode. GP-5 MUST show input level, No CAB, REC level, BT REC, and monitor level only when the session exposes them, and MUST NOT show the Global settings control when the session exposes none.
+GP-50 MUST be able to show: master volume (0 to 100), input level (−20 to +20 dB), No CAB (off or on), REC level (−20 to +20 dB), BT REC (−20 to +20 dB), monitor level (−20 to +20 dB), REC mode left (Dry or Wet), REC mode right (Dry or Wet), and footswitch mode (Patch or Stomp). GP-5 MUST NOT show master volume, REC mode left, REC mode right, or footswitch mode. GP-5 MUST show input level, No CAB, REC level, BT REC, and monitor level only when the session exposes them, and MUST NOT show the Global control when the session exposes none.
 
 #### Scenario: GP-50 opens the modal with dumped values
-- **WHEN** a GP-50 session is showing the patch bar and the globals snapshot has input level 0, No CAB off, and master volume 63
-- **THEN** Controller shows a Global settings control
-- **AND** opening it shows those values
+- **WHEN** a GP-50 session is connected and the globals snapshot has input level 0, No CAB off, and master volume 63
+- **THEN** the chrome shows a Global control next to the connection status
+- **AND** opening it shows those values with master volume first
 - **AND** the modal has no Save control
 
 #### Scenario: GP-5 hides the control when no global is exposed
-- **WHEN** a GP-5 session is showing the patch bar and the session exposes no global settings
-- **THEN** Controller does not show a Global settings control
+- **WHEN** a GP-5 session is connected and the session exposes no global settings
+- **THEN** the chrome does not show a Global control
 
 #### Scenario: GP-5 does not show GP-50-only rows
 - **WHEN** a GP-5 session exposes input level and the user opens Global settings
@@ -82,7 +82,7 @@ GP-50 MUST be able to show: input level (−20 to +20 dB), No CAB (off or on), R
 #### Scenario: Disconnect closes the modal
 - **WHEN** Global settings is open and the user disconnects
 - **THEN** the modal is closed
-- **AND** the Global settings control is hidden
+- **AND** the Global control is hidden
 
 #### Scenario: A patch change keeps global values
 - **WHEN** Global settings is showing input level 6 and the user selects another patch
