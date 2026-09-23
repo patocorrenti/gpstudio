@@ -1049,27 +1049,46 @@ export class DeviceSession {
     }
     const finishBusy = this.snapshot.chainSync === "syncing";
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
-    if (
-      chainSlotsEqual(chain, this.snapshot.chain) ||
+    const edited =
       this.snapshot.modified ||
       this.pendingControlWrites.size > 0 ||
-      this.pendingPatchWrites.size > 0
-    ) {
+      this.pendingPatchWrites.size > 0;
+    if (edited) {
       if (finishBusy) {
         this.clearChainRefreshTimer();
         this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
       }
       return;
     }
+    // First dump on Bluetooth is often stale for volume/BPM even when the chain
+    // already matches. Always take those globals from the confirmation dump.
     const globals = this.patchGlobalsFromDump(result.dump);
     this.currentPatchDump = result.dump;
-    this.baseline = {
-      chain: cloneChain(chain),
+    this.snapshot = {
+      ...this.snapshot,
       patchVolume: globals.patchVolume,
       patchBpm: globals.patchBpm,
     };
-    this.snapshot = {
-      ...this.snapshot,
+    if (chainSlotsEqual(chain, this.snapshot.chain)) {
+      this.baseline = {
+        chain: this.baseline?.chain ?? cloneChain(this.snapshot.chain),
+        patchVolume: globals.patchVolume,
+        patchBpm: globals.patchBpm,
+      };
+      if (finishBusy) {
+        this.clearChainRefreshTimer();
+        this.setChain(this.snapshot.chain, { chainSync: "idle", canExportPatch: true });
+      } else {
+        this.snapshot = {
+          ...this.snapshot,
+          modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
+        };
+        this.emitSnapshot();
+      }
+      return;
+    }
+    this.baseline = {
+      chain: cloneChain(chain),
       patchVolume: globals.patchVolume,
       patchBpm: globals.patchBpm,
     };
@@ -1506,7 +1525,11 @@ export class DeviceSession {
       }
     }
     if (bpm !== null) {
-      const bpmPackets = encodePatchBpm(linkMode, bpm);
+      // Family 1142 is one byte (40–255). BPM 256–260 needs official CC 73/74.
+      const bpmPackets =
+        bpm > 255
+          ? encodePatchTempoCc(linkMode, bpm)
+          : encodePatchBpm(linkMode, bpm);
       if (bpmPackets) {
         for (const bytes of bpmPackets) {
           steps.push({ kind: "global", bytes });
