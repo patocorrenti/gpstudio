@@ -734,10 +734,14 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       throw new Error("Patch control is not available on this link.");
     }
-    if (!Number.isFinite(value) || value < 0 || value > PATCH_VOLUME_MAX) {
-      return;
-    }
-    this.stagePatchGlobal(PATCH_VOLUME_WRITE_KEY, Math.round(value), options.flush === true);
+  if (!Number.isFinite(value)) {
+    return;
+  }
+  const next = Math.round(value);
+  if (next < 0 || next > PATCH_VOLUME_MAX) {
+    return;
+  }
+  this.stagePatchGlobal(PATCH_VOLUME_WRITE_KEY, next, options.flush === true);
   }
 
   async setPatchBpm(value: number, options: { flush?: boolean } = {}): Promise<void> {
@@ -753,10 +757,14 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       throw new Error("Patch control is not available on this link.");
     }
-    if (!Number.isFinite(value) || value < PATCH_BPM_MIN || value > PATCH_BPM_MAX) {
-      return;
-    }
-    this.stagePatchGlobal(PATCH_BPM_WRITE_KEY, Math.round(value), options.flush === true);
+  if (!Number.isFinite(value)) {
+    return;
+  }
+  const next = Math.round(value);
+  if (next < PATCH_BPM_MIN || next > PATCH_BPM_MAX) {
+    return;
+  }
+  this.stagePatchGlobal(PATCH_BPM_WRITE_KEY, next, options.flush === true);
   }
 
   private async runIdentitySync(generation: number): Promise<void> {
@@ -1595,6 +1603,13 @@ export class DeviceSession {
         ...this.snapshot,
         modified: this.isWorkingModified(this.snapshot.chain, this.snapshot.chainSync),
       };
+      if (this.currentPatchDump) {
+        if (key === PATCH_VOLUME_WRITE_KEY) {
+          writeDumpPatchVolume(this.snapshot.model, this.currentPatchDump, value);
+        } else if (key === PATCH_BPM_WRITE_KEY && this.snapshot.model === "gp50") {
+          writeDumpPatchBpm(this.snapshot.model, this.currentPatchDump, value);
+        }
+      }
       this.emitSnapshot();
     }
     if (unchanged && !flush) {

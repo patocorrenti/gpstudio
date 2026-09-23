@@ -287,17 +287,16 @@ export function encodePatchBpmSysex(bpm: number): Uint8Array | null {
 
 function prstDescriptor(model: DeviceModel, dump: Uint8Array): Uint8Array {
   const descriptor = Uint8Array.from(model === "gp50" ? GP50_DESCRIPTOR : GP5_DESCRIPTOR);
-  const layout = prstLayout(model);
-  const volume = packedWord(dump, layout.volAt);
-  const bpm = packedWord(dump, layout.bpmAt);
-  if (volume !== null && volume >= 0 && volume <= PATCH_VOL_MAX) {
+  const volume = readDumpPatchVolume(model, dump);
+  const bpm = readDumpPatchBpm(model, dump);
+  if (volume !== null) {
     if (model === "gp50") {
       descriptor[GP50_DESC_VOL_AT] = volume;
     } else {
       writeU32Le(descriptor, GP5_DESC_VOL_AT, volume);
     }
   }
-  if (bpm !== null && bpm >= PATCH_BPM_MIN && bpm <= PATCH_BPM_MAX) {
+  if (bpm !== null) {
     writeU32Le(
       descriptor,
       model === "gp50" ? GP50_DESC_BPM_AT : GP5_DESC_BPM_AT,
@@ -400,10 +399,10 @@ export function decodePrstFile(bytes: Uint8Array): DecodedPrstFile | null {
   const bpmOk =
     bpm !== null && bpm >= PATCH_BPM_MIN && bpm <= PATCH_BPM_MAX ? bpm : null;
   if (volumeOk !== null) {
-    writePackedWord(dump, layout.volAt, volumeOk);
+    writeDumpPatchVolume(model, dump, volumeOk);
   }
   if (bpmOk !== null) {
-    writePackedWord(dump, layout.bpmAt, bpmOk);
+    writeDumpPatchBpm(model, dump, bpmOk);
   }
   return {
     model,
@@ -455,14 +454,21 @@ export function readDumpPatchVolume(model: DeviceModel, dump: Uint8Array): numbe
 
 /**
  * Patch BPM from the current-preset dump word `.prst` already uses.
- * The word is one byte, so only 40–255 can round-trip; anything else is null.
+ * Words 40–255 are BPM directly. Words 0–4 are the high tempo range
+ * (256–260), matching CC 73/74 LSB when MSB is 2. Other values are null.
  */
 export function readDumpPatchBpm(model: DeviceModel, dump: Uint8Array): number | null {
   const word = packedWord(dump, prstLayout(model).bpmAt);
-  if (word === null || word < PATCH_BPM_MIN || word > 255) {
+  if (word === null) {
     return null;
   }
-  return word;
+  if (word >= PATCH_BPM_MIN && word <= 255) {
+    return word;
+  }
+  if (word >= 0 && word <= 4) {
+    return 256 + word;
+  }
+  return null;
 }
 
 /** Write patch volume into the dump word slot. No-op outside 0–100 or if the dump is short. */
@@ -482,18 +488,18 @@ export function writeDumpPatchVolume(
 }
 
 /**
- * Write patch BPM into the dump word slot. The slot is one byte, so 256–260
- * (legal on CC 73/74) are left unchanged. No-op outside 40–255 or if the dump is short.
+ * Write patch BPM into the dump word slot. 40–255 store as-is; 256–260 store
+ * as BPM − 256 (the CC 74 LSB). No-op outside 40–260 or if the dump is short.
  */
 export function writeDumpPatchBpm(model: DeviceModel, dump: Uint8Array, bpm: number): void {
-  if (!Number.isInteger(bpm) || bpm < PATCH_BPM_MIN || bpm > 255) {
+  if (!Number.isInteger(bpm) || bpm < PATCH_BPM_MIN || bpm > PATCH_BPM_MAX) {
     return;
   }
   const at = prstLayout(model).bpmAt;
   if (dump.length < at + 2) {
     return;
   }
-  writePackedWord(dump, at, bpm);
+  writePackedWord(dump, at, bpm > 255 ? bpm - 256 : bpm);
 }
 
 function tobDumpFromCapture(model: DeviceModel, capture: Uint8Array): Uint8Array {
@@ -509,10 +515,12 @@ function tobDumpFromCapture(model: DeviceModel, capture: Uint8Array): Uint8Array
       : capture[35 + GP5_DESC_VOL_AT];
   const bpm =
     model === "gp50"
-      ? capture[35 + GP50_DESC_BPM_AT]
-      : capture[35 + GP5_DESC_BPM_AT];
-  writePackedWord(dump, layout.volAt, volume);
-  writePackedWord(dump, layout.bpmAt, bpm);
+      ? readU32Le(capture, 35 + GP50_DESC_BPM_AT)
+      : readU32Le(capture, 35 + GP5_DESC_BPM_AT);
+  writeDumpPatchVolume(model, dump, volume);
+  if (bpm !== null) {
+    writeDumpPatchBpm(model, dump, bpm);
+  }
   return dump;
 }
 
@@ -639,11 +647,16 @@ function assertPatchStoreFixtures(): void {
   }
   if (
     packedWord(decodedGp50.dump, GP50_DUMP_VOL_AT) !== decodedGp50.volume ||
-    packedWord(decodedGp50.dump, GP50_DUMP_BPM_AT) !== decodedGp50.bpm ||
+    readDumpPatchBpm("gp50", decodedGp50.dump) !== decodedGp50.bpm ||
     packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT) !== decodedGp5.volume ||
-    packedWord(decodedGp5.dump, GP50_DUMP_BPM_AT - GP5_DUMP_SHIFT) !== decodedGp5.bpm
+    readDumpPatchBpm("gp5", decodedGp5.dump) !== decodedGp5.bpm
   ) {
     throw new Error("TOB decode must copy descriptor volume/BPM into dump word slots");
+  }
+  const highBpmDump = new Uint8Array(decodedGp50.dump);
+  writeDumpPatchBpm("gp50", highBpmDump, 260);
+  if (readDumpPatchBpm("gp50", highBpmDump) !== 260 || packedWord(highBpmDump, GP50_DUMP_BPM_AT) !== 4) {
+    throw new Error("Dump BPM 256–260 must store as LSB and read back full tempo");
   }
   if (decodePrstFile(gp50Capture)?.model === "gp5") {
     throw new Error("A GP-50 capture must not decode as GP-5");
