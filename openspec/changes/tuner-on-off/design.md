@@ -34,6 +34,10 @@ While connected, the snapshot carries `tunerOn` (default `false` on connect). To
 
 Tuner is a device mode, not a patch field. `setTuner` must not call the working-patch modified path, must not request a chain dump, and must not set `chainSync` to syncing.
 
+### Patch change forces tuner off
+
+App `setPatch` and pedal current-patch changes (including retarget while a load is in flight) clear `tunerOn` and send CC 58 = 0 when it was on. App recall sends that off before the patch CC. Navigating with the tuner open is unstable on the pedal.
+
 ### Controller control beside stomp presses
 
 A feature sibling under `src/features/controller/` (or an addition next to `StompPressRow`). English label `Tuner`, `aria-pressed` from `tunerOn`, disabled while `chainSync` is syncing, hidden when disconnected. Same control on USB and Bluetooth. No pitch meter.

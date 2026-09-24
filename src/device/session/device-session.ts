@@ -386,8 +386,19 @@ export class DeviceSession {
     this.pendingPatchSource = "app";
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
-    this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
+    const turnTunerOff = this.snapshot.tunerOn;
+    this.snapshot = {
+      ...this.snapshot,
+      patch: next,
+      chainSync,
+      modified: false,
+      tunerOn: false,
+    };
     this.emitSnapshot();
+    // Tuner off before recall: navigating with tuner on is unstable on the pedal.
+    if (turnTunerOff) {
+      await this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+    }
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
     this.refreshChain(true, true);
@@ -1162,14 +1173,19 @@ export class DeviceSession {
         return;
       }
       const changed = next !== this.snapshot.patch;
+      const turnTunerOff = changed && this.snapshot.tunerOn;
       this.snapshot = {
         ...this.snapshot,
         patch: next,
         modified: changed ? false : this.snapshot.modified,
+        tunerOn: turnTunerOff ? false : this.snapshot.tunerOn,
       };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
       if (changed) {
+        if (turnTunerOff && capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+          void this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+        }
         this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
         this.pendingPatchSource = "pedal";
@@ -1208,13 +1224,18 @@ export class DeviceSession {
     this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
     this.pendingPatchSource = "pedal";
+    const turnTunerOff = this.snapshot.tunerOn;
     this.snapshot = {
       ...this.snapshot,
       patch: next,
       chainSync: "syncing",
       modified: false,
+      tunerOn: false,
     };
     this.emitSnapshot();
+    if (turnTunerOff && capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      void this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+    }
     this.releaseWaiters(this.patchWaiters);
     this.refreshChain(true, true);
   }

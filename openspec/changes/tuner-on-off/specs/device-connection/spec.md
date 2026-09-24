@@ -6,6 +6,8 @@ After a USB or Bluetooth session is ready and the current chain is shown, toggli
 
 The session MUST NOT apply inbound CC 58 to the snapshot. The session MUST NOT mark the working patch modified solely because of a tuner write. The session MUST NOT send patch recall or a chain-dump request solely because of a tuner write. Module on/off, order, models, controls, stomp assignment, patch index, patch volume, and patch BPM MUST NOT change solely because of a tuner write. While the chain is syncing, or while no session is connected, a tuner toggle MUST NOT send.
 
+When the selected patch changes — whether the user recalled a patch or the pedal reported a different current patch — and the session had the tuner on, the session MUST turn the tuner off (CC 58 value 0) and MUST show the tuner off. That turn-off MUST happen before an app-initiated patch recall is sent.
+
 #### Scenario: Turning the tuner on sends CC 58 value 127
 
 - **WHEN** a ready session has the tuner off and the user turns the tuner on
@@ -18,6 +20,19 @@ The session MUST NOT apply inbound CC 58 to the snapshot. The session MUST NOT m
 #### Scenario: Turning the tuner off sends CC 58 value 0
 
 - **WHEN** a ready session has the tuner on and the user turns the tuner off
+- **THEN** the session sends CC 58 with value 0
+- **AND** the snapshot shows the tuner off
+
+#### Scenario: App patch change turns the tuner off
+
+- **WHEN** a ready session has the tuner on and the user selects another patch
+- **THEN** the session sends CC 58 with value 0
+- **AND** the snapshot shows the tuner off
+- **AND** that CC 58 off is sent before the patch recall for the new slot
+
+#### Scenario: Pedal patch change turns the tuner off
+
+- **WHEN** a ready session has the tuner on and the pedal reports a different current patch
 - **THEN** the session sends CC 58 with value 0
 - **AND** the snapshot shows the tuner off
 

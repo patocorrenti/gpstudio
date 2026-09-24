@@ -39,7 +39,7 @@ context: |
   CC 70, value 127; assigned module on/off updates on-change; no module
   CC 48–57, no 114d, no patch recall, and no chain dump for that press), and
   tuner on/off (CC 58, 127 on / 0 off; last app write only; inbound CC 58
-  ignored; no pitch UI)
+  ignored; no pitch UI; patch change turns it off when it was on)
   are in scope on USB and Bluetooth. USB must not apply unsolicited live
   assignment reports or live stomp reports. Library SysEx (browse / import / reorder),
   IR/NAM file upload, and the Editor route come in later phases.
