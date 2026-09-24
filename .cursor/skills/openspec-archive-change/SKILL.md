@@ -1,12 +1,12 @@
 ---
 name: openspec-archive-change
 description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
-allowed-tools: Bash(openspec:*)
+allowed-tools: Bash(openspec:*), Bash(git *), Bash(mkdir:*), Bash(mv:*)
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: openspec
-  version: "1.0"
+  version: "1.1"
   generatedBy: "1.13.0"
 ---
 
@@ -144,13 +144,48 @@ Archive a completed change in the experimental workflow.
    mv "<changeRoot>" "<planningHome.changesDir>/archive/<target-name>"
    ```
 
-6. **Display summary**
+6. **Commit and push**
+
+   After the archive move (and any synced main specs) succeed, create a git commit and push it. This step is part of archive — do not ask whether to commit.
+
+   Use the change name from step 1 (e.g. `tuner-on-off`), not the dated archive folder name.
+
+   Commit message (verbatim, with the change name substituted for `xxx`):
+
+   ```text
+   doc: archive change xxx
+   ```
+
+   Example: change `tuner-on-off` → `doc: archive change tuner-on-off`.
+
+   Steps:
+   1. Confirm the working tree is a git repo (`git rev-parse --is-inside-work-tree`). If not, skip commit/push, note that in the summary, and continue to step 7.
+   2. Run `git status` / `git diff` / `git log -5 --oneline` in parallel (same safety checks as a normal commit).
+   3. Stage the archive move, synced main specs, and any other files that belong to this archive (implementation and docs for that change still uncommitted). Do not stage secrets (`.env`, credentials). Do not use destructive git commands.
+   4. Commit with a HEREDOC so the message is exact:
+
+      ```bash
+      git commit -m "$(cat <<'EOF'
+      doc: archive change <name>
+
+      EOF
+      )"
+      ```
+
+      Replace `<name>` with the change name. Do not add a body unless needed for a hook; keep the subject exactly `doc: archive change <name>`.
+   5. If the commit succeeds, push the current branch to its remote (`git push`). Request network permissions if needed. Do **not** force-push. If there is no upstream, set it with `git push -u origin HEAD` only when that is the normal tracking setup for this repo.
+   6. If commit or push fails, report the error and stop; the archive directory move already happened — do not silently leave that uncommitted without saying so.
+
+   When archiving several changes in one user request, run this commit+push once per change (one commit per change name), after each archive move.
+
+7. **Display summary**
 
    Show archive completion summary including:
    - Change name
    - Schema that was used
    - Archive location
    - Whether specs were synced (if applicable)
+   - Commit subject and whether push succeeded (or that git was skipped)
    - Note about any warnings (incomplete artifacts/tasks)
 
 **Output On Success**
@@ -162,6 +197,7 @@ Archive a completed change in the experimental workflow.
 **Schema:** <schema-name>
 **Archived to:** the archive path derived from `planningHome.changesDir`/<target-name>/
 **Specs:** <"✓ Synced to main specs" only if the step 4 verification passed; otherwise "No delta specs" or "Sync skipped">
+**Git:** committed `doc: archive change <change-name>` and pushed
 
 <"All artifacts complete. All tasks complete." — or, if archived with warnings, list them instead (e.g. "Archived with 2 incomplete tasks")>
 ```
@@ -172,6 +208,8 @@ Archive a completed change in the experimental workflow.
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened
+- After a successful archive move, always commit with `doc: archive change <name>` and push (unless the tree is not a git repo)
+- Never force-push; never skip hooks unless the user explicitly asks
 - If sync is requested, run the `openspec-sync-specs` workflow inline (agent-driven)
 - Never archive while a spec sync is still in flight — run the sync inline and verify the main specs before moving `changeRoot`
 - If delta specs exist, always run the sync assessment and show the combined summary before prompting
