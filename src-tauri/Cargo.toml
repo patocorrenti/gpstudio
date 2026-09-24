@@ -2,8 +2,8 @@
 name = "app"
 version = "0.3.1"
 description = "Patone GP Studio — editor and controller for Valeton GP-5 and GP-50"
-authors = []
-license = ""
+authors = ["Patricio Correnti"]
+license = "MIT"
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
