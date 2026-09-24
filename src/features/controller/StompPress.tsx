@@ -27,7 +27,7 @@ export function StompPressRow({
     <div
       role="group"
       aria-label="Stomp"
-      className="mb-3 flex items-center justify-center gap-2"
+      className="flex items-center justify-center gap-2"
     >
       {presses.map((press) => (
         <Button

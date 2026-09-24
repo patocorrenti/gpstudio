@@ -114,6 +114,7 @@ import {
   encodeSlotModel,
   encodeStompAssignment,
   encodeStompPress,
+  encodeTuner,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
@@ -149,6 +150,8 @@ export type SessionSnapshot =
       patchVolume: number | null;
       patchBpm: number | null;
       canExportPatch: boolean;
+      /** Last app-written tuner on/off. Inbound CC 58 is ignored. */
+      tunerOn: boolean;
       modified: boolean;
       sync: SessionSync;
       linkMode: LinkMode;
@@ -311,6 +314,7 @@ export class DeviceSession {
         patchVolume: null,
         patchBpm: null,
         canExportPatch: false,
+        tunerOn: false,
         modified: false,
         sync: "syncing",
         linkMode: "bluetooth",
@@ -331,6 +335,7 @@ export class DeviceSession {
         patchVolume: null,
         patchBpm: null,
         canExportPatch: false,
+        tunerOn: false,
         modified: false,
         sync: "syncing",
         linkMode: "usb",
@@ -597,6 +602,24 @@ export class DeviceSession {
     );
     this.setChain(chain);
     await this.sendBytes(packet);
+  }
+
+  async setTuner(on: boolean): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Tuner control is not available on this link.");
+    }
+    if (this.snapshot.tunerOn === on) {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, tunerOn: on };
+    this.emitSnapshot();
+    await this.sendBytes(encodeTuner(this.snapshot.linkMode, on));
   }
 
   async reorderChain(fromIndex: number, toIndex: number): Promise<void> {

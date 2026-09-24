@@ -3,6 +3,8 @@ import {
   gp50Cc,
   gp5Cc,
   MODULE_CC,
+  MODULE_CC_OFF,
+  MODULE_CC_ON,
 } from "@/device/cc";
 import type { AudioChain, ChainSlotId, EffectId } from "@/device/chain";
 import {
@@ -91,6 +93,14 @@ function stompPressController(model: DeviceModel, stompIndex: number): number | 
     return gp50Cc.ctrl2;
   }
   return null;
+}
+
+/** Official tuner on/off CC 58. Writes use 0 / 127 like module switches. */
+export function encodeTuner(linkMode: LinkMode, on: boolean): Uint8Array {
+  return encodeLinkMidi(
+    linkMode,
+    midiCc(gp5Cc.tuner, on ? MODULE_CC_ON : MODULE_CC_OFF),
+  );
 }
 
 export function encodeModule(
@@ -510,3 +520,27 @@ function assertStompPress(): void {
 
 assertUsbBluetoothWrapOnly();
 assertStompPress();
+assertTuner();
+
+function assertTuner(): void {
+  const usbOn = encodeTuner("usb", true);
+  const bleOn = encodeTuner("bluetooth", true);
+  const usbOff = encodeTuner("usb", false);
+  const bleOff = encodeTuner("bluetooth", false);
+  const bleOnMidi = unwrapBlePacket(bleOn);
+  const bleOffMidi = unwrapBlePacket(bleOff);
+  if (
+    usbOn.length !== 3 ||
+    usbOn[0] !== 0xb0 ||
+    usbOn[1] !== 0x3a ||
+    usbOn[2] !== 0x7f ||
+    usbOff[1] !== 0x3a ||
+    usbOff[2] !== 0x00 ||
+    !bleOnMidi ||
+    !bleOffMidi ||
+    !sameBytes(usbOn, bleOnMidi) ||
+    !sameBytes(usbOff, bleOffMidi)
+  ) {
+    throw new Error("Tuner must be CC 58 (0x3a) with 0x7F on and 0x00 off");
+  }
+}
