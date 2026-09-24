@@ -2,7 +2,9 @@ import type { BluetoothLink } from "@/bluetooth/types";
 import { decodePresetDump } from "@/device/chain-codec";
 import {
   encodeChainOrder,
+  encodeIdentity,
   encodeIrNames,
+  encodeChainRequest,
   encodePatch,
   encodePatchStore,
   encodeSlotModel,
@@ -391,5 +393,279 @@ async function assertUserIrSession(): Promise<void> {
 }
 
 void assertUserIrSession();
+
+function writeIdentityNibble(bytes: Uint8Array, index: number, value: number): void {
+  bytes[index] = (value >> 4) & 0x0f;
+  bytes[index + 1] = value & 0x0f;
+}
+
+function currentPatchAt(patch: number): Uint8Array {
+  const midi = currentPatchZero();
+  writeIdentityNibble(midi, 13, patch);
+  return midi;
+}
+
+function patchChangedNotify(): Uint8Array {
+  const midi = new Uint8Array(22);
+  midi[0] = 0xf0;
+  midi[3] = 0;
+  midi[4] = 1;
+  midi[9] = 1;
+  midi[10] = 2;
+  midi[11] = 1;
+  midi[12] = 11;
+  midi[21] = 0xf7;
+  return midi;
+}
+
+function chainRequestCount(sent: Uint8Array[]): number {
+  const request = encodeChainRequest("bluetooth");
+  return sent.filter((packet) => packetsEqual(packet, request)).length;
+}
+
+async function connectBluetoothReady(
+  session: DeviceSession,
+  bluetooth: ReturnType<typeof scriptedBluetooth>,
+  patch: number,
+): Promise<void> {
+  await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+  await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
+  await tick();
+  bluetooth.push(bluetoothNameList());
+  await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
+  await tick();
+  bluetooth.push(currentPatchAt(patch));
+  await untilReady("Identity sync did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+    bluetooth.push(packet);
+  }
+  await untilReady("Connect dump did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+}
+
+async function assertRapidPedalPatchRetarget(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 10);
+    const chainsBefore = chainRequestCount(bluetooth.sent);
+    bluetooth.push(patchChangedNotify());
+    await untilReady("Pedal patch-changed did not ask current-patch", () => {
+      const identity = encodeIdentity("bluetooth", "current-patch");
+      return bluetooth.sent.some((packet) => packetsEqual(packet, identity));
+    });
+    await tick();
+    bluetooth.push(currentPatchAt(11));
+    bluetooth.push(currentPatchAt(12));
+    bluetooth.push(currentPatchAt(13));
+    await untilReady("Rapid pedal reports did not land on 13", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.patch === 13;
+    });
+    const chainsAfterReports = chainRequestCount(bluetooth.sent);
+    if (chainsAfterReports <= chainsBefore) {
+      throw new Error("Retarget must request a chain dump for the latest slot");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x04, 0x00, 0x00, 0x0a]), 40)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("First dump after retarget did not apply", () => {
+      const snapshot = session.getSnapshot();
+      return (
+        snapshot.status === "connected" &&
+        snapshot.patch === 13 &&
+        snapshot.chain.some((slot) => slot.id === "cab" && slot.modelId === "cab-dark-vit-1x12")
+      );
+    });
+    const mid = session.getSnapshot();
+    if (mid.status !== "connected" || mid.chainSync !== "syncing") {
+      throw new Error("Patch change must stay syncing until confirmation on Bluetooth");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x04, 0x00, 0x00, 0x0a]), 40)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("Confirmation did not clear syncing", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    const done = session.getSnapshot();
+    if (done.status !== "connected" || done.patch !== 13) {
+      throw new Error("Rapid pedal patch burst must leave the snapshot on patch 13");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertRapidPedalPatchRetarget().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertAppRecallKeepsPendingSlot(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 10);
+    await session.setPatch(42);
+    const afterSelect = session.getSnapshot();
+    if (afterSelect.status !== "connected" || afterSelect.patch !== 42) {
+      throw new Error("setPatch must select patch 42");
+    }
+    bluetooth.push(currentPatchAt(17));
+    await tick();
+    const afterStale = session.getSnapshot();
+    if (afterStale.status !== "connected" || afterStale.patch !== 42) {
+      throw new Error("App recall must ignore a stale current-patch for another slot");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertAppRecallKeepsPendingSlot().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+function scriptedUsb(): {
+  sent: Uint8Array[];
+  push: (bytes: Uint8Array) => void;
+  transport: MidiTransport;
+} {
+  const sent: Uint8Array[] = [];
+  let handler: ((bytes: Uint8Array) => void) | null = null;
+  let open = false;
+  return {
+    sent,
+    push(bytes) {
+      handler?.(bytes);
+    },
+    transport: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes) => {
+        sent.push(Uint8Array.from(bytes));
+      },
+      subscribe: (next) => {
+        handler = next;
+        return () => {
+          if (handler === next) {
+            handler = null;
+          }
+        };
+      },
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      close: async () => {
+        open = false;
+      },
+      sysexEnabled: () => true,
+    },
+  };
+}
+
+function usbNameList(): Uint8Array {
+  const payload = new Uint8Array(4000);
+  const midi = new Uint8Array(10 + payload.length);
+  midi[0] = 0xf0;
+  midi[3] = 6;
+  midi[4] = 10;
+  midi.set(payload, 9);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
+async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
+  const usb = scriptedUsb();
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  try {
+    await session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+    await untilReady("USB identity did not request names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await untilReady("USB identity did not request current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(5));
+    await untilReady("USB session did not become ready", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      usb.push(packet);
+    }
+    await untilReady("USB connect dump did not go idle", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    await session.setPatch(6);
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
+      usb.push(packet);
+    }
+    const afterFirst = session.getSnapshot();
+    if (afterFirst.status !== "connected" || afterFirst.chainSync !== "syncing") {
+      throw new Error("USB patch change must stay syncing after the first dump until confirmation");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
+      usb.push(packet);
+    }
+    await untilReady("USB confirmation did not clear syncing", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertUsbPatchConfirmHoldsSyncing().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertDownloadLeavesConfirmOff(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 3);
+    const before = chainRequestCount(bluetooth.sent);
+    const downloadPromise = session.downloadCurrentPatch();
+    await untilReady("Download did not request a chain dump", () => chainRequestCount(bluetooth.sent) === before + 1);
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      bluetooth.push(packet);
+    }
+    const file = await downloadPromise;
+    if (!file) {
+      throw new Error("Download must return a .prst when a dump is held");
+    }
+    await untilReady("Download refresh did not settle", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    // Download refreshes once (confirm off). A second quiet confirmation would
+    // request another dump after the download dump applies.
+    const after = chainRequestCount(bluetooth.sent);
+    if (after !== before + 1) {
+      throw new Error("Download must request one chain dump without arming confirmation");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertDownloadLeavesConfirmOff().catch((error) => {
+  console.error(error);
+  throw error;
+});
 
 

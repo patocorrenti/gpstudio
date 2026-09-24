@@ -179,6 +179,11 @@ export class DeviceSession {
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
+  /**
+   * Who owns {@link pendingPatchLoad}. App recall discards other indices; pedal
+   * loads retarget when a newer current-patch arrives.
+   */
+  private pendingPatchSource: "app" | "pedal" | null = null;
   /** Last loaded or stored working patch (chain, stomps, volume, GP-50 BPM) for the selected slot. */
   private baseline: WorkingBaseline | null = null;
   /**
@@ -191,7 +196,8 @@ export class DeviceSession {
   /**
    * Quiet second current-preset request after a user or pedal patch change.
    * Connect, Reload, download, and upload leave this off. A match is discarded;
-   * a mismatch is applied once and does not arm another request.
+   * a mismatch is applied once and does not arm another request. USB and
+   * Bluetooth keep chainSync syncing until that confirmation finishes.
    */
   private patchConfirm: "off" | "after-apply" | "in-flight" = "off";
   /**
@@ -371,6 +377,7 @@ export class DeviceSession {
     }
     this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
+    this.pendingPatchSource = "app";
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
     this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
@@ -1095,7 +1102,11 @@ export class DeviceSession {
     if (event.type === "current-patch") {
       const next = clampPatch(event.patch);
       if (this.pendingPatchLoad !== null && next !== this.pendingPatchLoad) {
-        this.releaseWaiters(this.patchWaiters);
+        if (this.pendingPatchSource === "app") {
+          this.releaseWaiters(this.patchWaiters);
+          return;
+        }
+        this.retargetPedalPatch(next);
         return;
       }
       const changed = next !== this.snapshot.patch;
@@ -1109,6 +1120,7 @@ export class DeviceSession {
       if (changed) {
         this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
+        this.pendingPatchSource = "pedal";
         this.refreshChain(true, true);
       }
       return;
@@ -1133,6 +1145,28 @@ export class DeviceSession {
     void this.sendChainRequest(this.syncGeneration);
   }
 
+  /**
+   * Pedal stepped again before the previous load finished. Follow the latest
+   * index, drop in-progress dump fragments, and request one dump for that slot.
+   */
+  private retargetPedalPatch(next: number): void {
+    if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
+      return;
+    }
+    this.dropWorkingBaseline();
+    this.pendingPatchLoad = next;
+    this.pendingPatchSource = "pedal";
+    this.snapshot = {
+      ...this.snapshot,
+      patch: next,
+      chainSync: "syncing",
+      modified: false,
+    };
+    this.emitSnapshot();
+    this.releaseWaiters(this.patchWaiters);
+    this.refreshChain(true, true);
+  }
+
   private applyIrNames(names: (string | null)[] | null): void {
     if (!names || this.snapshot.status !== "connected") {
       return;
@@ -1151,12 +1185,12 @@ export class DeviceSession {
     }
     const chain = preserveExpEnabled(this.snapshot.chain, result.chain);
     const armConfirmation = this.patchConfirm === "after-apply";
-    // Bluetooth often gets a stale first dump; keep the busy overlay until confirm.
-    const holdBusyForConfirm =
-      armConfirmation && this.snapshot.linkMode === "bluetooth";
+    // First dump after a patch change can be stale; keep busy until confirm on both links.
+    const holdBusyForConfirm = armConfirmation;
     const patch = this.snapshot.patch;
     const generation = this.syncGeneration;
     this.pendingPatchLoad = null;
+    this.pendingPatchSource = null;
     if (!holdBusyForConfirm) {
       this.clearChainRefreshTimer();
     }
@@ -1226,7 +1260,7 @@ export class DeviceSession {
 
   /**
    * One current-preset request after a patch-change dump.
-   * USB: no overlay. Bluetooth: overlay stays until the confirmation dump arrives.
+   * Overlay stays until the confirmation dump arrives (USB and Bluetooth).
    */
   private requestPatchConfirmation(): void {
     if (this.snapshot.status !== "connected") {
@@ -1432,6 +1466,7 @@ export class DeviceSession {
   private beginGeneration(): void {
     this.syncGeneration += 1;
     this.pendingPatchLoad = null;
+    this.pendingPatchSource = null;
     this.patchConfirm = "off";
     this.postChainDeviceAsks = false;
     this.dropWorkingBaseline();
