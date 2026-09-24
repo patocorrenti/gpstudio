@@ -33,8 +33,11 @@ context: |
   Save / rename / duplicate remain store 114a;
   GP-50 file → GP-50 session, GP-5 file → GP-5 session; not Library import, not conversion),
   Bluetooth live model (command 07) and live control (command 08) follow,
-  and Controller drag-and-drop of movable modules are
-  in scope on USB and Bluetooth. Library SysEx (browse / import / reorder),
+  Controller drag-and-drop of movable modules, and per-patch stomp
+  assignment (dump decode + SET family 114d; GP-5 one stomp, GP-50 two;
+  EXP never assignable) are
+  in scope on USB and Bluetooth. USB must not apply unsolicited live
+  assignment reports. Library SysEx (browse / import / reorder),
   IR/NAM file upload, and the Editor route come in later phases.
 
   Tech stack:
@@ -213,10 +216,10 @@ context: |
     GP-5 screen brightness and footswitch modes 0-99 / 0-9 / A-Z / CTL / Tuner
     are in scope
   - Applying USB inbound live-module, Stomp footswitch, live chain-order,
-    or live global reports (USB is not duplex for those controls)
-  - Stomp assignment edit (which modules each footswitch toggles). Paused
-    lab: openspec/changes/stomp-assignment/ (GP-50 dump decode locked; SET
-    not accepted). Do not treat that as in-scope product until a write works.
+    live assignment notify (command 0D), or live global reports (USB is not
+    duplex for those controls). Stomp assignment read/write is in scope
+    (dump + SET 114d); failed envelopes stay in
+    openspec/changes/archive/2026-09-23-stomp-assignment/ (do not retry W1–W3 / H7).
   Do not paste JavaScript from reference/ or other third-party editors into src/.
   Agents MUST read reference/ when encoding or decoding Valeton SysEx.
 
@@ -307,7 +310,8 @@ rules:
       live model/control (commands 07 / 08), and live global reports
       (including CC 1 / CC 28 on GP-50, and the GP-5 live map) are in scope;
       USB must not apply those reports;
-      chain-order SET writes, slot model/control SETs, global 1111 SETs,
+      chain-order SET writes, slot model/control SETs, stomp-assignment SETs
+      (114d), global 1111 SETs,
       GP-5 footswitch 1115 SETs,
       GP-50 master volume (CC 1) and Patch|Stomp (CC 28), current-patch store
       SETs (114a), current-patch file export, current-patch .prst load into
@@ -315,7 +319,8 @@ rules:
       in scope; read reference/ for SysEx (do not paste it into src/); do not
       apply liveFromPedal volume/BPM CC or tuner to the snapshot while the
       patch stays the same; Bluetooth live patch-volume SysEx is applied;
-      patch-bar volume is CC 7 and GP-50 tempo is CC 73/74; family 1142 stays
+      USB must not apply live assignment notify 0D; patch-bar volume is CC 7
+      and GP-50 tempo is CC 73/74; family 1142 stays
       the upload path; Library import/reorder of .prst stay later
       (current-patch .prst export of the connected model and load into the
       working patch are in scope; no GP-5/GP-50 conversion)

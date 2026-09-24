@@ -6,6 +6,7 @@ export type { InboundMidiEvent } from "@/device/midi-log";
 export type { LinkEndpoint } from "@/device/endpoint";
 export { formatPatch, formatPatchOption, PATCH_COUNT } from "@/device/identity";
 export {
+  EFFECT_IDS,
   chainSlotBypassed,
   chainSlotLabel,
   defaultChain,
@@ -16,6 +17,7 @@ export {
   type ChainSlotId,
   type EffectId,
 } from "@/device/chain";
+export { emptyStomps, type StompAssignment } from "@/device/chain-codec";
 export {
   DeviceSession,
   type ChainSync,

@@ -47,9 +47,7 @@ export function AboutPage() {
       <div className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">What's next</h2>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
-          <li>
-            Stomp control and global pedal settings, so the beta can wrap up
-          </li>
+          <li>Transparent compatibility between GP-5 and GP-50 .prst files</li>
           <li>Desktop builds for Windows, Mac, and Linux</li>
           <li>Publish the project as open source</li>
           <li>
@@ -60,6 +58,12 @@ export function AboutPage() {
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Changelog</h2>
+        <h3 className="text-sm font-medium text-muted-foreground">
+          <span className="text-foreground font-mono">Version 0.3.0</span>
+        </h3>
+        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+          <li>Stomp control for GP-5 and Footswitch A-B for GP-50</li>
+        </ul>
         <h3 className="text-sm font-medium text-muted-foreground">
           <span className="text-foreground font-mono">Version 0.2.2</span>
         </h3>

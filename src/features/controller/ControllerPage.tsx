@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import type { DeviceModel } from "@/device/models";
-import type { AudioChain } from "@/device/session";
+import type { AudioChain, StompAssignment } from "@/device/session";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { AudioChainRow } from "@/features/controller/AudioChain";
@@ -10,10 +10,12 @@ import { SlotControlPanels } from "@/features/controller/SlotControls";
 
 function PatchBody({
   chain,
+  stomps,
   pedal,
   busy,
 }: {
   chain: AudioChain;
+  stomps: StompAssignment;
   pedal: DeviceModel;
   busy: boolean;
 }) {
@@ -23,7 +25,12 @@ function PatchBody({
         <PatchBodySkeleton pedal={pedal} />
       ) : (
         <div className="flex w-full flex-col items-center">
-          <AudioChainRow chain={chain} disabled={busy} />
+          <AudioChainRow
+            chain={chain}
+            stomps={stomps}
+            pedal={pedal}
+            disabled={busy}
+          />
           <SlotControlPanels chain={chain} pedal={pedal} disabled={busy} />
         </div>
       )}
@@ -66,6 +73,7 @@ function ConnectedController() {
       />
       <PatchBody
         chain={snapshot.chain}
+        stomps={snapshot.stomps}
         pedal={snapshot.model}
         busy={snapshot.chainSync === "syncing"}
       />

@@ -14,15 +14,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Ban, Ellipsis } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import type { DeviceModel } from "@/device/models";
 import {
   chainSlotBypassed,
   chainSlotLabel,
   isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
+  type EffectId,
+  type StompAssignment,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
+import { SlotStompMark } from "@/features/controller/StompAssignment";
 import { cn } from "@/lib/utils";
 
 /** Cable through the icon: pt-1.5 + grip h-3 + gap-2 + half of size-14. */
@@ -38,12 +42,16 @@ function slotClassName(enabled: boolean): string {
 function AudioChainSlotView({
   slot,
   chain,
+  stomps,
+  pedal,
   disabled,
   isFirst,
   isLast,
 }: {
   slot: AudioChainSlot;
   chain: AudioChain;
+  stomps: StompAssignment;
+  pedal: DeviceModel;
   disabled: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -55,6 +63,7 @@ function AudioChainSlotView({
   const power = slot.enabled ? "on" : "off";
   const movable = isMovableEffect(slot.id);
   const sortable = movable && !disabled;
+  const stompTarget = slot.id !== "exp";
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
       id: slot.id,
@@ -73,6 +82,14 @@ function AudioChainSlotView({
       {...(sortable ? attributes : {})}
       {...(sortable ? listeners : {})}
     >
+      {stompTarget ? (
+        <SlotStompMark
+          effect={slot.id as EffectId}
+          stomps={stomps}
+          pedal={pedal}
+          disabled={disabled}
+        />
+      ) : null}
       <span
         className={cn(
           "relative z-10 flex h-3 w-full items-center justify-center",
@@ -152,9 +169,13 @@ function AudioChainSlotView({
 
 export function AudioChainRow({
   chain,
+  stomps,
+  pedal,
   disabled,
 }: {
   chain: AudioChain;
+  stomps: StompAssignment;
+  pedal: DeviceModel;
   disabled: boolean;
 }) {
   const session = useDeviceSession();
@@ -192,6 +213,8 @@ export function AudioChainRow({
               <AudioChainSlotView
                 slot={slot}
                 chain={chain}
+                stomps={stomps}
+                pedal={pedal}
                 disabled={disabled}
                 isFirst={index === 0}
                 isLast={index === chain.length - 1}

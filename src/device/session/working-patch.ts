@@ -1,9 +1,11 @@
-import type { AudioChain } from "@/device/chain";
+import type { AudioChain, EffectId } from "@/device/chain";
+import type { StompAssignment } from "@/device/chain-codec";
 import { PATCH_COUNT } from "@/device/identity";
 import type { DeviceModel } from "@/device/models";
 
 export type WorkingBaseline = {
   chain: AudioChain;
+  stomps: StompAssignment;
   patchVolume: number | null;
   patchBpm: number | null;
 };
@@ -66,14 +68,53 @@ export function cloneChain(chain: AudioChain): AudioChain {
   }));
 }
 
+export function cloneStomps(stomps: StompAssignment): StompAssignment {
+  return stomps.map((list) => list.slice());
+}
+
+/** Same effects per foot; order inside a foot does not matter. */
+export function stompsEqual(left: StompAssignment, right: StompAssignment): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (!stompFootEqual(left[index], right[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function stompFootEqual(left: readonly EffectId[], right: readonly EffectId[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const counts = new Map<EffectId, number>();
+  for (const id of left) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  for (const id of right) {
+    const next = (counts.get(id) ?? 0) - 1;
+    if (next < 0) {
+      return false;
+    }
+    counts.set(id, next);
+  }
+  return true;
+}
+
 export function patchDiffersFromBaseline(
   baseline: WorkingBaseline,
   chain: AudioChain,
+  stomps: StompAssignment,
   patchVolume: number | null,
   patchBpm: number | null,
   model: DeviceModel,
 ): boolean {
   if (!chainSlotsEqual(chain, baseline.chain)) {
+    return true;
+  }
+  if (!stompsEqual(stomps, baseline.stomps)) {
     return true;
   }
   if (patchVolume !== baseline.patchVolume) {
@@ -86,6 +127,7 @@ export function isWorkingModified(
   baseline: WorkingBaseline | null,
   chain: AudioChain,
   chainSync: "idle" | "syncing",
+  stomps: StompAssignment,
   patchVolume: number | null,
   patchBpm: number | null,
   model: DeviceModel,
@@ -93,5 +135,5 @@ export function isWorkingModified(
   if (chainSync === "syncing" || baseline === null) {
     return false;
   }
-  return patchDiffersFromBaseline(baseline, chain, patchVolume, patchBpm, model);
+  return patchDiffersFromBaseline(baseline, chain, stomps, patchVolume, patchBpm, model);
 }
