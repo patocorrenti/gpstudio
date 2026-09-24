@@ -17,4 +17,4 @@
 ## 5. Check
 
 - [x] 5.1 Run `npx tsc -b --pretty false` and fix type errors from this change. Do not add an in-browser pass.
-- [ ] 5.2 Operator, on a pedal: GP-5 press sends CC 69 and the assigned modules toggle; GP-50 A sends CC 69 and B sends CC 70. Check one USB session and one Bluetooth session (web or desktop; both backends send the same CC, Bluetooth only adds the BLE-MIDI wrap already asserted in 1.1). Confirm no chain-refresh overlay and no extra patch recall. If value 127 is ignored, change only that constant and note it here.
+- [x] 5.2 Operator, on a pedal: GP-5 press sends CC 69 and the assigned modules toggle; GP-50 A sends CC 69 and B sends CC 70. Check one USB session and one Bluetooth session (web or desktop; both backends send the same CC, Bluetooth only adds the BLE-MIDI wrap already asserted in 1.1). Confirm no chain-refresh overlay and no extra patch recall. If value 127 is ignored, change only that constant and note it here.
