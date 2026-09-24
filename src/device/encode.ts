@@ -3,6 +3,8 @@ import {
   gp50Cc,
   gp5Cc,
   MODULE_CC,
+  MODULE_CC_OFF,
+  MODULE_CC_ON,
 } from "@/device/cc";
 import type { AudioChain, ChainSlotId, EffectId } from "@/device/chain";
 import {
@@ -29,6 +31,7 @@ import {
   type RecMode,
 } from "@/device/globals";
 import type { LinkMode } from "@/device/link";
+import type { DeviceModel } from "@/device/models";
 
 function midiCc(controller: number, value: number): Uint8Array {
   return new Uint8Array([0xb0, controller, value]);
@@ -65,6 +68,39 @@ export function encodeLinkMidiPackets(linkMode: LinkMode, midi: Uint8Array): Uin
 
 export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
   return encodeLinkMidi(linkMode, midiCc(gp5Cc.patch, patch));
+}
+
+/** One stomp press: GP-5 and GP-50 A are CC 69; GP-50 B is CC 70. Value 127. */
+const STOMP_PRESS_VALUE = 127;
+
+export function encodeStompPress(
+  linkMode: LinkMode,
+  model: DeviceModel,
+  stompIndex: number,
+): Uint8Array | null {
+  const controller = stompPressController(model, stompIndex);
+  if (controller === null) {
+    return null;
+  }
+  return encodeLinkMidi(linkMode, midiCc(controller, STOMP_PRESS_VALUE));
+}
+
+function stompPressController(model: DeviceModel, stompIndex: number): number | null {
+  if (stompIndex === 0) {
+    return gp5Cc.ctl;
+  }
+  if (model === "gp50" && stompIndex === 1) {
+    return gp50Cc.ctrl2;
+  }
+  return null;
+}
+
+/** Official tuner on/off CC 58. Writes use 0 / 127 like module switches. */
+export function encodeTuner(linkMode: LinkMode, on: boolean): Uint8Array {
+  return encodeLinkMidi(
+    linkMode,
+    midiCc(gp5Cc.tuner, on ? MODULE_CC_ON : MODULE_CC_OFF),
+  );
 }
 
 export function encodeModule(
@@ -444,4 +480,67 @@ function assertUsbBluetoothWrapOnly(): void {
   }
 }
 
+function assertStompPress(): void {
+  const usbGp5 = encodeStompPress("usb", "gp5", 0);
+  const bleGp5 = encodeStompPress("bluetooth", "gp5", 0);
+  const usbA = encodeStompPress("usb", "gp50", 0);
+  const bleA = encodeStompPress("bluetooth", "gp50", 0);
+  const usbB = encodeStompPress("usb", "gp50", 1);
+  const bleB = encodeStompPress("bluetooth", "gp50", 1);
+  const bleGp5Midi = bleGp5 ? unwrapBlePacket(bleGp5) : null;
+  const bleAMidi = bleA ? unwrapBlePacket(bleA) : null;
+  const bleBMidi = bleB ? unwrapBlePacket(bleB) : null;
+  const moduleCc = usbGp5 !== null && usbGp5[1] >= 48 && usbGp5[1] <= 57;
+  if (
+    !usbGp5 ||
+    !usbA ||
+    !usbB ||
+    !bleGp5Midi ||
+    !bleAMidi ||
+    !bleBMidi ||
+    usbGp5.length !== 3 ||
+    usbGp5[0] !== 0xb0 ||
+    usbGp5[1] !== 0x45 ||
+    usbGp5[2] !== 0x7f ||
+    usbA[1] !== 0x45 ||
+    usbB[0] !== 0xb0 ||
+    usbB[1] !== 0x46 ||
+    usbB[2] !== 0x7f ||
+    moduleCc ||
+    !sameBytes(usbGp5, bleGp5Midi) ||
+    !sameBytes(usbA, bleAMidi) ||
+    !sameBytes(usbB, bleBMidi) ||
+    encodeStompPress("usb", "gp5", 1) !== null ||
+    encodeStompPress("usb", "gp50", 2) !== null ||
+    encodeStompPress("bluetooth", "gp5", 1) !== null
+  ) {
+    throw new Error("Stomp press must be CC 69 (0x45) or GP-50 CC 70 (0x46) at 0x7F, not CC 48-57");
+  }
+}
+
 assertUsbBluetoothWrapOnly();
+assertStompPress();
+assertTuner();
+
+function assertTuner(): void {
+  const usbOn = encodeTuner("usb", true);
+  const bleOn = encodeTuner("bluetooth", true);
+  const usbOff = encodeTuner("usb", false);
+  const bleOff = encodeTuner("bluetooth", false);
+  const bleOnMidi = unwrapBlePacket(bleOn);
+  const bleOffMidi = unwrapBlePacket(bleOff);
+  if (
+    usbOn.length !== 3 ||
+    usbOn[0] !== 0xb0 ||
+    usbOn[1] !== 0x3a ||
+    usbOn[2] !== 0x7f ||
+    usbOff[1] !== 0x3a ||
+    usbOff[2] !== 0x00 ||
+    !bleOnMidi ||
+    !bleOffMidi ||
+    !sameBytes(usbOn, bleOnMidi) ||
+    !sameBytes(usbOff, bleOffMidi)
+  ) {
+    throw new Error("Tuner must be CC 58 (0x3a) with 0x7F on and 0x00 off");
+  }
+}

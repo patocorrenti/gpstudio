@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
 import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
+import { PedalFootControls } from "@/features/connect/PedalFootControls";
 import MainMenu from "@/components/main-menu";
 
 export function AppShell() {
@@ -20,6 +21,7 @@ export function AppShell() {
         <div className="flex items-center gap-2">
           <ConnectionStatus />
           <GlobalSettingsControl />
+          <PedalFootControls />
         </div>
         <div className="flex items-center justify-end gap-3">
           <MainMenu />

@@ -113,6 +113,8 @@ import {
   encodePatchStore,
   encodeSlotModel,
   encodeStompAssignment,
+  encodeStompPress,
+  encodeTuner,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
@@ -148,6 +150,8 @@ export type SessionSnapshot =
       patchVolume: number | null;
       patchBpm: number | null;
       canExportPatch: boolean;
+      /** Last app-written tuner on/off. Inbound CC 58 is ignored. */
+      tunerOn: boolean;
       modified: boolean;
       sync: SessionSync;
       linkMode: LinkMode;
@@ -310,6 +314,7 @@ export class DeviceSession {
         patchVolume: null,
         patchBpm: null,
         canExportPatch: false,
+        tunerOn: false,
         modified: false,
         sync: "syncing",
         linkMode: "bluetooth",
@@ -330,6 +335,7 @@ export class DeviceSession {
         patchVolume: null,
         patchBpm: null,
         canExportPatch: false,
+        tunerOn: false,
         modified: false,
         sync: "syncing",
         linkMode: "usb",
@@ -380,8 +386,19 @@ export class DeviceSession {
     this.pendingPatchSource = "app";
     const chainSync =
       this.snapshot.sync === "ready" ? "syncing" : this.snapshot.chainSync;
-    this.snapshot = { ...this.snapshot, patch: next, chainSync, modified: false };
+    const turnTunerOff = this.snapshot.tunerOn;
+    this.snapshot = {
+      ...this.snapshot,
+      patch: next,
+      chainSync,
+      modified: false,
+      tunerOn: false,
+    };
     this.emitSnapshot();
+    // Tuner off before recall: navigating with tuner on is unstable on the pedal.
+    if (turnTunerOff) {
+      await this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+    }
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
     this.refreshChain(true, true);
@@ -568,6 +585,52 @@ export class DeviceSession {
     );
     this.setChain(chain);
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
+  }
+
+  async pressStomp(stompIndex: number): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Stomp press is not available on this link.");
+    }
+    const packet = encodeStompPress(
+      this.snapshot.linkMode,
+      this.snapshot.model,
+      stompIndex,
+    );
+    if (!packet) {
+      return;
+    }
+    const assigned = this.snapshot.stomps[stompIndex] ?? [];
+    const chain = this.snapshot.chain.map((slot) =>
+      slot.id !== "exp" && assigned.includes(slot.id)
+        ? { ...slot, enabled: !slot.enabled }
+        : slot,
+    );
+    this.setChain(chain);
+    await this.sendBytes(packet);
+  }
+
+  async setTuner(on: boolean): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Tuner control is not available on this link.");
+    }
+    if (this.snapshot.tunerOn === on) {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, tunerOn: on };
+    this.emitSnapshot();
+    await this.sendBytes(encodeTuner(this.snapshot.linkMode, on));
   }
 
   async reorderChain(fromIndex: number, toIndex: number): Promise<void> {
@@ -1110,14 +1173,19 @@ export class DeviceSession {
         return;
       }
       const changed = next !== this.snapshot.patch;
+      const turnTunerOff = changed && this.snapshot.tunerOn;
       this.snapshot = {
         ...this.snapshot,
         patch: next,
         modified: changed ? false : this.snapshot.modified,
+        tunerOn: turnTunerOff ? false : this.snapshot.tunerOn,
       };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
       if (changed) {
+        if (turnTunerOff && capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+          void this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+        }
         this.dropWorkingBaseline();
         this.pendingPatchLoad = next;
         this.pendingPatchSource = "pedal";
@@ -1156,13 +1224,18 @@ export class DeviceSession {
     this.dropWorkingBaseline();
     this.pendingPatchLoad = next;
     this.pendingPatchSource = "pedal";
+    const turnTunerOff = this.snapshot.tunerOn;
     this.snapshot = {
       ...this.snapshot,
       patch: next,
       chainSync: "syncing",
       modified: false,
+      tunerOn: false,
     };
     this.emitSnapshot();
+    if (turnTunerOff && capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      void this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
+    }
     this.releaseWaiters(this.patchWaiters);
     this.refreshChain(true, true);
   }
