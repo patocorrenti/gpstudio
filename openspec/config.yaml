@@ -219,7 +219,7 @@ context: |
     live assignment notify (command 0D), or live global reports (USB is not
     duplex for those controls). Stomp assignment read/write is in scope
     (dump + SET 114d); failed envelopes stay in
-    openspec/changes/stomp-assignment/ (do not retry W1–W3 / H7).
+    openspec/changes/archive/2026-09-23-stomp-assignment/ (do not retry W1–W3 / H7).
   Do not paste JavaScript from reference/ or other third-party editors into src/.
   Agents MUST read reference/ when encoding or decoding Valeton SysEx.
 

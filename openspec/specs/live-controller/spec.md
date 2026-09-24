@@ -848,3 +848,42 @@ GP-50 MUST be able to show: master volume (0 to 100), input level (−20 to +20 
 #### Scenario: A patch change keeps global values
 - **WHEN** Global settings is showing input level 6 and the user selects another patch
 - **THEN** input level still shows 6
+
+### Requirement: Controller shows and edits stomp assignment
+
+After the audio chain is shown, Controller MUST show the current patch's stomp assignment on each effect module through the device session. EXP MUST NOT have a stomp mark. GP-5 MUST expose one stomp: the mark toggles empty and filled. GP-50 MUST expose two stomps: the mark cycles empty, A, and B. Changing an assignment MUST go through the device session and MUST NOT send raw MIDI from React. The same assignment UI MUST be used on USB and Bluetooth. Controller MUST NOT show the chain-refresh busy overlay solely because the user edited a stomp assignment. Disconnecting MUST hide the assignment UI.
+
+#### Scenario: GP-5 shows one stomp
+- **WHEN** a GP-5 session is showing the audio chain after a dump that assigns PRE to the only stomp
+- **THEN** Controller shows a filled stomp mark on PRE
+- **AND** no second footswitch letter is shown on that mark
+
+#### Scenario: GP-50 shows two stomps
+- **WHEN** a GP-50 session is showing the audio chain after a dump that assigns PRE to stomp 1 and MOD plus DLY to stomp 2
+- **THEN** Controller shows an A mark on PRE
+- **AND** Controller shows a B mark on MOD and on DLY
+
+#### Scenario: User assigns a module to a stomp
+- **WHEN** a GP-50 session is showing DST without a stomp mark and the user assigns DST to stomp 1
+- **THEN** DST shows an A mark
+- **AND** that change is sent through the device session
+- **AND** the chain-refresh busy overlay is not shown solely because that assignment changed
+
+#### Scenario: User clears a module from a stomp
+- **WHEN** a GP-50 session is showing DST with an A mark and the user clears DST from stomp 1
+- **THEN** DST no longer shows an A mark
+- **AND** that change is sent through the device session
+
+#### Scenario: EXP is not assignable
+- **WHEN** a GP-50 session is showing the audio chain
+- **THEN** EXP has no stomp mark
+
+#### Scenario: USB and Bluetooth share assignment UI
+- **WHEN** a Bluetooth session is showing stomp assignment marks
+- **THEN** Controller shows the same stomp capacity for that model as USB
+- **AND** edits go through the device session
+
+#### Scenario: Disconnect hides assignment
+- **WHEN** the user disconnects while Controller is showing stomp assignment marks
+- **THEN** the assignment UI is hidden
+- **AND** the screen states that no pedals are connected

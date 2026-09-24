@@ -23,4 +23,4 @@
 ## 5. Check and operator confirm
 
 - [x] 5.1 Run `npx tsc -b --pretty false` and fix type errors from this change.
-- [ ] 5.2 Operator: on USB, assign/clear DST on GP-50 stomp 1; confirm Log shows the Patone `114d` frame and a subsequent dump matches 1006/1014. Then Bluetooth; then GP-5 at 920. Record pass/fail in a short note under this change folder if anything needs a follow-up refine (do not invent a new family without a capture).
+- [x] 5.2 Operator: on USB, assign/clear DST on GP-50 stomp 1; confirm Log shows the Patone `114d` frame and a subsequent dump matches 1006/1014. Then Bluetooth; then GP-5 at 920. Record pass/fail in a short note under this change folder if anything needs a follow-up refine (do not invent a new family without a capture).

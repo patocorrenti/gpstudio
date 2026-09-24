@@ -240,4 +240,4 @@ Windows packaging: `tauri build` → NSIS/MSI installer. Web: `vite` in Chrome/E
 - [x] Change `prst-upload`: load a `.prst` of the connected model into the working patch (GP-50 → GP-50, GP-5 → GP-5; writes; Save is store `114a`; no extra recall and no cross-model conversion)
 - [x] Change `patch-modified-state`: `modified` on the snapshot; Save disabled until the working patch differs from the baseline, then emerald (clears on Save / rename / restore / patch change / disconnect)
 - [x] Change `toast-feedback`: global English toasts (Sonner promise) for connect/disconnect and Save/rename/duplicate/upload; the upload toast offers Save; disconnect closes the modal
-- [ ] Change `stomp-footswitch-assign`: read/edit which modules each stomp assigns (dump decode + SET `114d`). Failed SET envelopes stay in lab `openspec/changes/stomp-assignment/` (do not retry W1–W3 / H7).
+- [x] Change `stomp-footswitch-assign`: read/edit which modules each stomp assigns (dump decode + SET `114d`). Failed SET envelopes stay in lab `openspec/changes/archive/2026-09-23-stomp-assignment/` (do not retry W1–W3 / H7).
