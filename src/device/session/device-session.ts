@@ -113,6 +113,7 @@ import {
   encodePatchStore,
   encodeSlotModel,
   encodeStompAssignment,
+  encodeStompPress,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
 import { createMidiTransport } from "@/midi/detect";
@@ -568,6 +569,34 @@ export class DeviceSession {
     );
     this.setChain(chain);
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
+  }
+
+  async pressStomp(stompIndex: number): Promise<void> {
+    if (this.snapshot.status !== "connected") {
+      throw new Error("No pedal is connected.");
+    }
+    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+      return;
+    }
+    if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
+      throw new Error("Stomp press is not available on this link.");
+    }
+    const packet = encodeStompPress(
+      this.snapshot.linkMode,
+      this.snapshot.model,
+      stompIndex,
+    );
+    if (!packet) {
+      return;
+    }
+    const assigned = this.snapshot.stomps[stompIndex] ?? [];
+    const chain = this.snapshot.chain.map((slot) =>
+      slot.id !== "exp" && assigned.includes(slot.id)
+        ? { ...slot, enabled: !slot.enabled }
+        : slot,
+    );
+    this.setChain(chain);
+    await this.sendBytes(packet);
   }
 
   async reorderChain(fromIndex: number, toIndex: number): Promise<void> {
