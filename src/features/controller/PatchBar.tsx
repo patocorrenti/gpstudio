@@ -249,7 +249,11 @@ export function PatchBar({
       return;
     }
     setUploadError(null);
-    setPendingUpload(bytes);
+    if (modified) {
+      setPendingUpload(bytes);
+      return;
+    }
+    uploadPatchBytes(bytes);
   }
 
   function confirmUpload() {
@@ -258,6 +262,10 @@ export function PatchBar({
     }
     const bytes = pendingUpload;
     setPendingUpload(null);
+    uploadPatchBytes(bytes);
+  }
+
+  function uploadPatchBytes(bytes: Uint8Array) {
     void toast.promise(
       (async () => {
         const result = await session.uploadCurrentPatch(bytes);
