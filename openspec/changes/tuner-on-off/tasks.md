@@ -8,7 +8,7 @@
 
 ## 3. Controller
 
-- [x] 3.1 Add a Tuner control under `src/features/controller/` (beside the stomp press row is fine; not under `src/components/`): English `Tuner`, pressed state from `tunerOn`, disabled while `chainSync` is syncing, hidden on disconnect, calls `setTuner` and does not import the encoder. Same control on USB and Bluetooth. No pitch display. Verify `npx tsc -b --pretty false` typechecks `src/features/controller/`.
+- [x] 3.1 Add Switch / Tuner under `src/features/connect/` in the shell next to Global (not under `src/components/`, not in the patch body): English `Switch` on GP-5, `Switch A` / `Switch B` on GP-50, and `Tuner` with pressed state from `tunerOn`. Disabled while sync or chainSync is busy, hidden on disconnect, calls `pressStomp` / `setTuner` and does not import the encoder. Same controls on USB and Bluetooth. No pitch display. Verify `npx tsc -b --pretty false` typechecks.
 
 ## 4. Docs and context
 

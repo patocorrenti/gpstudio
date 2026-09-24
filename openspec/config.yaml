@@ -164,11 +164,11 @@ context: |
     and previous/next wait while chainSync is syncing; the selector may stay
     usable), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
-    CC 48–57; GP-50 EXP via CC 13). Beside the chain, a stomp press
-    (GP-5 one button, GP-50 A and B) sends CC 69 or GP-50 CC 70 (value 127)
-    through the session on USB and Bluetooth and toggles assigned modules
-    on-change without the chain-refresh overlay. Tuner (CC 58, 127 on / 0 off)
-    sits beside that row; inbound CC 58 is ignored and there is no pitch UI.
+    CC 48–57; GP-50 EXP via CC 13). Shell chrome next to Global offers
+    Switch (GP-5), Switch A / Switch B (GP-50), and Tuner (CC 58, 127 on / 0 off);
+    those are pedal controls, not the patch body. Switch presses send CC 69 or
+    GP-50 CC 70 (value 127) and toggle assigned modules on-change without the
+    chain-refresh overlay. Inbound CC 58 is ignored and there is no pitch UI.
     Movable modules (NR, PRE, MOD, DLY, RVB)
     reorder by drag-and-drop through the session and show a three-dot grip.
     DST, NS, AMP, CAB, and EQ stay a contiguous block in that order (nothing

@@ -40,7 +40,7 @@ App `setPatch` and pedal current-patch changes (including retarget while a load 
 
 ### Controller control beside stomp presses
 
-A feature sibling under `src/features/controller/` (or an addition next to `StompPressRow`). English label `Tuner`, `aria-pressed` from `tunerOn`, disabled while `chainSync` is syncing, hidden when disconnected. Same control on USB and Bluetooth. No pitch meter.
+A feature sibling under `src/features/connect/` in the shell header next to Global (not under `src/components/`, not in the patch body). English labels: GP-5 `Switch`; GP-50 `Switch A` / `Switch B`; `Tuner` with `aria-pressed` from `tunerOn`. Disabled while sync or chainSync is busy. Hidden when disconnected. Same controls on USB and Bluetooth. No pitch meter.
 
 ## Risks / Trade-offs
 
