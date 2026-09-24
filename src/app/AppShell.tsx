@@ -36,7 +36,7 @@ export function AppShell() {
           <span className="font-bold">GP Studio</span>
           {" · Independent controller for Valeton GP5/50 · Version 0.3.1 [ Beta Testing ] · "}
           <Link to="/about" className="text-foreground/60">
-            Pato Correnti
+            © 2026 Pato Correnti
           </Link>
         </p>
         <Button
