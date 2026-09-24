@@ -263,7 +263,7 @@ export const EQ_MODELS: readonly FxModel[] = [
     kind: "eq",
     label: "Mess EQ",
     description: "Based on the 5-band EQ module on Mesa/Boogie®* amps, can easily realize the classic boogie V-shaped sound.",
-    basedOn: "Mesa/Boogie®* 5-band EQ",
+    basedOn: "Based on Mesa/Boogie®* 5-band EQ",
     devices: BOTH_PEDALS,
     wire: [0x3c, 0x00, 0x00, 0x01],
     controls: [

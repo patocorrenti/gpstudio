@@ -7,7 +7,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "A-Chorus",
     description: "Based on legendary Arion® SCH-1* stereo chorus pedal. Eric Clapton and Michael Landau used its sound to create the wonderful atmosphere of the 80s! Whether it's the classic chorus effect or the wonderful rotating speaker sound, you can easily get it.",
-    basedOn: "Arion® SCH-1* stereo chorus pedal",
+    basedOn: "Based on Arion® SCH-1* stereo chorus pedal",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x04],
     controls: [
@@ -55,7 +55,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "B-Chorus",
     description: "Based on the famous ensemble chorus unit tuned for bassists.",
-    basedOn: "Ensemble chorus unit tuned for bassists.",
+    basedOn: "Based on Ensemble chorus unit tuned for bassists.",
     devices: BOTH_PEDALS,
     wire: [0x08, 0x00, 0x00, 0x04],
     controls: [
@@ -215,7 +215,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "O-Phase",
     description: "Based on legendary MXR® M101 Phase 90*. Have you heard the guitar sound in Eddie Van Halen's \"Eruption\"? That distorted tone with a sense of rotation is realized by Phase 90.",
-    basedOn: "MXR® M101 Phase 90*",
+    basedOn: "Based on MXR® M101 Phase 90*",
     devices: BOTH_PEDALS,
     wire: [0x19, 0x00, 0x00, 0x04],
     controls: [
@@ -245,7 +245,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "M-Vibe",
     description: "Based on Voodoo Lab® Micro Vibe*. Voodoo Lab Micro Vibe has the same design as the original 1968 Uni-Vibe*. Jimi Hendrix and Stevie Ray Vaughan used these effects extensively in their albums. The Vibe effect will bring about slight and regular pitch changes.",
-    basedOn: "Voodoo Lab® Micro Vibe*",
+    basedOn: "Based on Voodoo Lab® Micro Vibe*",
     devices: BOTH_PEDALS,
     wire: [0x1f, 0x00, 0x00, 0x04],
     controls: [
@@ -284,7 +284,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "V-Roto",
     description: "Based on a BBD-based blue vibrato pedal, producing natural analog vibrato sound.",
-    basedOn: "BBD-based blue vibrato pedal",
+    basedOn: "Based on BBD-based blue vibrato pedal",
     devices: BOTH_PEDALS,
     wire: [0x15, 0x00, 0x00, 0x04],
     controls: [
@@ -370,7 +370,7 @@ export const MOD_MODELS: readonly FxModel[] = [
     kind: "mod",
     label: "O-Trem",
     description: "Based on legendary Demeter® TRM-1 Tremulator*, offering classical opto tremolo sound. In 1982, rock pioneer Ry Cooder approached James Demeter to ask whether the tremolo sound of the Fender® twin series speakers could be made into a pedal effect device, and this classic effect device was born.",
-    basedOn: "Demeter® TRM-1 Tremulator*",
+    basedOn: "Based on Demeter® TRM-1 Tremulator*",
     devices: BOTH_PEDALS,
     wire: [0x21, 0x00, 0x00, 0x04],
     controls: [

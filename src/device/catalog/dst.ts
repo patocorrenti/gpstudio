@@ -7,7 +7,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "Green OD",
     description: "Based on legenary Ibanez® TS-808 Tube Screamer®* overdrive pedal. Since it was first shown to the world in 1979, TS808 has opened up a new world. There are countless guitarists who love it. It is a warm, delicate overdrive effect.Can be used as either an overdrive or a Boost, can be used in a variety of musical styles.",
-    basedOn: "Ibanez® TS-808 Tube Screamer®",
+    basedOn: "Based on Ibanez® TS-808 Tube Screamer®",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x03],
     controls: [
@@ -110,7 +110,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "SM Dist",
     description: "It is based on a classic orange three-knob distortion effector, which can be used to easily get the timbre characteristics of the 70s-80s.",
-    basedOn: "Classic orange three-knob distortion effector",
+    basedOn: "Based on Classic orange three-knob distortion effector",
     devices: BOTH_PEDALS,
     wire: [0x2a, 0x00, 0x00, 0x03],
     controls: [
@@ -148,7 +148,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "Plustortion",
     description: "This little yellow box has produced lots of great soundings in countless classic studio albums. Yeah, we're talking the legendary MXR® M104 Distortion +*, and this M104-based Plustortion. The Plustortion recreated the Germanium-powered soft clipping distortion, like what Randy Rhoads and other hard rockers do!",
-    basedOn: "MXR® M104 Distortion +",
+    basedOn: "Based on MXR® M104 Distortion +",
     devices: BOTH_PEDALS,
     wire: [0x29, 0x00, 0x00, 0x03],
     controls: [
@@ -177,7 +177,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "La Charger",
     description: "Based on MI Audio® Crunch Box®* distortion pedal. Sensitive and exquisite distortion beast, it satisfies all the passion of Riff and Solo.The response of each frequency band is balanced, the dynamic feedback is faithful to the fingertip, and the noise can be well controlled even at high gain.",
-    basedOn: "MI Audio® Crunch Box®",
+    basedOn: "Based on MI Audio® Crunch Box®",
     devices: BOTH_PEDALS,
     wire: [0x30, 0x00, 0x00, 0x03],
     controls: [
@@ -215,7 +215,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "Darktale",
     description: "Based on legendary ProCo™ The Rat* distortion (early LM308 OP-amp version). The Rat* has come to life thanks to its wide range of Filter knob, bright and compact sound head, full end and strong plasticity, making it a favorite of many musicians.",
-    basedOn: "ProCo™ The Rat distortion (early LM308 OP-amp version)",
+    basedOn: "Based on ProCo™ The Rat distortion (early LM308 OP-amp version)",
     devices: BOTH_PEDALS,
     wire: [0x2b, 0x00, 0x00, 0x03],
     controls: [
@@ -253,7 +253,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "Sora Fuzz",
     description: "Based on legendary Dallas-Arbiter® Fuzz Face®* fuzz pedal. Dallas Arbiter conjured the sound of rock and roll for half a century in 1966 with a few simple transistors. The sound of Fuzz Face was heavy and sharp, and its sound influenced countless famous musicians.",
-    basedOn: "Dallas-Arbiter® Fuzz Face®",
+    basedOn: "Based on Dallas-Arbiter® Fuzz Face®",
     devices: BOTH_PEDALS,
     wire: [0x22, 0x00, 0x00, 0x03],
     controls: [
@@ -282,7 +282,7 @@ export const DST_MODELS: readonly FxModel[] = [
     kind: "dst",
     label: "Red Haze",
     description: "Based on legendary Dallas-Arbiter® Fuzz Face®* fuzz pedal. Dallas Arbiter conjured the sound of rock and roll for half a century in 1966 with a few simple transistors. The sound of Fuzz Face was heavy and sharp, and its sound influenced countless famous musicians.",
-    basedOn: "Dallas-Arbiter® Fuzz Face®",
+    basedOn: "Based on Dallas-Arbiter® Fuzz Face®",
     devices: BOTH_PEDALS,
     wire: [0x24, 0x00, 0x00, 0x03],
     controls: [
