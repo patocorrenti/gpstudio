@@ -17,4 +17,4 @@
 ## 5. Check
 
 - [x] 5.1 Run `npx tsc -b --pretty false` and fix type errors from this change. Do not add an in-browser pass.
-- [ ] 5.2 Operator: on USB and Bluetooth, Tuner on sends CC 58 = 127 and the pedal enters tuner; Tuner off sends 0 and exits. Confirm no chain-refresh overlay and no patch recall. If a value other than 0/127 is required, change only those constants and note it here.
+- [x] 5.2 Operator: on USB and Bluetooth, Tuner on sends CC 58 = 127 and the pedal enters tuner; Tuner off sends 0 and exits. Confirm no chain-refresh overlay and no patch recall. If a value other than 0/127 is required, change only those constants and note it here.
