@@ -25,7 +25,7 @@ import {
   type StompAssignment,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
-import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
+import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { SlotStompMark } from "@/features/controller/StompAssignment";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,6 @@ function AudioChainSlotView({
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
-  const icon = CHAIN_SLOT_ICONS[slot.id];
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
   const movable = isMovableEffect(slot.id);
@@ -113,16 +112,10 @@ function AudioChainSlotView({
       />
       <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
-          {icon ? (
-            <img
-              src={icon}
-              alt=""
-              className={cn(
-                "object-contain size-14",
-                slot.enabled ? "" : "opacity-20",
-              )}
-            />
-          ) : null}
+          <ChainSlotIcon
+            id={slot.id}
+            className={slot.enabled ? undefined : "opacity-20"}
+          />
           {bypassed ? (
             <span
               className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"

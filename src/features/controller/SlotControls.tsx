@@ -27,7 +27,7 @@ import {
   type EffectId,
 } from "@/device/session";
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
-import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
+import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { ModelSelect } from "@/features/controller/ModelSelect";
 
 function formatControlValue(control: FxControl, value: number): string {
@@ -137,11 +137,7 @@ function SlotControlPanel({
     >
       <div className="flex items-center gap-3 -mr-2 pb-2">
         <h2 className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-semibold tracking-wide">
-          <img
-            src={CHAIN_SLOT_ICONS[slot.id]}
-            alt=""
-            className="size-6 object-contain"
-          />
+          <ChainSlotIcon id={slot.id} size="sm" />
           {kindLabel}
         </h2>
         <div className="flex min-w-0 flex-1 items-center gap-0.5">
