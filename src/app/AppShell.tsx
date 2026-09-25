@@ -1,5 +1,7 @@
 import { Bug } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
+import logo from "@/assets/img/gpstudio-logo.svg";
+import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,8 +17,18 @@ export function AppShell() {
       <Toaster />
       <div className="relative flex min-h-svh flex-col bg-background text-foreground">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
-        <Link to="/" className="w-fit text-lg font-semibold tracking-tight">
-          GP Studio
+        <Link to="/" className="w-fit" aria-label="GP Studio">
+          <img
+            src={logo}
+            alt="GP Studio"
+            className="h-5 w-auto dark:hidden"
+          />
+          <img
+            src={logoWhite}
+            alt=""
+            aria-hidden
+            className="hidden h-5 w-auto dark:block"
+          />
         </Link>
         <div className="flex items-center gap-2">
           <ConnectionStatus />
