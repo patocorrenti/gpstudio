@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const GLYPH_VARIANT = {
   icon: "relative h-[48px] w-9 items-end rounded-[3px] pb-0.9 text-[1.1rem] tracking-tight",
-  "icon-sm": "size-6 px-0.5 text-sm tracking-tight",
+  "icon-sm": "size-7 px-0.5 text-[0.95rem] tracking-tight",
 } as const;
 
 function GlyphKnob() {
