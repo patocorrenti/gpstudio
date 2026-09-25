@@ -15,6 +15,18 @@ function GlyphKnob() {
   );
 }
 
+function GlyphJack({ side }: { side: "left" | "right" }) {
+  return (
+    <span
+      className={cn(
+        "absolute top-[calc(50%+2px)] h-2.5 w-1 -translate-y-1/2 bg-zinc-500",
+        side === "left" && "-left-1 rounded-l-[3px]",
+        side === "right" && "-right-1 rounded-r-[3px]",
+      )}
+    />
+  );
+}
+
 export function SlotGlyph({
   label,
   backgroundColor,
@@ -39,10 +51,14 @@ export function SlotGlyph({
       aria-hidden
     >
       {variant === "icon" ? (
-        <span className="absolute top-1.5 inset-x-0 flex justify-center gap-1.5">
-          <GlyphKnob />
-          <GlyphKnob />
-        </span>
+        <>
+          <GlyphJack side="left" />
+          <GlyphJack side="right" />
+          <span className="absolute top-1.5 inset-x-0 flex justify-center gap-1.5">
+            <GlyphKnob />
+            <GlyphKnob />
+          </span>
+        </>
       ) : null}
       {label}
     </span>
