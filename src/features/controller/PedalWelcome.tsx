@@ -1,5 +1,7 @@
 import logo from "@/assets/img/gpstudio-logo.svg";
 import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
+import pedalsLineBlack from "@/assets/img/gp5-50-line-black.png";
+import pedalsLineWhite from "@/assets/img/gp5-50-line-white.png";
 import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
 
 export function PedalWelcome() {
@@ -36,6 +38,18 @@ export function PedalWelcome() {
         </span>
       </div>
       <p>Connect a Valeton GP5 or GP50 to get started...</p>
+      <img
+        src={pedalsLineBlack}
+        alt=""
+        aria-hidden
+        className="mt-2 w-[176px] dark:hidden"
+      />
+      <img
+        src={pedalsLineWhite}
+        alt=""
+        aria-hidden
+        className="mt-2 hidden w-[176px] dark:block"
+      />
     </button>
   );
 }
