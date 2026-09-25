@@ -7,10 +7,35 @@ const GLYPH_VARIANT = {
   "icon-sm": "size-7 px-0.5 text-[0.95rem] tracking-tight",
 } as const;
 
-function GlyphKnob() {
+export type SlotGlyphKnobTone = "light" | "dark";
+
+const KNOB_TONE = {
+  light: {
+    body: "bg-zinc-300",
+    mark: "bg-zinc-500/70",
+  },
+  dark: {
+    body: "bg-zinc-700",
+    mark: "bg-zinc-400/80",
+  },
+} as const;
+
+function GlyphKnob({
+  className,
+  tone = "light",
+}: {
+  className?: string;
+  tone?: SlotGlyphKnobTone;
+}) {
+  const colors = KNOB_TONE[tone];
   return (
-    <span className="relative size-2.5 rounded-full bg-zinc-300">
-      <span className="absolute top-[3px] left-1/2 h-1.5 w-px -translate-x-1/2 rounded-full bg-zinc-500/70" />
+    <span className={cn("relative size-2.5 rounded-full", colors.body, className)}>
+      <span
+        className={cn(
+          "absolute top-[3px] left-1/2 h-1.5 w-px -translate-x-1/2 rounded-full",
+          colors.mark,
+        )}
+      />
     </span>
   );
 }
@@ -27,17 +52,92 @@ function GlyphJack({ side }: { side: "left" | "right" }) {
   );
 }
 
+/** Pedal face detail — discrete layouts, not a free knob count. */
+export type SlotGlyphFace = "knobs-1" | "knobs-2" | "knobs-3" | "knobs-6" | "sliders-4";
+
+function Knobs3Row({ tone }: { tone: SlotGlyphKnobTone }) {
+  return (
+    <span className="flex justify-center gap-0.5">
+      <GlyphKnob className="size-2" tone={tone} />
+      <GlyphKnob className="size-2" tone={tone} />
+      <GlyphKnob className="size-2" tone={tone} />
+    </span>
+  );
+}
+
+/** Four vertical EQ-style faders. */
+function EqSliders() {
+  return (
+    <span className="absolute top-1.5 inset-x-0 flex h-4 items-end justify-center gap-[3px]">
+      <span className="h-2 w-[3px] rounded-full bg-zinc-700" />
+      <span className="h-3.5 w-[3px] rounded-full bg-zinc-700" />
+      <span className="h-2.5 w-[3px] rounded-full bg-zinc-700" />
+      <span className="h-3 w-[3px] rounded-full bg-zinc-700" />
+    </span>
+  );
+}
+
+function GlyphFace({
+  face,
+  knobTone,
+}: {
+  face: SlotGlyphFace;
+  knobTone: SlotGlyphKnobTone;
+}) {
+  switch (face) {
+    case "knobs-1":
+      return (
+        <span className="absolute top-1.5 inset-x-0 flex justify-center">
+          <GlyphKnob tone={knobTone} />
+        </span>
+      );
+    case "knobs-2":
+      return (
+        <span className="absolute top-1.5 inset-x-0 flex justify-center gap-1.5">
+          <GlyphKnob tone={knobTone} />
+          <GlyphKnob tone={knobTone} />
+        </span>
+      );
+    case "knobs-3":
+      return (
+        <span className="absolute top-1.5 inset-x-0">
+          <Knobs3Row tone={knobTone} />
+        </span>
+      );
+    case "knobs-6":
+      return (
+        <span className="absolute top-1 inset-x-0 flex flex-col gap-0.5">
+          <Knobs3Row tone={knobTone} />
+          <Knobs3Row tone={knobTone} />
+        </span>
+      );
+    case "sliders-4":
+      return <EqSliders />;
+  }
+}
+
+export type SlotGlyphTextTone = "light" | "dark";
+
+const TEXT_TONE = {
+  light: "#ffffff",
+  dark: "#1a1a1a",
+} as const;
+
 export function SlotGlyph({
   label,
   backgroundColor,
-  textColor = "#ffffff",
+  textTone = "light",
   variant = "icon",
+  face = "knobs-2",
+  knobTone = "light",
   className,
 }: {
   label: string;
   backgroundColor: string;
-  textColor?: string;
+  textTone?: SlotGlyphTextTone;
   variant?: keyof typeof GLYPH_VARIANT;
+  face?: SlotGlyphFace;
+  knobTone?: SlotGlyphKnobTone;
   className?: string;
 }) {
   return (
@@ -47,17 +147,14 @@ export function SlotGlyph({
         GLYPH_VARIANT[variant],
         className,
       )}
-      style={{ backgroundColor, color: textColor }}
+      style={{ backgroundColor, color: TEXT_TONE[textTone] }}
       aria-hidden
     >
       {variant === "icon" ? (
         <>
           <GlyphJack side="left" />
           <GlyphJack side="right" />
-          <span className="absolute top-1.5 inset-x-0 flex justify-center gap-1.5">
-            <GlyphKnob />
-            <GlyphKnob />
-          </span>
+          <GlyphFace face={face} knobTone={knobTone} />
         </>
       ) : null}
       {label}
@@ -81,6 +178,45 @@ const GLYPH_SIZE = {
   sm: "icon-sm",
 } as const satisfies Record<"md" | "sm", keyof typeof GLYPH_VARIANT>;
 
+const SLOT_GLYPHS: Partial<
+  Record<
+    ChainSlotId,
+    {
+      label: string;
+      backgroundColor: string;
+      textTone?: SlotGlyphTextTone;
+      face?: SlotGlyphFace;
+      knobTone?: SlotGlyphKnobTone;
+    }
+  >
+> = {
+  nr: {
+    label: "NR",
+    backgroundColor: "#c1c2c7",
+    face: "knobs-1",
+    knobTone: "dark",
+    textTone: "dark",
+  },
+  dst: { label: "DST", backgroundColor: "#e4415c", face: "knobs-2" },
+  ns: { label: "NS", backgroundColor: "#7c43e0", face: "knobs-6" },
+  pre: { label: "PRE", backgroundColor: "#bd41dd", face: "knobs-2" },
+  dly: { label: "DLY", backgroundColor: "#dc4690", face: "knobs-3" },
+  mod: {
+    label: "MOD",
+    backgroundColor: "#40c8de",
+    face: "knobs-3",
+    knobTone: "dark",
+    textTone: "dark",
+  },
+  rvb: { label: "RVB", backgroundColor: "#2472d4", face: "knobs-3" },
+  eq: {
+    label: "EQ",
+    backgroundColor: "#debc8c",
+    face: "sliders-4",
+    textTone: "dark",
+  },
+};
+
 export function ChainSlotIcon({
   id,
   size = "md",
@@ -90,12 +226,16 @@ export function ChainSlotIcon({
   size?: "md" | "sm";
   className?: string;
 }) {
-  if (id === "dst") {
+  const glyph = SLOT_GLYPHS[id];
+  if (glyph) {
     return (
       <span className={cn(GLYPH_FRAME[size], className)}>
         <SlotGlyph
-          label="DST"
-          backgroundColor="#e4415c"
+          label={glyph.label}
+          backgroundColor={glyph.backgroundColor}
+          textTone={glyph.textTone}
+          face={glyph.face}
+          knobTone={glyph.knobTone}
           variant={GLYPH_SIZE[size]}
         />
       </span>
