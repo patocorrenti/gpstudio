@@ -61,7 +61,7 @@ function ConnectedController() {
   }
 
   return (
-    <section className="flex flex-1 flex-col items-center">
+    <section className="flex w-full flex-1 flex-col items-center">
       <PatchBar
         patch={snapshot.patch}
         patchNames={snapshot.patchNames}

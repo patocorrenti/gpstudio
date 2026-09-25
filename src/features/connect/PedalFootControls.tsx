@@ -6,11 +6,11 @@ import {
   useSessionSnapshot,
 } from "@/features/connect/DeviceSessionProvider";
 
-const GP5_SWITCH = [{ index: 0, label: "Switch", aria: "Press switch" }] as const;
+const GP5_SWITCH = [{ index: 0, label: "Fsw", aria: "Press footswitch" }] as const;
 
 const GP50_SWITCH = [
-  { index: 0, label: "Switch A", aria: "Press switch A" },
-  { index: 1, label: "Switch B", aria: "Press switch B" },
+  { index: 0, label: "sw A", aria: "Press switch A" },
+  { index: 1, label: "sw B", aria: "Press switch B" },
 ] as const;
 
 function switchButtons(pedal: DeviceModel) {
