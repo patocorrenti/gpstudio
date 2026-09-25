@@ -170,7 +170,7 @@ version = "${version}"
     ],
     [
       "src/app/AppShell.tsx",
-      read("src/app/AppShell.tsx").includes(`Version ${version} [`),
+      read("src/app/AppShell.tsx").includes(`{' '}v${version}`),
     ],
     [
       "index.html",
@@ -279,8 +279,8 @@ version = "${next}"`,
     replaceExactlyOnce(
       "src/app/AppShell.tsx",
       read("src/app/AppShell.tsx"),
-      `Version ${current} [`,
-      `Version ${next} [`,
+      `{' '}v${current}`,
+      `{' '}v${next}`,
     ),
   );
   write(

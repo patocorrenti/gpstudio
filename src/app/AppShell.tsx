@@ -47,7 +47,7 @@ export function AppShell() {
         <p className="min-w-0 flex-1 text-center">
           <span className="font-bold">GP Studio</span>
           {' '}v0.3.1
-          {" · Compatible with Valeton GP5 and GP50 · "}
+          {" · Compatible with Valeton GP5/50 · "}
           <Link to="/about" className="text-foreground/60">
             © 2026 Pato Correnti
           </Link>
