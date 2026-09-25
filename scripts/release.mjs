@@ -190,23 +190,16 @@ version = "${version}"
   }
 }
 
-function escapeHtml(text) {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
 function changelogBlock(version, notes) {
   const items = notes
-    .map((note) => `          <li>${escapeHtml(note)}</li>`)
+    .map((note) => `      ${JSON.stringify(note)},`)
     .join("\n");
-  return `        <h3 className="text-sm font-medium text-muted-foreground">
-          <span className="text-foreground font-mono">Version ${version}</span>
-        </h3>
-        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+  return `  {
+    version: "${version}",
+    notes: [
 ${items}
-        </ul>
+    ],
+  },
 `;
 }
 
@@ -303,15 +296,15 @@ version = "${next}"`,
   );
 
   const aboutPath = "src/features/about/AboutPage.tsx";
-  const heading = `        <h2 className="text-lg font-semibold tracking-tight">Changelog</h2>\n`;
+  const marker = `const CHANGELOG = [\n`;
   const about = read(aboutPath);
-  if (count(about, heading) !== 1) {
-    fail("AboutPage.tsx: changelog heading not found");
+  if (count(about, marker) !== 1) {
+    fail("AboutPage.tsx: CHANGELOG array not found");
   }
-  if (about.includes(`Version ${next}</span>`)) {
+  if (about.includes(`version: "${next}"`)) {
     fail(`AboutPage.tsx already has Version ${next}`);
   }
-  write(aboutPath, about.replace(heading, heading + changelogBlock(next, notes)));
+  write(aboutPath, about.replace(marker, marker + changelogBlock(next, notes)));
 }
 
 function assertCleanWorktree() {
