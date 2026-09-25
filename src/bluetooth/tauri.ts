@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { BleMidiDecoder } from "@/bluetooth/ble-midi";
 import type {
   BluetoothDiscoverOptions,
-  BluetoothEndpoint,
+  BluetoothDiscoverResult,
   BluetoothLink,
   DisconnectHandler,
   MidiMessageHandler,
@@ -27,9 +27,9 @@ export class TauriBluetoothLink implements BluetoothLink {
 
   async discover(
     _options: BluetoothDiscoverOptions = {},
-  ): Promise<BluetoothEndpoint[]> {
+  ): Promise<BluetoothDiscoverResult> {
     const rows = await invoke<EndpointDto[]>("ble_scan");
-    return rows.flatMap((row) => {
+    const endpoints = rows.flatMap((row) => {
       if (row.kind !== "bluetooth" || !looksLikePedalName(row.label)) {
         return [];
       }
@@ -46,6 +46,7 @@ export class TauriBluetoothLink implements BluetoothLink {
         },
       ];
     });
+    return { endpoints };
   }
 
   async open(id: string): Promise<void> {

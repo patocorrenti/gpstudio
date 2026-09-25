@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import type { DeviceModel } from "@/device/models";
 import {
@@ -20,6 +21,7 @@ function switchButtons(pedal: DeviceModel) {
  * Pedal footswitch press and tuner — shell chrome next to Global, not the patch body.
  */
 export function PedalFootControls() {
+  const navigate = useNavigate();
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
 
@@ -47,6 +49,7 @@ export function PedalFootControls() {
           disabled={busy}
           aria-label={press.aria}
           onClick={() => {
+            navigate("/");
             void session.pressStomp(press.index);
           }}
         >
@@ -61,6 +64,7 @@ export function PedalFootControls() {
         aria-label={tunerOn ? "Exit tuner" : "Enter tuner"}
         aria-pressed={tunerOn}
         onClick={() => {
+          navigate("/");
           void session.setTuner(!tunerOn);
         }}
       >

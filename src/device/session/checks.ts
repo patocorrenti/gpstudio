@@ -85,7 +85,7 @@ function recordingUsb(): {
 function stubBluetooth(): BluetoothLink {
   let open = false;
   return {
-    discover: async () => [],
+    discover: async () => ({ endpoints: [] }),
     open: async () => {
       open = true;
     },
@@ -144,7 +144,7 @@ function scriptedBluetooth(): {
       handler?.(bytes);
     },
     link: {
-      discover: async () => [],
+      discover: async () => ({ endpoints: [] }),
       open: async () => {
         open = true;
       },

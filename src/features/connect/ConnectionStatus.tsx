@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bluetooth, Usb } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { BluetoothEndpoint } from "@/bluetooth/types";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { ScanPanel } from "@/features/connect/ScanPanel";
 import { SelectModelPanel } from "@/features/connect/SelectModelPanel";
 
 export function ConnectionStatus() {
+  const navigate = useNavigate();
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
   const { open, setOpen } = useConnectDialog();
@@ -62,9 +64,22 @@ export function ConnectionStatus() {
   async function scanBluetooth(interactive: boolean) {
     setBusy(true);
     setError(null);
+    let handedOff = false;
     try {
-      const list = await session.discoverBluetooth({ interactive });
-      setBleEndpoints(list);
+      const { endpoints, selectedId } = await session.discoverBluetooth({
+        interactive,
+      });
+      setBleEndpoints(endpoints);
+      const selected = selectedId
+        ? endpoints.find((endpoint) => endpoint.id === selectedId)
+        : undefined;
+      if (selected) {
+        handedOff = true;
+        if (!selected.suggestedModel) {
+          setBusy(false);
+        }
+        pickDevice(selected);
+      }
     } catch (cause) {
       setBleEndpoints([]);
       setError(
@@ -73,7 +88,9 @@ export function ConnectionStatus() {
           : "Could not list Bluetooth pedals.",
       );
     } finally {
-      setBusy(false);
+      if (!handedOff) {
+        setBusy(false);
+      }
     }
   }
 
@@ -167,7 +184,10 @@ export function ConnectionStatus() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={connected ? `Connected to ${label}` : "Connect a pedal"}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          navigate("/");
+          setOpen(true);
+        }}
         className={connected ? "gap-2.5" : undefined}
       >
         <span

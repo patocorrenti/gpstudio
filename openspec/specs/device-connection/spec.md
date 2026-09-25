@@ -8,7 +8,7 @@ Lets the user connect a Valeton GP-5 or GP-50 over USB-MIDI or Bluetooth from th
 
 ### Requirement: Connect modal lists USB devices then resolves the model
 
-Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery and MUST list discovered Bluetooth pedals. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
+Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery. On the desktop app, the Bluetooth tab MUST list discovered Bluetooth pedals for the user to pick. On the web app, when the browser Bluetooth picker returns a chosen pedal, the system MUST treat that choice as the pick and MUST NOT require a second click in the modal list; if the picker is cancelled, the modal MUST still list already-authorized Bluetooth pedals when any are available. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
 
 #### Scenario: Discover then pick a USB device
 - **WHEN** the user opens Connect while disconnected
@@ -83,14 +83,29 @@ After a USB or Bluetooth session is marked connected, the chrome connection cont
 
 ### Requirement: Bluetooth tab lists pedals then connects
 
-While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals and MUST list them for the user to pick. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
+While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
 
-#### Scenario: Bluetooth scan then pick
-- **WHEN** the user selects the Bluetooth tab while disconnected
+On the desktop app, the modal MUST list discovered Bluetooth pedals for the user to pick, and the session MUST stay disconnected until the user picks a device from that list.
+
+On the web app, an interactive scan MUST open the browser Bluetooth picker. When the user chooses a pedal there, the system MUST proceed with that device as the pick without requiring another click in the modal list. When the user cancels the picker, the modal MUST list already-authorized Bluetooth pedals when any remain available, and the session MUST stay disconnected until the user picks one from that list or runs another scan.
+
+#### Scenario: Desktop Bluetooth scan then pick
+- **WHEN** the user selects the Bluetooth tab while disconnected in the desktop app
 - **THEN** the modal lists nearby Bluetooth pedals
 - **AND** it does not list USB-MIDI devices
 - **AND** the modal states that Bluetooth is a two-way connection and slower
 - **AND** the session stays disconnected until the user picks a device
+
+#### Scenario: Web Bluetooth picker connects without a second click
+- **WHEN** the user runs an interactive Bluetooth scan in the web app and chooses a pedal in the browser picker
+- **THEN** the system treats that pedal as the chosen device without requiring another click in the modal list
+- **AND** if the label suggests GP-5 or GP-50, the system connects using that model without asking
+- **AND** the connected session link mode is Bluetooth
+
+#### Scenario: Web Bluetooth picker cancelled keeps authorized list
+- **WHEN** the user runs an interactive Bluetooth scan in the web app, cancels the browser picker, and at least one already-authorized Bluetooth pedal is available
+- **THEN** the modal lists those authorized pedals
+- **AND** the session stays disconnected until the user picks a device from that list or scans again
 
 #### Scenario: Known Bluetooth model connects without asking
 - **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50

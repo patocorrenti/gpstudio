@@ -1,6 +1,7 @@
 import { BleMidiDecoder } from "@/bluetooth/ble-midi";
 import type {
   BluetoothDiscoverOptions,
+  BluetoothDiscoverResult,
   BluetoothEndpoint,
   BluetoothLink,
   DisconnectHandler,
@@ -161,12 +162,13 @@ export class WebBluetoothLink implements BluetoothLink {
 
   async discover(
     options: BluetoothDiscoverOptions = {},
-  ): Promise<BluetoothEndpoint[]> {
+  ): Promise<BluetoothDiscoverResult> {
     const bluetooth = bluetoothApi();
     if (!bluetooth) {
       throw missingBluetoothError();
     }
 
+    let selectedId: string | undefined;
     try {
       if (typeof bluetooth.getDevices === "function") {
         const granted = await bluetooth.getDevices();
@@ -184,6 +186,7 @@ export class WebBluetoothLink implements BluetoothLink {
           optionalServices: [CONTROL_SERVICE_UUID],
         });
         this.remember(picked);
+        selectedId = picked.id;
       }
     } catch (error) {
       const cancelled =
@@ -201,7 +204,7 @@ export class WebBluetoothLink implements BluetoothLink {
         endpoints.push(endpoint);
       }
     }
-    return endpoints;
+    return selectedId ? { endpoints, selectedId } : { endpoints };
   }
 
   async open(id: string): Promise<void> {

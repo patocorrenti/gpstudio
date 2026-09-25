@@ -76,13 +76,10 @@ export function ScanPanel({
         }}
         className="gap-4"
       >
-        <TabsList className="grid h-12 w-full grid-cols-2 mt-8 group-data-horizontal/tabs:h-12">
+        <TabsList className="mt-2 grid h-12 w-full grid-cols-2 group-data-horizontal/tabs:h-12">
           <TabsTrigger value="usb" className="gap-1.5 px-2 dark:data-active:bg-background">
             <Usb />
             USB
-            <span className="absolute left-50% bottom-9 ml-1 rounded-sm bg-sky-600 dark:bg-sky-800 px-2 py-0.5 text-[11px] font-light text-white">
-              Recommended
-            </span>
           </TabsTrigger>
           <TabsTrigger value="bluetooth" className="gap-1.5 px-2 dark:data-active:bg-background">
             <Bluetooth />
@@ -124,7 +121,7 @@ export function ScanPanel({
               />
               <p>
                 No pedals found on USB.<br />
-                Connect a Valeton GP5 or GP50 and try again.
+                Connect a Valeton GP5 or GP50 and scan again.
               </p>
             </div>
           ) : null}
@@ -148,7 +145,7 @@ export function ScanPanel({
               },
               {
                 icon: Turtle,
-                text: "Slower, less stable connection.",
+                text: "Slower connection",
               },
             ]}
           />
@@ -169,7 +166,7 @@ export function ScanPanel({
               />
               <p>
                 No pedals found on Bluetooth.<br />
-                Put a Valeton GP5 or GP50 in pairing mode and refresh.
+                Put a Valeton GP5 or GP50 in pairing mode and scan again.
               </p>
             </div>
           ) : null}
@@ -189,7 +186,7 @@ export function ScanPanel({
             onClick={onRefresh}
           >
             <RefreshCw className="size-3 text-muted-foreground" />
-            Refresh
+            Scan again
           </Button>
         </DialogFooter>
       ) : null}

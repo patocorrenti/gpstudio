@@ -1,7 +1,7 @@
 import { createBluetoothLink } from "@/bluetooth/detect";
 import type {
   BluetoothDiscoverOptions,
-  BluetoothEndpoint,
+  BluetoothDiscoverResult,
   BluetoothLink,
 } from "@/bluetooth/types";
 import {
@@ -281,7 +281,7 @@ export class DeviceSession {
 
   discoverBluetooth(
     options?: BluetoothDiscoverOptions,
-  ): Promise<BluetoothEndpoint[]> {
+  ): Promise<BluetoothDiscoverResult> {
     return this.bluetooth.discover(options);
   }
 
