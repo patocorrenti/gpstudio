@@ -10,7 +10,7 @@ export function PedalWelcome() {
   return (
     <button
       type="button"
-      className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-4 pb-16 text-muted-foreground transition-colors hover:text-foreground"
+      className="group flex flex-1 cursor-pointer flex-col items-center justify-center gap-4 pb-16 text-muted-foreground transition-colors hover:text-foreground"
       aria-haspopup="dialog"
       aria-label="Connect a pedal"
       onClick={openConnect}
@@ -42,13 +42,13 @@ export function PedalWelcome() {
           src={pedalsLineBlack}
           alt=""
           aria-hidden
-          className="w-[176px] dark:hidden"
+          className="w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
         />
         <img
           src={pedalsLineWhite}
           alt=""
           aria-hidden
-          className="hidden w-[176px] dark:block"
+          className="hidden w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:block"
         />
         <p>Connect a Valeton GP5 or GP50 to get started...</p>
       </div>
