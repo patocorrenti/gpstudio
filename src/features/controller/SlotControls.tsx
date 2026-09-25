@@ -136,9 +136,9 @@ function SlotControlPanel({
       aria-label={`${kindLabel} controls`}
     >
       <div className="flex items-center gap-3 -mr-2 pb-2">
-        <h2 className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-semibold tracking-wide">
+        <h2 className="shrink-0">
           <ChainSlotIcon id={slot.id} size="sm" />
-          {kindLabel}
+          <span className="sr-only">{kindLabel}</span>
         </h2>
         <div className="flex min-w-0 flex-1 items-center gap-0.5">
           {options.length > 1 ? (

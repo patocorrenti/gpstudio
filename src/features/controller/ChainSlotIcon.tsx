@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const GLYPH_VARIANT = {
   icon: "relative h-[48px] w-9 items-end rounded-[3px] pb-0.9 text-[1.1rem] tracking-tight",
-  "icon-sm": "size-7 px-0.5 text-[0.95rem] tracking-tight",
+  "icon-sm": "size-7 rounded-[3px] px-0.5 text-[0.95rem] tracking-tight",
 } as const;
 
 export type SlotGlyphKnobTone = "light" | "dark";
@@ -164,7 +164,7 @@ export function SlotGlyph({
 
 const IMAGE_SIZE = {
   md: "size-14",
-  sm: "size-6",
+  sm: "size-7 rounded-[3px]",
 } as const;
 
 /** Chain keeps a size-14 box so the cable still crosses the glyph center. */
