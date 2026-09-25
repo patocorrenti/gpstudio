@@ -15,7 +15,7 @@ export function AppShell() {
   return (
     <ConnectDialogProvider>
       <Toaster />
-      <div className="relative flex min-h-svh flex-col bg-background text-foreground">
+      <div className="flex min-h-svh flex-col bg-background text-foreground">
       <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
         <Link to="/" className="w-fit" aria-label="GP Studio">
           <img
@@ -43,10 +43,10 @@ export function AppShell() {
       <main className="flex min-h-0 flex-1 flex-col p-6">
         <Outlet />
       </main>
-      <footer className="flex items-center gap-4 border-t py-2 pr-24 pl-6 text-[11px] leading-none text-muted-foreground/60">
+      <footer className="flex items-center gap-4 border-t py-2 pr-6 pl-6 text-[11px] leading-none text-muted-foreground/60">
         <p className="min-w-0 flex-1 text-center">
           <span className="font-bold">GP Studio</span>
-          {' '}v0.3.1 [ Beta ]
+          {' '}v0.3.1
           {" · Compatible with Valeton GP5 and GP50 · "}
           <Link to="/about" className="text-foreground/60">
             © 2026 Pato Correnti
@@ -68,14 +68,6 @@ export function AppShell() {
           </a>
         </Button>
       </footer>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-0 bottom-0 z-20 size-20 overflow-hidden"
-      >
-        <div className="absolute bottom-3.5 -right-6 w-28 rotate-[-45deg] bg-amber-400/70 py-px text-center text-[8px] font-bold tracking-[0.22em] text-black/80">
-          BETA
-        </div>
-      </div>
     </div>
     </ConnectDialogProvider>
   );
