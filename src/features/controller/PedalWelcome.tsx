@@ -37,19 +37,21 @@ export function PedalWelcome() {
           Closed Beta
         </span>
       </div>
-      <p>Connect a Valeton GP5 or GP50 to get started...</p>
-      <img
-        src={pedalsLineBlack}
-        alt=""
-        aria-hidden
-        className="mt-2 w-[176px] dark:hidden"
-      />
-      <img
-        src={pedalsLineWhite}
-        alt=""
-        aria-hidden
-        className="mt-2 hidden w-[176px] dark:block"
-      />
+      <div className="mt-2 flex flex-col items-center gap-2">
+        <img
+          src={pedalsLineBlack}
+          alt=""
+          aria-hidden
+          className="w-[176px] dark:hidden"
+        />
+        <img
+          src={pedalsLineWhite}
+          alt=""
+          aria-hidden
+          className="hidden w-[176px] dark:block"
+        />
+        <p>Connect a Valeton GP5 or GP50 to get started...</p>
+      </div>
     </button>
   );
 }
