@@ -388,14 +388,26 @@ export function ChainSlotIcon({
       <span
         className={cn(
           GLYPH_FRAME[size],
-          "relative grid place-items-center",
+          "relative grid place-items-center [perspective:180px]",
           className,
         )}
       >
         <span
           className={cn(
-            "col-start-1 row-start-1",
-            !enabled && "invisible",
+            "col-start-1 row-start-1 flex h-[48px] w-9 translate-y-px items-center justify-center rounded-[3px] bg-foreground/5 font-slot-glyph font-semibold tracking-tight text-muted-foreground/50",
+            size === "sm" ? "h-7 w-7 text-[0.9rem]" : "text-[1.15rem]",
+          )}
+          aria-hidden
+        >
+          {glyph.label}
+        </span>
+        <span
+          className={cn(
+            "col-start-1 row-start-1 z-10 origin-center transition-[transform,opacity] duration-[220ms] ease-out",
+            glyph.body === "wide" && "relative -top-2",
+            enabled
+              ? "opacity-100 [transform:translateZ(0)_scale(1)]"
+              : "pointer-events-none opacity-0 [transform:translateZ(-28px)_scale(0.78)]",
           )}
         >
           <SlotGlyph
@@ -409,16 +421,6 @@ export function ChainSlotIcon({
             variant={GLYPH_SIZE[size]}
           />
         </span>
-        <span
-          className={cn(
-            "col-start-1 row-start-1 flex h-[48px] w-9 translate-y-px items-center justify-center rounded-[3px] bg-foreground/5 font-slot-glyph font-semibold tracking-tight text-muted-foreground/50",
-            size === "sm" ? "h-7 w-7 text-[0.9rem]" : "text-[1.15rem]",
-            enabled && "invisible",
-          )}
-          aria-hidden
-        >
-          {glyph.label}
-        </span>
       </span>
     );
   }
@@ -428,9 +430,11 @@ export function ChainSlotIcon({
       src={CHAIN_SLOT_ICONS[id]}
       alt=""
       className={cn(
-        "object-contain",
+        "object-contain transition-[transform,opacity] duration-[220ms] ease-out",
         IMAGE_SIZE[size],
-        !enabled && "opacity-20",
+        enabled
+          ? "scale-100 opacity-100"
+          : "scale-[0.78] opacity-20",
         className,
       )}
     />
