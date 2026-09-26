@@ -411,8 +411,8 @@ export function ChainSlotIcon({
         </span>
         <span
           className={cn(
-            "col-start-1 row-start-1 translate-y-0.5 font-slot-glyph font-semibold tracking-tight text-muted-foreground opacity-60",
-            size === "sm" ? "text-[0.9rem]" : "text-[1.15rem]",
+            "col-start-1 row-start-1 flex h-[48px] w-9 translate-y-px items-center justify-center rounded-[3px] bg-foreground/5 font-slot-glyph font-semibold tracking-tight text-muted-foreground/50",
+            size === "sm" ? "h-7 w-7 text-[0.9rem]" : "text-[1.15rem]",
             enabled && "invisible",
           )}
           aria-hidden
