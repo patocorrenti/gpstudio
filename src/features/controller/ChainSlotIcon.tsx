@@ -2,24 +2,27 @@ import type { ChainSlotId } from "@/device/session";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
 import { cn } from "@/lib/utils";
 
-export type SlotGlyphBody = "standard" | "tall" | "wide-top";
+export type SlotGlyphBody = "standard" | "tall" | "wide-top" | "wide";
 
 const GLYPH_SIZE_STYLE = {
-  icon: "relative items-end pb-0.9 text-[1.1rem] tracking-tight",
+  icon: "relative text-[1.1rem] tracking-tight",
   "icon-sm": "px-0.5 text-[0.95rem] tracking-tight",
 } as const;
 
-/** Pedal chassis size — discrete shapes, not free dimensions. */
+/** Chassis size — discrete shapes, not free dimensions. */
 const GLYPH_BODY = {
   icon: {
     standard: "h-[48px] w-9",
     tall: "h-[56px] w-9",
     "wide-top": "h-[56px] w-9",
+    /** Same height as pedals, a bit wider — AMP/CAB blocks (+ handle above). */
+    wide: "w-[42px] flex-col items-center",
   },
   "icon-sm": {
     standard: "size-7",
     tall: "h-8 w-7",
     "wide-top": "h-8 w-7",
+    wide: "size-7",
   },
 } as const;
 
@@ -29,7 +32,26 @@ const GLYPH_CHASSIS = {
   tall: "rounded-[3px]",
   "wide-top":
     "[clip-path:polygon(0%_0%,100%_0%,92%_100%,8%_100%)]",
+  wide: "rounded-[3px]",
 } as const;
+
+const PEDAL_BODIES: ReadonlySet<SlotGlyphBody> = new Set([
+  "standard",
+  "tall",
+  "wide-top",
+]);
+
+/** Shared AMP / CAB handle fill (same as AMP chassis). */
+const AMP_HANDLE_COLOR = "#e59f3d";
+
+function AmpCabHandle({ color }: { color: string }) {
+  return (
+    <span
+      className="h-[7px] w-[72%] rounded-t-[3px] border border-b-0 bg-transparent"
+      style={{ borderColor: color }}
+    />
+  );
+}
 
 export type SlotGlyphKnobTone = "light" | "dark";
 
@@ -76,14 +98,17 @@ function GlyphJack({ side }: { side: "left" | "right" }) {
   );
 }
 
-/** Pedal face detail — discrete layouts, not a free knob count. */
+/** Pedal / module face detail — discrete layouts. */
 export type SlotGlyphFace =
+  | "blank"
   | "knobs-1"
   | "knobs-2"
   | "knobs-3"
   | "knobs-6"
   | "sliders-4"
-  | "lines-7";
+  | "lines-7"
+  | "amp-panel"
+  | "cab-speaker";
 
 function Knobs3Row({ tone }: { tone: SlotGlyphKnobTone }) {
   return (
@@ -122,6 +147,41 @@ function FaceLines7() {
   );
 }
 
+const AMP_PANEL_COLOR = "#7a5520";
+const CAB_BG_COLOR = "#505251";
+const CAB_DETAIL_COLOR = "#393a39";
+const CAB_FRAME_COLOR = "#272827";
+
+/** Amp head control strip — darker brown panel with five knobs. */
+function FaceAmpPanel() {
+  return (
+    <span
+      className="absolute top-1 inset-x-1 flex h-3.5 items-center justify-evenly rounded-[3px] px-0.5"
+      style={{ backgroundColor: AMP_PANEL_COLOR }}
+    >
+      {Array.from({ length: 5 }, (_, index) => (
+        <span key={index} className="size-[3.5px] rounded-full bg-zinc-300" />
+      ))}
+    </span>
+  );
+}
+
+/** Cab baffle — inset frame + speaker circle. */
+function FaceCabSpeaker() {
+  return (
+    <>
+      <span
+        className="absolute inset-[3px] rounded-[2px] border-2"
+        style={{ borderColor: CAB_FRAME_COLOR }}
+      />
+      <span
+        className="absolute top-1/2 left-1/2 size-[28px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{ backgroundColor: CAB_DETAIL_COLOR }}
+      />
+    </>
+  );
+}
+
 function GlyphFace({
   face,
   knobTone,
@@ -130,6 +190,8 @@ function GlyphFace({
   knobTone: SlotGlyphKnobTone;
 }) {
   switch (face) {
+    case "blank":
+      return null;
     case "knobs-1":
       return (
         <span className="absolute top-1.5 inset-x-0 flex justify-center">
@@ -160,6 +222,10 @@ function GlyphFace({
       return <EqSliders />;
     case "lines-7":
       return <FaceLines7 />;
+    case "amp-panel":
+      return <FaceAmpPanel />;
+    case "cab-speaker":
+      return <FaceCabSpeaker />;
   }
 }
 
@@ -178,6 +244,7 @@ export function SlotGlyph({
   body = "standard",
   face = "knobs-2",
   knobTone = "light",
+  handleColor = AMP_HANDLE_COLOR,
   className,
 }: {
   label: string;
@@ -187,16 +254,23 @@ export function SlotGlyph({
   body?: SlotGlyphBody;
   face?: SlotGlyphFace;
   knobTone?: SlotGlyphKnobTone;
+  handleColor?: string;
   className?: string;
 }) {
-  const showHardware = variant === "icon";
+  const showJacks = variant === "icon" && PEDAL_BODIES.has(body);
+  const showFace = variant === "icon" && face !== "blank";
+  const showHandle = body === "wide" && variant === "icon";
+  const alignBottom = showJacks || (variant === "icon" && face === "amp-panel");
+  const pedalAlign = alignBottom ? "items-end pb-0.9" : "items-center";
+  const boxSize = showHandle ? "h-[42px] w-full" : "size-full";
 
   return (
     <span
       className={cn("relative inline-flex", GLYPH_BODY[variant][body], className)}
       aria-hidden
     >
-      {showHardware ? (
+      {showHandle ? <AmpCabHandle color={handleColor} /> : null}
+      {showJacks ? (
         <>
           <GlyphJack side="left" />
           <GlyphJack side="right" />
@@ -204,14 +278,16 @@ export function SlotGlyph({
       ) : null}
       <span
         className={cn(
-          "flex size-full items-center justify-center font-slot-glyph font-semibold leading-none tracking-wide",
+          "relative flex justify-center font-slot-glyph font-semibold leading-none tracking-wide",
+          boxSize,
+          pedalAlign,
           GLYPH_SIZE_STYLE[variant],
           GLYPH_CHASSIS[body],
         )}
         style={{ backgroundColor, color: TEXT_TONE[textTone] }}
       >
-        {showHardware ? <GlyphFace face={face} knobTone={knobTone} /> : null}
-        {label}
+        {showFace ? <GlyphFace face={face} knobTone={knobTone} /> : null}
+        <span className="relative z-10">{label}</span>
       </span>
     </span>
   );
@@ -243,6 +319,7 @@ const SLOT_GLYPHS: Partial<
       body?: SlotGlyphBody;
       face?: SlotGlyphFace;
       knobTone?: SlotGlyphKnobTone;
+      handleColor?: string;
     }
   >
 > = {
@@ -278,6 +355,20 @@ const SLOT_GLYPHS: Partial<
     face: "lines-7",
     textTone: "dark",
   },
+  amp: {
+    label: "AMP",
+    backgroundColor: AMP_HANDLE_COLOR,
+    body: "wide",
+    face: "amp-panel",
+    textTone: "dark",
+  },
+  cab: {
+    label: "CAB",
+    backgroundColor: CAB_BG_COLOR,
+    body: "wide",
+    face: "cab-speaker",
+    handleColor: CAB_BG_COLOR,
+  },
 };
 
 export function ChainSlotIcon({
@@ -300,6 +391,7 @@ export function ChainSlotIcon({
           body={glyph.body}
           face={glyph.face}
           knobTone={glyph.knobTone}
+          handleColor={glyph.handleColor}
           variant={GLYPH_SIZE[size]}
         />
       </span>
