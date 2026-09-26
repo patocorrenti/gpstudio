@@ -20,8 +20,8 @@ const GLYPH_BODY = {
   },
   "icon-sm": {
     standard: "size-7",
-    tall: "h-8 w-7",
-    "wide-top": "h-8 w-7",
+    tall: "size-7",
+    "wide-top": "size-7",
     wide: "size-7",
   },
 } as const;
@@ -257,16 +257,25 @@ export function SlotGlyph({
   handleColor?: string;
   className?: string;
 }) {
-  const showJacks = variant === "icon" && PEDAL_BODIES.has(body);
-  const showFace = variant === "icon" && face !== "blank";
-  const showHandle = body === "wide" && variant === "icon";
-  const alignBottom = showJacks || (variant === "icon" && face === "amp-panel");
+  const isSm = variant === "icon-sm";
+  /** Small icons: same plate for every slot — color + text tone only. */
+  const resolvedBody = isSm ? "standard" : body;
+  const resolvedFace = isSm ? "blank" : face;
+  const showJacks = !isSm && PEDAL_BODIES.has(resolvedBody);
+  const showFace = !isSm && resolvedFace !== "blank";
+  const showHandle = !isSm && resolvedBody === "wide";
+  const alignBottom =
+    showJacks || (!isSm && resolvedFace === "amp-panel");
   const pedalAlign = alignBottom ? "items-end pb-0.9" : "items-center";
   const boxSize = showHandle ? "h-[42px] w-full" : "size-full";
 
   return (
     <span
-      className={cn("relative inline-flex", GLYPH_BODY[variant][body], className)}
+      className={cn(
+        "relative inline-flex",
+        GLYPH_BODY[variant][resolvedBody],
+        className,
+      )}
       aria-hidden
     >
       {showHandle ? <AmpCabHandle color={handleColor} /> : null}
@@ -282,11 +291,13 @@ export function SlotGlyph({
           boxSize,
           pedalAlign,
           GLYPH_SIZE_STYLE[variant],
-          GLYPH_CHASSIS[body],
+          GLYPH_CHASSIS[resolvedBody],
         )}
         style={{ backgroundColor, color: TEXT_TONE[textTone] }}
       >
-        {showFace ? <GlyphFace face={face} knobTone={knobTone} /> : null}
+        {showFace ? (
+          <GlyphFace face={resolvedFace} knobTone={knobTone} />
+        ) : null}
         <span className="relative z-10">{label}</span>
       </span>
     </span>
@@ -404,7 +415,7 @@ export function ChainSlotIcon({
         <span
           className={cn(
             "col-start-1 row-start-1 z-10 origin-center transition-[transform,opacity] duration-[220ms] ease-out",
-            glyph.body === "wide" && "relative -top-2",
+            glyph.body === "wide" && size === "md" && "relative -top-2",
             enabled
               ? "opacity-100 [transform:translateZ(0)_scale(1)]"
               : "pointer-events-none opacity-0 [transform:translateZ(-28px)_scale(0.78)]",
