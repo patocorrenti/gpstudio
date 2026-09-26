@@ -110,12 +110,9 @@ function AudioChainSlotView({
         )}
         style={{ top: CHAIN_CABLE_TOP }}
       />
-      <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
+      <div className="relative flex min-h-6 w-full flex-col items-center justify-center">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
-          <ChainSlotIcon
-            id={slot.id}
-            className={slot.enabled ? undefined : "opacity-20"}
-          />
+          <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
           {bypassed ? (
             <span
               className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
@@ -125,14 +122,6 @@ function AudioChainSlotView({
             </span>
           ) : null}
         </div>
-        <span
-          className={cn(
-            "relative z-10 text-xs font-semibold tracking-wide",
-            !slot.enabled && "opacity-80",
-          )}
-        >
-          {label}
-        </span>
       </div>
       <Switch
         size="sm"

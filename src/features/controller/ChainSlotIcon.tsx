@@ -374,26 +374,51 @@ const SLOT_GLYPHS: Partial<
 export function ChainSlotIcon({
   id,
   size = "md",
+  enabled = true,
   className,
 }: {
   id: ChainSlotId;
   size?: "md" | "sm";
+  enabled?: boolean;
   className?: string;
 }) {
   const glyph = SLOT_GLYPHS[id];
   if (glyph) {
     return (
-      <span className={cn(GLYPH_FRAME[size], className)}>
-        <SlotGlyph
-          label={glyph.label}
-          backgroundColor={glyph.backgroundColor}
-          textTone={glyph.textTone}
-          body={glyph.body}
-          face={glyph.face}
-          knobTone={glyph.knobTone}
-          handleColor={glyph.handleColor}
-          variant={GLYPH_SIZE[size]}
-        />
+      <span
+        className={cn(
+          GLYPH_FRAME[size],
+          "relative grid place-items-center",
+          className,
+        )}
+      >
+        <span
+          className={cn(
+            "col-start-1 row-start-1",
+            !enabled && "invisible",
+          )}
+        >
+          <SlotGlyph
+            label={glyph.label}
+            backgroundColor={glyph.backgroundColor}
+            textTone={glyph.textTone}
+            body={glyph.body}
+            face={glyph.face}
+            knobTone={glyph.knobTone}
+            handleColor={glyph.handleColor}
+            variant={GLYPH_SIZE[size]}
+          />
+        </span>
+        <span
+          className={cn(
+            "col-start-1 row-start-1 translate-y-0.5 font-slot-glyph font-semibold tracking-tight text-muted-foreground opacity-60",
+            size === "sm" ? "text-[0.9rem]" : "text-[1.15rem]",
+            enabled && "invisible",
+          )}
+          aria-hidden
+        >
+          {glyph.label}
+        </span>
       </span>
     );
   }
@@ -402,7 +427,12 @@ export function ChainSlotIcon({
     <img
       src={CHAIN_SLOT_ICONS[id]}
       alt=""
-      className={cn("object-contain", IMAGE_SIZE[size], className)}
+      className={cn(
+        "object-contain",
+        IMAGE_SIZE[size],
+        !enabled && "opacity-20",
+        className,
+      )}
     />
   );
 }
