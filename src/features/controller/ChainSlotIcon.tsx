@@ -148,9 +148,9 @@ function FaceLines7() {
 }
 
 const AMP_PANEL_COLOR = "#7a5520";
-const CAB_BG_COLOR = "#505251";
-const CAB_DETAIL_COLOR = "#393a39";
-const CAB_FRAME_COLOR = "#272827";
+const CAB_BG_COLOR = "#d2712a";
+const CAB_DETAIL_COLOR = "#755121";
+const CAB_FRAME_COLOR = "#755121";
 
 /** Amp head control strip — darker brown panel with five knobs. */
 function FaceAmpPanel() {
@@ -175,7 +175,7 @@ function FaceCabSpeaker() {
         style={{ borderColor: CAB_FRAME_COLOR }}
       />
       <span
-        className="absolute top-1/2 left-1/2 size-[28px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="absolute top-1/2 left-1/2 size-[30px] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ backgroundColor: CAB_DETAIL_COLOR }}
       />
     </>
