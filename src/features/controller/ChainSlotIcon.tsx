@@ -2,9 +2,33 @@ import type { ChainSlotId } from "@/device/session";
 import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
 import { cn } from "@/lib/utils";
 
-const GLYPH_VARIANT = {
-  icon: "relative h-[48px] w-9 items-end rounded-[3px] pb-0.9 text-[1.1rem] tracking-tight",
-  "icon-sm": "size-7 rounded-[3px] px-0.5 text-[0.95rem] tracking-tight",
+export type SlotGlyphBody = "standard" | "tall" | "wide-top";
+
+const GLYPH_SIZE_STYLE = {
+  icon: "relative items-end pb-0.9 text-[1.1rem] tracking-tight",
+  "icon-sm": "px-0.5 text-[0.95rem] tracking-tight",
+} as const;
+
+/** Pedal chassis size — discrete shapes, not free dimensions. */
+const GLYPH_BODY = {
+  icon: {
+    standard: "h-[48px] w-9",
+    tall: "h-[56px] w-9",
+    "wide-top": "h-[56px] w-9",
+  },
+  "icon-sm": {
+    standard: "size-7",
+    tall: "h-8 w-7",
+    "wide-top": "h-8 w-7",
+  },
+} as const;
+
+/** Chassis outline — rect with radius, or slight top-wide trapezoid. */
+const GLYPH_CHASSIS = {
+  standard: "rounded-[3px]",
+  tall: "rounded-[3px]",
+  "wide-top":
+    "[clip-path:polygon(0%_0%,100%_0%,92%_100%,8%_100%)]",
 } as const;
 
 export type SlotGlyphKnobTone = "light" | "dark";
@@ -53,7 +77,13 @@ function GlyphJack({ side }: { side: "left" | "right" }) {
 }
 
 /** Pedal face detail — discrete layouts, not a free knob count. */
-export type SlotGlyphFace = "knobs-1" | "knobs-2" | "knobs-3" | "knobs-6" | "sliders-4";
+export type SlotGlyphFace =
+  | "knobs-1"
+  | "knobs-2"
+  | "knobs-3"
+  | "knobs-6"
+  | "sliders-4"
+  | "lines-7";
 
 function Knobs3Row({ tone }: { tone: SlotGlyphKnobTone }) {
   return (
@@ -73,6 +103,21 @@ function EqSliders() {
       <span className="h-3.5 w-[3px] rounded-full bg-zinc-700" />
       <span className="h-2.5 w-[3px] rounded-full bg-zinc-700" />
       <span className="h-3 w-[3px] rounded-full bg-zinc-700" />
+    </span>
+  );
+}
+
+/** Horizontal tread lines above the label (expression pedal). */
+function FaceLines7() {
+  return (
+    <span className="absolute top-1.5 inset-x-1.5 flex flex-col gap-[3px]">
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
+      <span className="h-px w-full bg-black/25" />
     </span>
   );
 }
@@ -113,6 +158,8 @@ function GlyphFace({
       );
     case "sliders-4":
       return <EqSliders />;
+    case "lines-7":
+      return <FaceLines7 />;
   }
 }
 
@@ -128,6 +175,7 @@ export function SlotGlyph({
   backgroundColor,
   textTone = "light",
   variant = "icon",
+  body = "standard",
   face = "knobs-2",
   knobTone = "light",
   className,
@@ -135,29 +183,36 @@ export function SlotGlyph({
   label: string;
   backgroundColor: string;
   textTone?: SlotGlyphTextTone;
-  variant?: keyof typeof GLYPH_VARIANT;
+  variant?: keyof typeof GLYPH_SIZE_STYLE;
+  body?: SlotGlyphBody;
   face?: SlotGlyphFace;
   knobTone?: SlotGlyphKnobTone;
   className?: string;
 }) {
+  const showHardware = variant === "icon";
+
   return (
     <span
-      className={cn(
-        "inline-flex items-center justify-center font-slot-glyph font-semibold leading-none tracking-wide",
-        GLYPH_VARIANT[variant],
-        className,
-      )}
-      style={{ backgroundColor, color: TEXT_TONE[textTone] }}
+      className={cn("relative inline-flex", GLYPH_BODY[variant][body], className)}
       aria-hidden
     >
-      {variant === "icon" ? (
+      {showHardware ? (
         <>
           <GlyphJack side="left" />
           <GlyphJack side="right" />
-          <GlyphFace face={face} knobTone={knobTone} />
         </>
       ) : null}
-      {label}
+      <span
+        className={cn(
+          "flex size-full items-center justify-center font-slot-glyph font-semibold leading-none tracking-wide",
+          GLYPH_SIZE_STYLE[variant],
+          GLYPH_CHASSIS[body],
+        )}
+        style={{ backgroundColor, color: TEXT_TONE[textTone] }}
+      >
+        {showHardware ? <GlyphFace face={face} knobTone={knobTone} /> : null}
+        {label}
+      </span>
     </span>
   );
 }
@@ -176,7 +231,7 @@ const GLYPH_FRAME = {
 const GLYPH_SIZE = {
   md: "icon",
   sm: "icon-sm",
-} as const satisfies Record<"md" | "sm", keyof typeof GLYPH_VARIANT>;
+} as const satisfies Record<"md" | "sm", keyof typeof GLYPH_SIZE_STYLE>;
 
 const SLOT_GLYPHS: Partial<
   Record<
@@ -185,6 +240,7 @@ const SLOT_GLYPHS: Partial<
       label: string;
       backgroundColor: string;
       textTone?: SlotGlyphTextTone;
+      body?: SlotGlyphBody;
       face?: SlotGlyphFace;
       knobTone?: SlotGlyphKnobTone;
     }
@@ -215,6 +271,13 @@ const SLOT_GLYPHS: Partial<
     face: "sliders-4",
     textTone: "dark",
   },
+  exp: {
+    label: "EXP",
+    backgroundColor: "#48c4dc",
+    body: "wide-top",
+    face: "lines-7",
+    textTone: "dark",
+  },
 };
 
 export function ChainSlotIcon({
@@ -234,6 +297,7 @@ export function ChainSlotIcon({
           label={glyph.label}
           backgroundColor={glyph.backgroundColor}
           textTone={glyph.textTone}
+          body={glyph.body}
           face={glyph.face}
           knobTone={glyph.knobTone}
           variant={GLYPH_SIZE[size]}
