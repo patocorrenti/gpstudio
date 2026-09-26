@@ -137,7 +137,7 @@ function AudioChainSlotView({
         disabled={disabled}
         className={cn(
           "relative z-10",
-          "data-checked:bg-primary/45 data-unchecked:bg-foreground/50 dark:data-unchecked:bg-input/80 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-muted-foreground",
+          "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-muted-foreground/45 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-primary-foreground",
         )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
         onPointerDown={(event) => {
