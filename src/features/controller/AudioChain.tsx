@@ -115,10 +115,18 @@ function AudioChainSlotView({
           <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
           {bypassed ? (
             <span
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+              className="pointer-events-none absolute inset-0 z-10 flex translate-y-[3px] items-center justify-center"
               aria-hidden="true"
             >
-              <Ban className="size-11 text-destructive drop-shadow-sm" strokeWidth={2.5} />
+              <Ban
+                className={cn(
+                  "size-11 drop-shadow-sm",
+                  slot.enabled
+                    ? "text-destructive"
+                    : "text-muted-foreground/35",
+                )}
+                strokeWidth={2.5}
+              />
             </span>
           ) : null}
         </div>
