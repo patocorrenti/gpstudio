@@ -25,7 +25,7 @@ import {
   type StompAssignment,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
-import { CHAIN_SLOT_ICONS } from "@/features/controller/chain-slot-icons";
+import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { SlotStompMark } from "@/features/controller/StompAssignment";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,6 @@ function AudioChainSlotView({
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
-  const icon = CHAIN_SLOT_ICONS[slot.id];
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
   const movable = isMovableEffect(slot.id);
@@ -111,35 +110,26 @@ function AudioChainSlotView({
         )}
         style={{ top: CHAIN_CABLE_TOP }}
       />
-      <div className="relative flex min-h-6 w-full flex-col items-center justify-center gap-1">
+      <div className="relative flex min-h-6 w-full flex-col items-center justify-center">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
-          {icon ? (
-            <img
-              src={icon}
-              alt=""
-              className={cn(
-                "object-contain size-14",
-                slot.enabled ? "" : "opacity-20",
-              )}
-            />
-          ) : null}
+          <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
           {bypassed ? (
             <span
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+              className="pointer-events-none absolute inset-0 z-10 flex translate-y-[3px] items-center justify-center"
               aria-hidden="true"
             >
-              <Ban className="size-11 text-destructive drop-shadow-sm" strokeWidth={2.5} />
+              <Ban
+                className={cn(
+                  "size-11 drop-shadow-sm",
+                  slot.enabled
+                    ? "text-destructive"
+                    : "text-muted-foreground/35",
+                )}
+                strokeWidth={2.5}
+              />
             </span>
           ) : null}
         </div>
-        <span
-          className={cn(
-            "relative z-10 text-xs font-semibold tracking-wide",
-            !slot.enabled && "opacity-80",
-          )}
-        >
-          {label}
-        </span>
       </div>
       <Switch
         size="sm"

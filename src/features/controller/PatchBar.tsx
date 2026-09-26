@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, TriangleAlert, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Settings2, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,7 +44,7 @@ import { toast } from "sonner";
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
 const patchChipClass =
-  "rounded-[4px] bg-muted dark:bg-muted/40 dark:hover:bg-muted/50";
+  "rounded-[4px] bg-background hover:bg-background/90 dark:bg-muted/40 dark:hover:bg-muted/50";
 const patchActionClass = `${patchChipClass} px-3`;
 const patchActionIconClass = "size-3 text-muted-foreground";
 
@@ -301,7 +301,8 @@ export function PatchBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1">
+    <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
+      <div className="flex flex-wrap items-center justify-center gap-1 px-6 pt-7 pb-3">
       <TooltipProvider delayDuration={0}>
         <PatchNavTooltip enabled={modified}>
           <span className="inline-flex">
@@ -379,11 +380,11 @@ export function PatchBar({
               variant="ghost"
               disabled={busy}
               className={patchActionClass}
-              aria-label="Patch options"
+              aria-label="Options"
               aria-expanded={optionsOpen}
             >
-              Patch Options
-              <ChevronDown className={patchActionIconClass} />
+              <Settings2 className={patchActionIconClass} />
+              Options
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-44 gap-0.5 p-1">
@@ -454,6 +455,7 @@ export function PatchBar({
         />
       </div>
       <PatchLevels model={model} volume={patchVolume} bpm={patchBpm} disabled={busy} />
+      </div>
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {
