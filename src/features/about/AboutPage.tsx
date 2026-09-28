@@ -7,6 +7,19 @@ import {
 
 const CHANGELOG = [
   {
+    version: "0.4.0",
+    notes: [
+      "Footswitch and tuner control",
+      "Many UI improvements",
+      "Removed the upload warning when the patch has no changes",
+      "Warn when downloading a patch that includes a custom IR",
+      "Fixed custom IR names not showing over USB",
+      "Released under the MIT license",
+      "New connection screen",
+      "Simplified Web Bluetooth connection steps",
+    ],
+  },
+  {
     version: "0.3.1",
     notes: [
       "Substantial improvement to connection stability",
