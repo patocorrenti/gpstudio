@@ -1,6 +1,6 @@
 import { Bug } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
-import logo from "@/assets/img/gpstudio-logo.svg";
+import logo from "@/assets/img/gpstudio-logo-black.svg";
 import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";

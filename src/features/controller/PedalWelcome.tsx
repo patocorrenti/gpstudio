@@ -1,4 +1,4 @@
-import logo from "@/assets/img/gpstudio-logo.svg";
+import logo from "@/assets/img/gpstudio-logo-black.svg";
 import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
 import pedalsLineBlack from "@/assets/img/gp5-50-line-black.png";
 import pedalsLineWhite from "@/assets/img/gp5-50-line-white.png";
