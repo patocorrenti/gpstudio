@@ -38,6 +38,8 @@ export const gp50Cc = {
   patchStompMode: 28,
   tempoMsb: 73,
   tempoLsb: 74,
+  /** CTRL 2 / stomp B. CTRL 1 / stomp A is the inherited `ctl` (CC 69). */
+  ctrl2: 70,
 } as const;
 
 /** Official module switches: NR…RVB are CC 48–57. */

@@ -25,10 +25,16 @@ export function NoPedalsConnected() {
   );
 }
 
-export function RequirePedal({ children }: { children: ReactNode }) {
+export function RequirePedal({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
   const snapshot = useSessionSnapshot();
   if (snapshot.status !== "connected") {
-    return <NoPedalsConnected />;
+    return fallback ?? <NoPedalsConnected />;
   }
   return children;
 }

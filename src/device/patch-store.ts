@@ -5,6 +5,8 @@ import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /** Packed SET header: size `0x10`, path `01 01 04`, family `114a` (store). */
 const STORE_SET_PREFIX = [0x01, 0x00, 0x10, 0x11, 0x4a] as const;
+/** Packed SET header: size `0x06`, family `1143` (Bluetooth patch recall). */
+const PATCH_RECALL_SET_PREFIX = [0x01, 0x00, 0x06, 0x11, 0x43] as const;
 /** Packed SET header: size `0x0A`, family `1142` (patch volume / BPM). */
 const PATCH_GLOBAL_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x42] as const;
 const PATCH_VOL_KIND = [0x01, 0x20, 0x00, 0x00] as const;
@@ -107,6 +109,20 @@ function nulNameBytes(name: string): Uint8Array {
 }
 
 /**
+ * App→pedal patch recall SET (family `1143`). Packed body locked from the
+ * reference editors' listPatches handler: size `0x06` + patch 0–99 + three
+ * zero bytes. Path `01 01 04`, CRC-8 ATM, nibble-expand, `F0`…`F7`. Used on
+ * Bluetooth; USB recall stays official CC 0. Not a live notify.
+ */
+export function encodePatchRecallSysex(patch: number): Uint8Array | null {
+  if (!Number.isInteger(patch) || patch < 0 || patch > 99) {
+    return null;
+  }
+  const packed = Uint8Array.from([...PATCH_RECALL_SET_PREFIX, patch, 0x00, 0x00, 0x00]);
+  return framePackedSet(packed);
+}
+
+/**
  * App→pedal current-patch store SET (family `114a`). Packed destination slot
  * 0–99 + 10-character space-padded name. Path `01 01 04`, CRC-8 ATM,
  * nibble-expand, `F0`…`F7`. Not a live notify and not a full preset dump.
@@ -165,10 +181,12 @@ function prstLayout(model: DeviceModel): {
       bpmAt: GP50_DUMP_BPM_AT,
     };
   }
+  // Chain body is shifted −86 vs GP-50; patch volume stays at dump word 100
+  // (same as the GP-5 reference editor). BPM is unused on GP-5 UI.
   return {
     bodyAt: GP5_PRST_BODY_AT,
     bodyLength: GP5_PRST_BODY_LENGTH,
-    volAt: GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT,
+    volAt: GP50_DUMP_VOL_AT,
     bpmAt: GP50_DUMP_BPM_AT - GP5_DUMP_SHIFT,
   };
 }
@@ -648,10 +666,18 @@ function assertPatchStoreFixtures(): void {
   if (
     packedWord(decodedGp50.dump, GP50_DUMP_VOL_AT) !== decodedGp50.volume ||
     readDumpPatchBpm("gp50", decodedGp50.dump) !== decodedGp50.bpm ||
-    packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT) !== decodedGp5.volume ||
+    packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT) !== decodedGp5.volume ||
+    readDumpPatchVolume("gp5", decodedGp5.dump) !== decodedGp5.volume ||
     readDumpPatchBpm("gp5", decodedGp5.dump) !== decodedGp5.bpm
   ) {
     throw new Error("TOB decode must copy descriptor volume/BPM into dump word slots");
+  }
+  // GP-5 live dump: volume at 100 (not body-shifted 14). Byte 14 staying 0
+  // must not be read as patch volume.
+  const gp5LiveVol = new Uint8Array(decodedGp5.dump.length);
+  writePackedWord(gp5LiveVol, GP50_DUMP_VOL_AT, 80);
+  if (readDumpPatchVolume("gp5", gp5LiveVol) !== 80) {
+    throw new Error("GP-5 dump patch volume must read from offset 100");
   }
   const highBpmDump = new Uint8Array(decodedGp50.dump);
   writeDumpPatchBpm("gp50", highBpmDump, 260);
@@ -693,6 +719,29 @@ function assertPatchStoreFixtures(): void {
   }
   if (encodePatchVolumeSysex(101) || encodePatchBpmSysex(39)) {
     throw new Error("Patch volume/BPM SET must reject out-of-range values");
+  }
+
+  const recall5 = encodePatchRecallSysex(5);
+  const recall42 = encodePatchRecallSysex(42);
+  if (!recall5 || !recall42 || recall5[0] !== 0xf0 || recall5[recall5.length - 1] !== 0xf7) {
+    throw new Error("Patch recall SET must be framed SysEx");
+  }
+  if (
+    recall5[9] !== 0x01 ||
+    recall5[10] !== 0x01 ||
+    recall5[11] !== 0x04 ||
+    recall5[12] !== 0x03
+  ) {
+    throw new Error("Patch recall SET must nibble-expand packed family 1143");
+  }
+  if (recall5[13] !== 0x00 || recall5[14] !== 0x05) {
+    throw new Error("Patch recall SET must pack patch index 5");
+  }
+  if (recall42[13] !== 0x02 || recall42[14] !== 0x0a) {
+    throw new Error("Patch recall SET must pack patch index 42");
+  }
+  if (encodePatchRecallSysex(100) || encodePatchRecallSysex(-1)) {
+    throw new Error("Patch recall SET must reject out-of-range patches");
   }
 }
 

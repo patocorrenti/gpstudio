@@ -8,7 +8,7 @@ Lets the user connect a Valeton GP-5 or GP-50 over USB-MIDI or Bluetooth from th
 
 ### Requirement: Connect modal lists USB devices then resolves the model
 
-Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery and MUST list discovered Bluetooth pedals. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
+Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery. On the desktop app, the Bluetooth tab MUST list discovered Bluetooth pedals for the user to pick. On the web app, when the browser Bluetooth picker returns a chosen pedal, the system MUST treat that choice as the pick and MUST NOT require a second click in the modal list; if the picker is cancelled, the modal MUST still list already-authorized Bluetooth pedals when any are available. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
 
 #### Scenario: Discover then pick a USB device
 - **WHEN** the user opens Connect while disconnected
@@ -83,14 +83,29 @@ After a USB or Bluetooth session is marked connected, the chrome connection cont
 
 ### Requirement: Bluetooth tab lists pedals then connects
 
-While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals and MUST list them for the user to pick. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
+While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
 
-#### Scenario: Bluetooth scan then pick
-- **WHEN** the user selects the Bluetooth tab while disconnected
+On the desktop app, the modal MUST list discovered Bluetooth pedals for the user to pick, and the session MUST stay disconnected until the user picks a device from that list.
+
+On the web app, an interactive scan MUST open the browser Bluetooth picker. When the user chooses a pedal there, the system MUST proceed with that device as the pick without requiring another click in the modal list. When the user cancels the picker, the modal MUST list already-authorized Bluetooth pedals when any remain available, and the session MUST stay disconnected until the user picks one from that list or runs another scan.
+
+#### Scenario: Desktop Bluetooth scan then pick
+- **WHEN** the user selects the Bluetooth tab while disconnected in the desktop app
 - **THEN** the modal lists nearby Bluetooth pedals
 - **AND** it does not list USB-MIDI devices
 - **AND** the modal states that Bluetooth is a two-way connection and slower
 - **AND** the session stays disconnected until the user picks a device
+
+#### Scenario: Web Bluetooth picker connects without a second click
+- **WHEN** the user runs an interactive Bluetooth scan in the web app and chooses a pedal in the browser picker
+- **THEN** the system treats that pedal as the chosen device without requiring another click in the modal list
+- **AND** if the label suggests GP-5 or GP-50, the system connects using that model without asking
+- **AND** the connected session link mode is Bluetooth
+
+#### Scenario: Web Bluetooth picker cancelled keeps authorized list
+- **WHEN** the user runs an interactive Bluetooth scan in the web app, cancels the browser picker, and at least one already-authorized Bluetooth pedal is available
+- **THEN** the modal lists those authorized pedals
+- **AND** the session stays disconnected until the user picks a device from that list or scans again
 
 #### Scenario: Known Bluetooth model connects without asking
 - **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50
@@ -107,9 +122,29 @@ While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals an
 - **THEN** the modal shows an English error
 - **AND** the session stays disconnected
 
+### Requirement: App patch recall waits for chain sync
+
+While a USB or Bluetooth session is ready and the current patch chain is syncing (including while a patch-change confirmation dump is outstanding), an app-initiated patch recall (previous, next, or 00–99 select through the device session) MUST leave the selected index and outbound traffic unchanged: it MUST NOT send patch recall and MUST NOT start another chain-dump request solely because that recall was attempted. Pedal-initiated current-patch reports MAY still update the shown index and retarget the in-flight dump path. When chain sync returns to idle (confirmation applied or refresh timed out), later app recalls MUST send again as usual.
+
+#### Scenario: Select ignored while syncing
+- **WHEN** the session is ready, chain sync is syncing after an app recall, and the user selects another patch through the device session
+- **THEN** no additional patch recall is sent
+- **AND** no additional chain-dump request is started solely because that select ran
+
+#### Scenario: Next ignored while syncing
+- **WHEN** the session is ready, chain sync is syncing, and the user activates patch next through the device session
+- **THEN** no patch recall is sent solely because next was activated
+
+#### Scenario: Pedal retarget still allowed while syncing
+- **WHEN** the session is ready, chain sync is syncing for a pedal load, and the pedal reports a newer current patch
+- **THEN** the snapshot shows that newer index
+- **AND** the session retargets the in-flight dump path for that index without requiring app recall
+
 ### Requirement: Bluetooth session sends patch recall
 
-While a session is connected over Bluetooth and initial patch identity sync has completed or timed out, Controller MUST offer working patch previous, patch next, and patch select (00–99), the same controls as a USB session. Choosing a patch or stepping previous/next MUST update the session patch and send that patch to the pedal through the device session. Connecting MUST NOT send a patch recall message by itself. USB sessions MUST keep sending patch recall through the device session using official CC 0.
+While a session is connected over Bluetooth and initial patch identity sync has completed or timed out, Controller MUST offer working patch previous, patch next, and patch select (00–99), the same controls as a USB session. Choosing a patch or stepping previous/next MUST update the session patch and MUST send that patch to the pedal through the device session as a parameter-write SET of packed family `1143` (path `01 01 04`, CRC-8 + nibble-expand; not live notify path `01 02 04` and not official CC 0), except when app patch recall is blocked because chain sync is syncing. After a `1143` SET is sent for an allowed recall, the session MUST wait for the pedal's command-received ACK for that write (or a short timeout if the ACK does not arrive) before requesting the current-preset dump for that patch. The confirmation dump after the first dump applies MUST still run as specified for patch changes. Connecting MUST NOT send a patch recall message by itself.
+
+USB sessions MUST keep sending patch recall through the device session using official CC 0. After an allowed USB CC 0 recall, the session MUST wait for a current-patch identity notify whose index matches the selected patch (or a short timeout if that notify does not arrive) before requesting the current-preset dump for that patch. USB MUST NOT wait for the Bluetooth `1143` command-received ACK. The confirmation dump after the first dump applies MUST still run on USB as specified for patch changes.
 
 #### Scenario: Bluetooth connected shows working patch send
 - **WHEN** the user is connected over Bluetooth, initial sync has completed or timed out, and opens Controller
@@ -117,17 +152,43 @@ While a session is connected over Bluetooth and initial patch identity sync has 
 - **AND** no patch recall is sent solely because the session connected or Controller opened
 
 #### Scenario: Select a patch over Bluetooth
-- **WHEN** the user is connected over Bluetooth and selects patch `42` from the center selector
+- **WHEN** the user is connected over Bluetooth, chain sync is idle, and selects patch `42` from the center selector
 - **THEN** the label reads `42`
-- **AND** the pedal is sent patch 42 through the device session
+- **AND** the pedal is sent patch 42 through the device session as packed family `1143`
+- **AND** that send is not official CC 0
+
+#### Scenario: Bluetooth dump waits for recall ACK
+- **WHEN** the user is connected over Bluetooth, chain sync is idle, and selects another patch
+- **THEN** the `1143` SET is sent
+- **AND** no current-preset dump request is sent for that recall until the command-received ACK arrives or the ACK wait times out
+- **AND** after that ACK or timeout, the session still requests the chain dump and still arms the confirmation dump as for other patch changes
 
 #### Scenario: USB patch send unchanged
-- **WHEN** the user is connected over USB and selects a patch
+- **WHEN** the user is connected over USB, chain sync is idle, and selects a patch
 - **THEN** that patch is still sent through the device session using official CC 0
+- **AND** no current-preset dump request is sent for that recall until a matching current-patch identity notify arrives or the wait times out
+- **AND** the session does not wait for a Bluetooth `1143` ACK
+- **AND** after that notify or timeout, the session still requests the chain dump and still arms the confirmation dump as for other patch changes
+
+#### Scenario: USB dump after matching index notify
+- **WHEN** the user is connected over USB, chain sync is syncing after CC 0 for patch `6`, and a current-patch identity for `6` arrives before the wait times out
+- **THEN** the session requests the current-preset dump for that patch
+- **AND** no second CC 0 is sent solely because that identity arrived
+
+#### Scenario: USB dump after index wait timeout
+- **WHEN** the user is connected over USB, chain sync is syncing after CC 0, and no matching current-patch identity arrives before the wait times out
+- **THEN** the session still requests the current-preset dump for the selected patch
+- **AND** still arms the confirmation dump as for other patch changes
 
 ### Requirement: Connected session syncs the current audio chain
 
-After a USB or Bluetooth session is marked connected, the device session SHALL request the current patch's audio-chain dump on the open link after patch identity (names and current index) or when that identity step times out. The connected snapshot MUST carry the current chain (module order and on/off) when a dump is decoded. If the dump times out or SysEx is unavailable, the session MUST still become ready after patch identity and MUST NOT send patch recall solely because the dump was missing. The chain request MAY continue in the background after the session is ready. After the session is ready, choosing a patch or a pedal-initiated patch report MUST refresh the chain for that patch without sending extra patch recall solely to obtain the dump. A decoded dump for that newly selected patch MUST be applied even when its chain equals the chain already shown. The session MUST NOT discard that dump because of that equality. Applying it MUST end the refresh: the snapshot carries that chain, the dump is held for download, and the patch is no longer syncing. After that patch-change dump is applied, the session MUST request one confirmation dump of the current patch and MUST NOT send patch recall for it. The confirmation MUST NOT mark the patch syncing. A confirmation that decodes to the same chain already shown MUST be discarded and MUST leave the shown chain and the held dump unchanged. A confirmation that decodes to a different chain MUST replace the shown chain and the held dump when the working patch is not modified, and MUST NOT request another confirmation. A confirmation that arrives after the user has edited the working patch MUST be discarded. Connect, Reload, download, and upload MUST NOT start a confirmation. Disconnect MUST drop chain state.
+After a USB or Bluetooth session is marked connected, the device session SHALL request the current patch's audio-chain dump on the open link after patch identity (names and current index) or when that identity step times out. The connected snapshot MUST carry the current chain (module order and on/off) when a dump is decoded. If the dump times out or SysEx is unavailable, the session MUST still become ready after patch identity and MUST NOT send patch recall solely because the dump was missing. The chain request MAY continue in the background after the session is ready. After the session is ready, choosing a patch or a pedal-initiated patch report MUST refresh the chain for that patch without sending extra patch recall solely to obtain the dump. A decoded dump for that newly selected patch MUST be applied even when its chain equals the chain already shown. The session MUST NOT discard that dump because of that equality.
+
+While a pedal-initiated patch load is in flight (a newer current-patch index has been accepted and its chain dump has not finished applying), a later pedal current-patch report for a different slot MUST retarget that load: the connected snapshot MUST show the latest reported index, the session MUST abandon the previous dump assembly for that load, and the session MUST request one chain dump for the latest slot. The session MUST NOT leave the shown index frozen on an intermediate slot solely because an earlier dump is still outstanding. While an app-initiated patch recall is in flight, a current-patch report for a different slot MUST NOT revert the selected index.
+
+Applying the first dump of a user or pedal patch change MUST arm one confirmation dump of the current patch and MUST NOT send patch recall for it. On USB and on Bluetooth, that first apply MUST keep the patch syncing until the confirmation dump is applied or the refresh times out. Connect, Reload, download, and upload MUST NOT start a confirmation. A confirmation that decodes to the same chain already shown MUST be discarded and MUST leave the shown chain and the held dump unchanged, and MUST end syncing. A confirmation that decodes to a different chain MUST replace the shown chain and the held dump when the working patch is not modified, MUST end syncing, and MUST NOT request another confirmation. A confirmation that arrives after the user has edited the working patch MUST be discarded and MUST end syncing when the overlay was held for confirmation. Disconnect MUST drop chain state.
+
+When a chain refresh times out without applying a finished dump (including while waiting for a USB current-patch identity before the first dump, or while a confirmation dump is outstanding), the session MUST end syncing and MUST clear any in-flight patch-load gate so a later pedal current-patch report can update the shown index and start a new dump path. The session MAY re-ask current-patch identity after that timeout.
 
 #### Scenario: USB connect requests the chain
 - **WHEN** a USB session becomes connected and SysEx is available
@@ -153,14 +214,25 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 #### Scenario: Identical patch dump is applied
 - **WHEN** the session is ready, the user selects another patch, and the dump for that patch decodes to the same chain already shown
 - **THEN** the session applies that dump
-- **AND** the current patch is no longer syncing
-- **AND** download can use that dump
+- **AND** the patch stays syncing until the confirmation dump is applied or the refresh times out
+- **AND** download can use that dump once syncing ends
 - **AND** no extra patch recall is sent solely to obtain that dump
+
+#### Scenario: Rapid pedal patch reports retarget the load
+- **WHEN** the session is ready on USB or Bluetooth, the pedal reports current patch `11`, then `12`, then `13` before the dump for `11` finishes applying
+- **THEN** the connected snapshot shows patch `13`
+- **AND** the session requests a chain dump for patch `13`
+- **AND** no dump for an abandoned intermediate slot is applied as the selected patch after `13` was reported
+
+#### Scenario: App recall ignores a stale current-patch index
+- **WHEN** the session is ready, the user selects patch `42`, and a current-patch report for a different slot arrives before that recall dump finishes
+- **THEN** the connected snapshot stays on patch `42`
+- **AND** the session does not retarget the load to that other slot
 
 #### Scenario: Matching confirmation is discarded
 - **WHEN** a user or pedal patch change has applied its dump and the confirmation dump decodes to the same chain already shown
 - **THEN** the shown chain stays as it is
-- **AND** the patch stays out of syncing
+- **AND** the patch is no longer syncing
 - **AND** no further confirmation dump is requested
 - **AND** no patch recall is sent solely because that confirmation arrived
 
@@ -168,13 +240,19 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 - **WHEN** a user or pedal patch change has applied its dump, the working patch is not modified, and the confirmation dump decodes to a different chain
 - **THEN** the snapshot shows that confirmation's chain
 - **AND** download uses that confirmation dump
-- **AND** the patch stays out of syncing
+- **AND** the patch is no longer syncing
 - **AND** no further confirmation dump is requested
 
 #### Scenario: An edit keeps the chain ahead of a confirmation
 - **WHEN** a user or pedal patch change has applied its dump, the user edits the working chain, and a confirmation dump then arrives
 - **THEN** the edited chain stays on screen
+- **AND** the patch is no longer syncing
 - **AND** no patch recall is sent solely because that confirmation arrived
+
+#### Scenario: USB and Bluetooth hold syncing through confirmation
+- **WHEN** a user or pedal patch change has applied its first dump on USB or on Bluetooth and the confirmation dump has not arrived yet
+- **THEN** the patch stays syncing
+- **AND** no further confirmation dump is requested until that one completes or the refresh times out
 
 #### Scenario: Reload does not start a confirmation
 - **WHEN** the user reloads the selected patch and that reload dump is applied
@@ -183,7 +261,7 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 #### Scenario: Pedal identical patch dump is applied
 - **WHEN** the session is ready, the pedal reports a new current patch, and the dump for that patch decodes to the same chain already shown
 - **THEN** the session applies that dump
-- **AND** the current patch is no longer syncing
+- **AND** the patch stays syncing until the confirmation dump is applied or the refresh times out
 - **AND** no patch recall is sent solely because that inbound report arrived
 
 #### Scenario: Pedal patch change refreshes the chain
@@ -195,6 +273,11 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 - **WHEN** the session is ready, the user selects another patch, and the open USB or Bluetooth link is gone
 - **THEN** the session becomes disconnected
 - **AND** the chrome control reads Connect
+
+#### Scenario: Chain refresh timeout clears the patch-load gate
+- **WHEN** a USB or Bluetooth patch change is syncing and the chain refresh times out without a finished dump
+- **THEN** chain sync returns to idle
+- **AND** a later pedal current-patch report for a different slot updates the shown index and may start a new dump path
 
 ### Requirement: Connected session toggles audio-chain modules
 
@@ -949,3 +1032,110 @@ When the user changes a stomp's assigned modules, the session MUST update the sn
 #### Scenario: USB ignores unsolicited assignment reports
 - **WHEN** a USB session is ready and an unsolicited live stomp-assignment report arrives
 - **THEN** the snapshot assignment does not change from that inbound report
+
+### Requirement: Connected session presses a stomp
+
+After a USB or Bluetooth session is ready and the current chain is shown, a stomp press MUST send one official MIDI CC on the open link and MUST update that chain on-change. GP-5 MUST send CC 69 with value 127. GP-50 stomp A MUST send CC 69 with value 127. GP-50 stomp B MUST send CC 70 with value 127. The session MUST NOT send module on/off CC 48–57, a stomp-assignment write, patch recall, or a chain-dump request solely because of that press.
+
+Each effect assigned to that stomp MUST toggle on/off. Effects not assigned to it MUST keep their on/off. EXP MUST NOT change. Module order, models, controls, stomp assignment, patch index, patch volume, and patch BPM MUST NOT change solely because of the press. The working patch MUST be marked modified when the resulting on/off differs from the baseline, and MUST NOT stay marked modified when the press restores the baseline. An empty assignment MUST still send the CC and MUST leave on/off unchanged. A press for a stomp the connected model does not expose MUST NOT send. While the chain is syncing, or while no session is connected, a press MUST NOT send.
+
+USB MUST NOT apply an unsolicited live stomp report to the snapshot. On Bluetooth, when live pedal state is applied, an inbound stomp mask MAY replace the on-change on/off with the reported mask and MUST NOT be treated as a patch change. The press MUST NOT change GP-50 Patch or Stomp mode and MUST NOT change the GP-5 footswitch mode.
+
+#### Scenario: GP-5 press sends CC 69 and toggles the assigned effect
+- **WHEN** a ready GP-5 session has AMP on and assigned to the only stomp, and the user presses that stomp
+- **THEN** the session sends CC 69 with value 127
+- **AND** the snapshot shows AMP off
+- **AND** no patch recall is sent solely because of that press
+- **AND** no chain dump is requested solely because of that press
+
+#### Scenario: GP-50 stomp A and stomp B use CC 69 and CC 70
+- **WHEN** a ready GP-50 session presses stomp A and then stomp B
+- **THEN** the first press sends CC 69 with value 127
+- **AND** the second press sends CC 70 with value 127
+
+#### Scenario: Each assigned effect toggles
+- **WHEN** a ready session has MOD on and DLY off, both assigned to stomp A, and PRE on and not assigned to stomp A, and the user presses stomp A
+- **THEN** the snapshot shows MOD off and DLY on
+- **AND** PRE stays on
+- **AND** the stomp assignment is unchanged
+
+#### Scenario: EXP is not toggled
+- **WHEN** a ready GP-50 session has EXP on and the user presses stomp A
+- **THEN** EXP stays on
+
+#### Scenario: Empty assignment still sends the CC
+- **WHEN** a ready GP-50 session has no effects assigned to stomp B and the user presses stomp B
+- **THEN** the session sends CC 70 with value 127
+- **AND** every module on/off stays as it was
+
+#### Scenario: GP-5 does not send a second stomp
+- **WHEN** a ready GP-5 session is asked to press a second stomp
+- **THEN** the session does not send a stomp CC
+
+#### Scenario: Press marks the working patch modified
+- **WHEN** a ready session's chain matches the baseline and the user presses a stomp that toggles an assigned effect
+- **THEN** the working patch is marked modified
+
+#### Scenario: A restoring press clears modified
+- **WHEN** the only difference from the baseline is an on/off bit that a stomp press set, and the user presses that stomp again
+- **THEN** the working patch is not marked modified
+
+#### Scenario: USB ignores a live stomp report after the press
+- **WHEN** a USB session has pressed a stomp and an unsolicited live stomp report arrives
+- **THEN** the snapshot keeps the on/off from the press
+- **AND** that report is not treated as a patch change
+
+#### Scenario: Bluetooth stomp mask may replace the on-change state
+- **WHEN** a Bluetooth session has pressed a stomp and a live stomp mask reports the resulting on/off
+- **THEN** the snapshot chain matches that mask
+- **AND** no patch recall is sent solely because that mask arrived
+
+#### Scenario: Syncing or disconnected does not send
+- **WHEN** the chain is syncing, or no session is connected, and a stomp press is requested
+- **THEN** the session does not send a stomp CC
+
+### Requirement: Connected session toggles the tuner
+
+After a USB or Bluetooth session is ready and the current chain is shown, toggling the tuner MUST send official MIDI CC 58 on the open link. Turning the tuner on MUST send value 127. Turning it off MUST send value 0. The session MUST keep an on/off state for the last app-written tuner value so the UI can show it. That state MUST start off when the session becomes connected and MUST drop on disconnect.
+
+The session MUST NOT apply inbound CC 58 to the snapshot. The session MUST NOT mark the working patch modified solely because of a tuner write. The session MUST NOT send patch recall or a chain-dump request solely because of a tuner write. Module on/off, order, models, controls, stomp assignment, patch index, patch volume, and patch BPM MUST NOT change solely because of a tuner write. While the chain is syncing, or while no session is connected, a tuner toggle MUST NOT send.
+
+When the selected patch changes — whether the user recalled a patch or the pedal reported a different current patch — and the session had the tuner on, the session MUST turn the tuner off (CC 58 value 0) and MUST show the tuner off. That turn-off MUST happen before an app-initiated patch recall is sent.
+
+#### Scenario: Turning the tuner on sends CC 58 value 127
+
+- **WHEN** a ready session has the tuner off and the user turns the tuner on
+- **THEN** the session sends CC 58 with value 127
+- **AND** the snapshot shows the tuner on
+- **AND** no patch recall is sent solely because of that write
+- **AND** no chain dump is requested solely because of that write
+- **AND** the working patch is not marked modified solely because of that write
+
+#### Scenario: Turning the tuner off sends CC 58 value 0
+
+- **WHEN** a ready session has the tuner on and the user turns the tuner off
+- **THEN** the session sends CC 58 with value 0
+- **AND** the snapshot shows the tuner off
+
+#### Scenario: App patch change turns the tuner off
+
+- **WHEN** a ready session has the tuner on and the user selects another patch
+- **THEN** the session sends CC 58 with value 0
+- **AND** the snapshot shows the tuner off
+- **AND** that CC 58 off is sent before the patch recall for the new slot
+
+#### Scenario: Pedal patch change turns the tuner off
+
+- **WHEN** a ready session has the tuner on and the pedal reports a different current patch
+- **THEN** the session sends CC 58 with value 0
+- **AND** the snapshot shows the tuner off
+
+#### Scenario: Inbound CC 58 is ignored
+
+- **WHEN** a USB or Bluetooth session has the tuner off and an inbound CC 58 with value 127 arrives
+- **THEN** the snapshot still shows the tuner off
+
+#### Scenario: Syncing or disconnected does not send
+
+- **WHEN** the chain is syncing, or no session is connected, and a tuner toggle is requested
+- **THEN** the session does not send CC 58

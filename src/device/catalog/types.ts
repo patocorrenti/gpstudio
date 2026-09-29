@@ -30,7 +30,7 @@ export type FxModel = {
   label: string;
   /** Manual / factory blurb for this model. */
   description?: string;
-  /** Named gear this model is based on, when the description identifies one. */
+  /** Shown under the model name. Starts with "Based on" so it reads as a reference. */
   basedOn?: string;
   devices: ReadonlySet<DeviceModel>;
   wire: WireIdentity;

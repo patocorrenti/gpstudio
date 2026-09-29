@@ -42,7 +42,7 @@ The system SHALL open one Bluetooth endpoint at a time and close it on request. 
 
 ### Requirement: Web and desktop use the same Bluetooth contract
 
-On the web app the system MUST use the browser Bluetooth API. In the desktop app the system MUST use the native Bluetooth backend. Callers MUST use the same discover/open/send/subscribe/close contract in both environments. Browser-only Bluetooth types MUST NOT leak to callers.
+On the web app the system MUST use the browser Bluetooth API. In the desktop app the system MUST use the native Bluetooth backend. Callers MUST use the same discover/open/send/subscribe/close contract in both environments. Discover MUST return the endpoint list, and on the web app an interactive discover that completes through the browser picker MUST also identify the chosen endpoint id when one was selected. Browser-only Bluetooth types MUST NOT leak to callers.
 
 #### Scenario: Web without Bluetooth support
 - **WHEN** discover is called in a browser that does not expose the Web Bluetooth API
@@ -51,6 +51,12 @@ On the web app the system MUST use the browser Bluetooth API. In the desktop app
 #### Scenario: Desktop lists host peripherals
 - **WHEN** discover is called in the desktop app
 - **THEN** the list comes from the native Bluetooth backend, not the WebView Bluetooth API
+- **AND** discover does not report a browser-picker selection id
+
+#### Scenario: Web interactive discover reports the chosen pedal
+- **WHEN** an interactive discover runs in the web app and the user chooses a pedal in the browser picker
+- **THEN** discover returns that pedal in the endpoint list
+- **AND** discover identifies that pedal as the selected endpoint
 
 #### Scenario: Send without an open session
 - **WHEN** send is called and no Bluetooth endpoint is open

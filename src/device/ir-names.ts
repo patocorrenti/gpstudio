@@ -13,12 +13,22 @@ const IR_NAME_STRIDE = 32;
 /**
  * Bluetooth IR-name fragments, F0-aligned.
  * The reference editor sees 212 / 96 including the BLE-MIDI header.
- * USB command and length are not locked (no Patone USB log); those packets stay unrecognized.
  */
 const BT_IR_DATA_LENGTH = 210;
 const BT_IR_TERMINATOR_LENGTH = 94;
 const BT_IR_DATA_PAYLOAD = 200;
 const BT_IR_TERMINATOR_PAYLOAD = 84;
+
+/**
+ * USB IR-name fragments (GP-50 and GP-5 reference editors).
+ * Complete SysEx, command `01 02`, length 48. Index nibbles at bytes 5–6.
+ * Payload is bytes 9..46 (38 bytes; `F7` excluded). The last fragment is
+ * index `0x11` (18 fragments, indices 0..17). Concatenated payload is 684
+ * bytes, the same name table as Bluetooth (origin 44, stride 32).
+ */
+const USB_IR_LENGTH = 48;
+const USB_IR_PAYLOAD = 38;
+const USB_IR_LAST_INDEX = 0x11;
 
 /**
  * Identity-family IR-name request (F0…F7). Same 14-byte envelope as name-list /
@@ -73,18 +83,25 @@ function irHeader(bytes: Uint8Array): IrHeader | null {
   if (midi.length < 12 || midi[0] !== 0xf0) {
     return null;
   }
-  if (midi[3] !== 0 || midi[4] !== 4) {
-    return null;
+  if (midi[3] === 0 && midi[4] === 4) {
+    const terminator = midi.length === BT_IR_TERMINATOR_LENGTH;
+    const data = midi.length === BT_IR_DATA_LENGTH;
+    if (!terminator && !data) {
+      return null;
+    }
+    return { indexAt: 5, payloadAt: 9, terminator };
   }
-  const terminator = midi.length === BT_IR_TERMINATOR_LENGTH;
-  const data = midi.length === BT_IR_DATA_LENGTH;
-  if (!terminator && !data) {
-    return null;
+  if (midi[3] === 1 && midi[4] === 2 && midi.length === USB_IR_LENGTH) {
+    return {
+      indexAt: 5,
+      payloadAt: 9,
+      terminator: nibble(midi, 5) === USB_IR_LAST_INDEX,
+    };
   }
-  return { indexAt: 5, payloadAt: 9, terminator };
+  return null;
 }
 
-/** True for a Bluetooth IR-name fragment. USB headers are not locked, so they return false. */
+/** True for a Bluetooth or USB IR-name fragment. */
 export function isIrNameDump(bytes: Uint8Array): boolean {
   return irHeader(bytes) !== null;
 }
@@ -181,9 +198,20 @@ function frameIrFragment(index: number, payload: Uint8Array, terminator: boolean
   return midi;
 }
 
-/** Indexed Bluetooth IR-name fragments. Slot 1 is index 0. */
-export function encodeIrNameDump(names: readonly (string | null)[]): Uint8Array[] {
-  const merged = new Uint8Array(BT_IR_DATA_PAYLOAD * 3 + BT_IR_TERMINATOR_PAYLOAD);
+function frameUsbIrFragment(index: number, payload: Uint8Array): Uint8Array {
+  const midi = new Uint8Array(USB_IR_LENGTH);
+  midi[0] = 0xf0;
+  midi[3] = 0x01;
+  midi[4] = 0x02;
+  midi[5] = (index >> 4) & 0x0f;
+  midi[6] = index & 0x0f;
+  midi.set(payload, 9);
+  midi[USB_IR_LENGTH - 1] = 0xf7;
+  return midi;
+}
+
+function packIrNameTable(names: readonly (string | null)[], length: number): Uint8Array {
+  const merged = new Uint8Array(length);
   for (let index = 0; index < USER_IR_COUNT; index += 1) {
     const name = names[index];
     if (!name) {
@@ -191,6 +219,24 @@ export function encodeIrNameDump(names: readonly (string | null)[]): Uint8Array[
     }
     merged.set(packAscii(name), IR_NAME_ORIGIN + index * IR_NAME_STRIDE);
   }
+  return merged;
+}
+
+/** Indexed IR-name fragments. Slot 1 is index 0. Default is the Bluetooth dump. */
+export function encodeIrNameDump(
+  names: readonly (string | null)[],
+  link: "bluetooth" | "usb" = "bluetooth",
+): Uint8Array[] {
+  if (link === "usb") {
+    const merged = packIrNameTable(names, USB_IR_PAYLOAD * (USB_IR_LAST_INDEX + 1));
+    const packets: Uint8Array[] = [];
+    for (let index = 0; index <= USB_IR_LAST_INDEX; index += 1) {
+      const start = index * USB_IR_PAYLOAD;
+      packets.push(frameUsbIrFragment(index, merged.subarray(start, start + USB_IR_PAYLOAD)));
+    }
+    return packets;
+  }
+  const merged = packIrNameTable(names, BT_IR_DATA_PAYLOAD * 3 + BT_IR_TERMINATOR_PAYLOAD);
   const payloads = [
     merged.subarray(0, BT_IR_DATA_PAYLOAD),
     merged.subarray(BT_IR_DATA_PAYLOAD, BT_IR_DATA_PAYLOAD * 2),
@@ -227,7 +273,18 @@ function assertIrNameFixtures(): void {
   usbLookalike[0] = 0xf0;
   usbLookalike[47] = 0xf7;
   if (isIrNameDump(usbLookalike)) {
-    throw new Error("Unlocked USB headers must not classify as an IR-name dump");
+    throw new Error("A 48-byte SysEx without command 01 02 must not classify as an IR-name dump");
+  }
+  const usbDecoder = new IrNameDecoder();
+  let usbDecoded: (string | null)[] | null = null;
+  for (const packet of encodeIrNameDump(names, "usb")) {
+    if (!isIrNameDump(packet) || packet.length !== USB_IR_LENGTH) {
+      throw new Error("USB IR-name fixture fragment was not classified");
+    }
+    usbDecoded = usbDecoder.push(packet);
+  }
+  if (usbDecoded?.[2] !== "Greenback 412" || usbDecoded[6] !== null) {
+    throw new Error("USB IR-name fixture must yield Greenback 412 at slot 03");
   }
   const shown = userIrDisplayName(
     { label: "User IR 03", userIrSlot: 3 },

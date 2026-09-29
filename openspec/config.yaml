@@ -4,7 +4,9 @@ schema: spec-driven
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
   Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
-  Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
+  USB patch recall uses official MIDI CC 0; Bluetooth patch recall uses SET family
+  1143 (CC 0 over GATT does not move the pedal). Module on/off (CC 48–57) uses
+  official MIDI CC.   A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
   factory model and control values for the ten effect slots, plus the twenty
   onboard user-IR CAB slots)
@@ -33,11 +35,15 @@ context: |
   Save / rename / duplicate remain store 114a;
   GP-50 file → GP-50 session, GP-5 file → GP-5 session; not Library import, not conversion),
   Bluetooth live model (command 07) and live control (command 08) follow,
-  Controller drag-and-drop of movable modules, and per-patch stomp
+  Controller drag-and-drop of movable modules, per-patch stomp
   assignment (dump decode + SET family 114d; GP-5 one stomp, GP-50 two;
-  EXP never assignable) are
-  in scope on USB and Bluetooth. USB must not apply unsolicited live
-  assignment reports. Library SysEx (browse / import / reorder),
+  EXP never assignable), and a stomp press (GP-5 CC 69, GP-50 CC 69 and
+  CC 70, value 127; assigned module on/off updates on-change; no module
+  CC 48–57, no 114d, no patch recall, and no chain dump for that press), and
+  tuner on/off (CC 58, 127 on / 0 off; last app write only; inbound CC 58
+  ignored; no pitch UI; patch change turns it off when it was on)
+  are in scope on USB and Bluetooth. USB must not apply unsolicited live
+  assignment reports or live stomp reports. Library SysEx (browse / import / reorder),
   IR/NAM file upload, and the Editor route come in later phases.
 
   Tech stack:
@@ -50,7 +56,7 @@ context: |
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
     GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
-    (CC 0, module CC 48–57, identity, chain dump, chain-order SET, slot
+    (Bluetooth patch recall SET 1143, module CC 48–57, stomp press CC 69 / CC 70, tuner CC 58, identity, chain dump, chain-order SET, slot
     model/control SET, or current-patch store SET wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
@@ -129,7 +135,7 @@ context: |
 
   Device profiles (phase 1, official MIDI CC):
   - GP-5: CC 0 patch, 7 volume, 22–25 bank/patch, 48–57 modules, 58 tuner, 69 CTL
-  - GP-50: the above + master/EXP (CC 1, 11, 13), unused relative steps (CC 17, 19, 21), Patch|Stomp mode (CC 28), absolute tempo (CC 73 + CC 74)
+  - GP-50: the above + master/EXP (CC 1, 11, 13), unused relative steps (CC 17, 19, 21), Patch|Stomp mode (CC 28), absolute tempo (CC 73 + CC 74), stomp B (CC 70; stomp A is inherited CC 69)
   - Endpoint suggests model from the USB MIDI name (Valeton usually appears as GP-5 / GP-50).
     If ambiguous or the name does not match, the user confirms or corrects. Port name is not hardware identity.
 
@@ -160,7 +166,12 @@ context: |
     and previous/next wait while chainSync is syncing; the selector may stay
     usable), audio chain
     (10 slots GP-5 / 11 GP-50 with EXP; order + on/off; NR…RVB toggles via
-    CC 48–57; GP-50 EXP via CC 13). Movable modules (NR, PRE, MOD, DLY, RVB)
+    CC 48–57; GP-50 EXP via CC 13). Shell chrome next to Global offers
+    Switch (GP-5), Switch A / Switch B (GP-50), and Tuner (CC 58, 127 on / 0 off);
+    those are pedal controls, not the patch body. Switch presses send CC 69 or
+    GP-50 CC 70 (value 127) and toggle assigned modules on-change without the
+    chain-refresh overlay. Inbound CC 58 is ignored and there is no pitch UI.
+    Movable modules (NR, PRE, MOD, DLY, RVB)
     reorder by drag-and-drop through the session and show a three-dot grip.
     DST, NS, AMP, CAB, and EQ stay a contiguous block in that order (nothing
     between them) and are not draggable; EXP is not draggable.
@@ -188,7 +199,8 @@ context: |
     flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 / A-Z / CTL /
     Tuner via family 1115, not CC 28. No REC mode and no Global BPM on GP-5.
     Bluetooth applies live global reports for the connected model; USB does not.
-    Tuner later. Family 1142 stays
+    Tuner write (CC 58) is in scope; inbound tuner and a pitch display stay later.
+    Family 1142 stays
     the .prst upload path.
   - Windows packaging: tauri build → NSIS/MSI
   - Web: Vite in Chrome/Edge (localhost or HTTPS)
@@ -207,10 +219,13 @@ context: |
     for the ten effect slots, and live global reports including CC 1 / CC 28
     are in scope. USB must not apply those reports.
     Current-patch model + control read/write for the ten effect slots is in scope)
-  - Tuner and relative step CCs (17, 19, 21). Patch volume, GP-50 BPM,
-    GP-50 master volume (CC 1), and GP-50 Patch|Stomp (CC 28) writes are in
+  - Relative step CCs (17, 19, 21). Patch volume, GP-50 BPM,
+    GP-50 master volume (CC 1), GP-50 Patch|Stomp (CC 28), stomp press
+    (GP-5 CC 69, GP-50 CC 69 and CC 70, value 127), and tuner on/off
+    (CC 58, 127 on / 0 off) writes are in
     scope on USB and Bluetooth. GP-5 global volume, levels, screen brightness,
     and footswitch modes are in scope via their SETs, not via CC 1 or CC 28.
+    Inbound tuner CC and an in-app pitch display stay out.
   - Pedal GLOBAL rows with no MIDI path (EXP calibrate, bypass type, EXP/FS
     assign, GP-50 display, MIDI routing, Auto CAB, language, factory reset, About).
     GP-5 screen brightness and footswitch modes 0-99 / 0-9 / A-Z / CTL / Tuner
@@ -247,7 +262,8 @@ context: |
     from that dump; current-patch upload is the inverse into the working patch
     (owned writes, not a dump SET and not store 114a). Do not paste reference/
     builders or convert across models.
-  - Patch recall uses MIDI CC published in the official manuals.
+  - Patch recall: USB uses MIDI CC 0 from the official manuals; Bluetooth uses
+    parameter-write SET family 1143 (reference editors; not CC 0 over GATT).
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
     are the durable behavior contract; a change is not required for every task.

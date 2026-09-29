@@ -7,7 +7,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "COMP",
     description: "Based on the legendary Ross™ Compressor. This is the originator of the guitar compression effect. It brings the guitar compression effect to the public and becomes an important element in the future. It has a very natural and mellow compression effect.",
-    basedOn: "Ross™ Compressor",
+    basedOn: "Based on Ross™ Compressor",
     devices: BOTH_PEDALS,
     wire: [0x00, 0x00, 0x00, 0x00],
     controls: [
@@ -36,7 +36,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "COMP4",
     description: "Based on the Keeley® C4 4-knob compressor*. A recording studio - level compression effect. Clear sense of hierarchy, the right amount of high frequency makes your guitar sound brighter.",
-    basedOn: "Keeley® C4 4-knob compressor",
+    basedOn: "Based on Keeley® C4 4-knob compressor",
     devices: BOTH_PEDALS,
     wire: [0x01, 0x00, 0x00, 0x00],
     controls: [
@@ -83,7 +83,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "Boost",
     description: "Based on famous Xotic® EP Booster* pedal. Provides +20DB of pure stimulation lift, strong low frequency, bright high frequency, making clear sound more pleasant.",
-    basedOn: "Xotic® EP Booster*",
+    basedOn: "Based on Xotic® EP Booster*",
     devices: BOTH_PEDALS,
     wire: [0x1a, 0x00, 0x00, 0x00],
     controls: [
@@ -121,7 +121,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "Micro Boost",
     description: "Based on the legendary MXR® M133 Micro Amp2 pedal. Providing up to 20dB of gain, the Micro Boost elevates your amp sound without changing its tonal character.",
-    basedOn: "MXR® M133 Micro Amp2 pedal",
+    basedOn: "Based on MXR® M133 Micro Amp2 pedal",
     devices: BOTH_PEDALS,
     wire: [0x14, 0x00, 0x00, 0x00],
     controls: [
@@ -141,7 +141,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "B-Boost",
     description: "Any guitarist can benefit from the Xotic® BB Preamp* overdrive pedal. The pedal works equally well for getting thick and creamy overdrive tones with great sustain as it does for pushing the clean front end of an already driven amp with up to 30dB of boost.",
-    basedOn: "Xotic® BB Preamp",
+    basedOn: "Based on Xotic® BB Preamp",
     devices: BOTH_PEDALS,
     wire: [0x0b, 0x00, 0x00, 0x00],
     controls: [
@@ -317,7 +317,7 @@ export const PRE_MODELS: readonly FxModel[] = [
     kind: "pre",
     label: "C-Wah",
     description: "Based on legendary Dunlop® CryBaby®* wah pedal. ",
-    basedOn: "Dunlop® CryBaby®",
+    basedOn: "Based on Dunlop® CryBaby®",
     devices: GP50_ONLY,
     wire: [0x08, 0x00, 0x00, 0x05],
     controls: [

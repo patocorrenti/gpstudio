@@ -8,6 +8,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -369,19 +375,25 @@ export function GlobalSettingsControl() {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="gap-1.5"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label="Global settings"
-        onClick={() => setOpen(true)}
-      >
-        <Settings className="size-4" aria-hidden />
-        Global
-      </Button>
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8"
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              aria-label="Global settings"
+              onClick={() => setOpen(true)}
+            >
+              <Settings className="size-4" aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Global Settings</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md" showCloseButton>
           <DialogHeader>

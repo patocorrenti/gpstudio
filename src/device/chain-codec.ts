@@ -59,9 +59,14 @@ const CONTROL_WRITE_SET_PREFIX = [0x01, 0x00, 0x0e, 0x11, 0x48] as const;
 /**
  * Packed SET header: size `0x0A`, path `01 01 04`, family `114d` (stomp assignment).
  * Body is both stomp masks (no foot index): A then B as m0, m1, m2, m3.
- * m2 is writable (dump gap); do not hardcode 00.
+ * m2 is writable (dump gap); do not hardcode 00. Used for GP-50 dual-mask writes.
  */
 const STOMP_ASSIGN_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x4d] as const;
+/**
+ * GP-5 per-effect assignment SET (reference `sendCTL`): size `0x05`, family
+ * `114d`, then footswitch `0`, effect index, 0|1.
+ */
+const STOMP_ASSIGN_EFFECT_SET_PREFIX = [0x01, 0x00, 0x05, 0x11, 0x4d] as const;
 
 /** GP-50 stomp A / B mask bases; GP-5 single stomp (same 86-byte front shift). */
 const GP50_STOMP_BASES = [1006, 1014] as const;
@@ -198,7 +203,7 @@ export function decodeStompsFromDump(data: Uint8Array, model: DeviceModel): Stom
 /**
  * App→pedal stomp-assignment SET (family `114d`). Replaces both stomp masks.
  * Path `01 01 04`, CRC-8 ATM, nibble-expand. Body: A then B as m0, m1, m2, m3.
- * Packs with {@link stompSetBits}, not the dump / live-`0D` map.
+ * Packs with {@link stompSetBits}, not the dump / live-`0D` map. GP-50 path.
  */
 export function encodeStompAssignmentSysex(
   stomps: readonly (readonly EffectId[])[],
@@ -225,6 +230,29 @@ export function encodeStompAssignmentSysex(
     b.m1,
     b.m2,
     b.m3,
+  ]);
+  return framePackedSet(packed);
+}
+
+/**
+ * App→pedal GP-5 stomp-assignment SET (family `114d`, size `0x05`).
+ * One effect bit per edit: footswitch (always 0), CTL effect index
+ * (`DUMP_MODULE_IDS`, NS = 9), value 0|1. Matches the GP-5 reference `sendCTL`.
+ */
+export function encodeStompAssignmentEffectSysex(
+  footswitch: 0 | 1,
+  effect: EffectId,
+  assigned: boolean,
+): Uint8Array | null {
+  const effectIndex = DUMP_MODULE_IDS.indexOf(effect);
+  if (effectIndex < 0) {
+    return null;
+  }
+  const packed = Uint8Array.from([
+    ...STOMP_ASSIGN_EFFECT_SET_PREFIX,
+    footswitch,
+    effectIndex,
+    assigned ? 1 : 0,
   ]);
   return framePackedSet(packed);
 }
@@ -624,12 +652,15 @@ function classifyDump(midi: Uint8Array): DumpHeader | null {
     };
   }
 
+  // GP-5 USB current-preset: reference editor uses exact lengths — data 48,
+  // terminator 34 (`_reference/gp5usb.html`). Do not treat other short packets
+  // as end-of-dump (the old `<= 36` rule).
   const gp5Usb = commandAt(midi, 1, 9);
-  if (gp5Usb && midi.length >= 30 && midi.length <= 52) {
+  if (gp5Usb && (midi.length === 48 || midi.length === 34)) {
     return {
       dumpClass: "gp5",
       ...gp5Usb,
-      terminator: midi.length <= 36,
+      terminator: midi.length === 34,
     };
   }
 
@@ -1126,6 +1157,40 @@ function assertPresetDumpFixtures(): void {
     throw new Error("Empty stomp SET must clear both masks");
   }
 
+  // GP-5 reference sendCTL: size 05, foot 0, effect index, 0|1 (DST=2 on).
+  const gp5DstOn = encodeStompAssignmentEffectSysex(0, "dst", true);
+  const gp5DstOff = encodeStompAssignmentEffectSysex(0, "dst", false);
+  const gp5NsOn = encodeStompAssignmentEffectSysex(0, "ns", true);
+  if (!gp5DstOn || !gp5DstOff || !gp5NsOn) {
+    throw new Error("GP-5 per-effect stomp SET must encode");
+  }
+  const gp5DstPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x00, 0x02, 0x01];
+  const gp5NsPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x00, 0x09, 0x01];
+  const gp5DstCrc = crc8Atm(Uint8Array.from(gp5DstPacked));
+  const gp5NsCrc = crc8Atm(Uint8Array.from(gp5NsPacked));
+  const expectGp5Dst = nibbleExpand(Uint8Array.from([gp5DstCrc, ...gp5DstPacked]));
+  const expectGp5Ns = nibbleExpand(Uint8Array.from([gp5NsCrc, ...gp5NsPacked]));
+  if (
+    gp5DstOn[0] !== 0xf0 ||
+    gp5DstOn[gp5DstOn.length - 1] !== 0xf7 ||
+    !expectGp5Dst.every((byte, index) => gp5DstOn[index + 1] === byte)
+  ) {
+    throw new Error("GP-5 DST assign SET must match size 05 foot 0 effect 2 val 1");
+  }
+  if (!expectGp5Ns.every((byte, index) => gp5NsOn[index + 1] === byte)) {
+    throw new Error("GP-5 NS assign SET must use effect index 9");
+  }
+  const gp5OffPacked = [0x01, 0x00, 0x05, 0x11, 0x4d, 0x00, 0x02, 0x00];
+  const expectGp5Off = nibbleExpand(
+    Uint8Array.from([crc8Atm(Uint8Array.from(gp5OffPacked)), ...gp5OffPacked]),
+  );
+  if (!expectGp5Off.every((byte, index) => gp5DstOff[index + 1] === byte)) {
+    throw new Error("GP-5 DST clear SET must send val 0");
+  }
+  if (encodeStompAssignmentEffectSysex(0, "exp" as EffectId, true)) {
+    throw new Error("GP-5 per-effect SET must reject EXP");
+  }
+
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.cab, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
   writeNibbleBytes(tweedy, GP50_VALUES_AT.cab, float32Le(50));
   const withUserIr = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
@@ -1298,4 +1363,35 @@ function assertIrFragmentsSkipChainDecoder(): void {
   }
 }
 
+/** GP-5 USB SysEx: F0 … F7 with command `01 09` and the given total length. */
+function frameGp5UsbPreset(length: number, index: number): Uint8Array {
+  const midi = new Uint8Array(length);
+  midi[0] = 0xf0;
+  midi[3] = 1;
+  midi[4] = 9;
+  midi[5] = (index >> 4) & 0x0f;
+  midi[6] = index & 0x0f;
+  midi[length - 1] = 0xf7;
+  return midi;
+}
+
+function assertGp5UsbDumpLengths(): void {
+  const chain = new ChainDecoder();
+  // Reference (`gp5usb.html`): data == 48, terminator == 34. Not `<= 36`.
+  if (chain.push(frameGp5UsbPreset(36, 0), "gp5")) {
+    throw new Error("GP-5 USB length 36 must not classify as current-preset");
+  }
+  if (chain.push(frameGp5UsbPreset(40, 0), "gp5")) {
+    throw new Error("GP-5 USB length 40 must not classify as current-preset");
+  }
+  if (chain.push(frameGp5UsbPreset(48, 0), "gp5")) {
+    throw new Error("GP-5 USB length 48 must wait for the length-34 terminator");
+  }
+  // Terminator with a gap (index 1 only after index 0) must not invent a chain.
+  if (chain.push(frameGp5UsbPreset(34, 2), "gp5")) {
+    throw new Error("GP-5 USB terminator with a fragment gap must not finish");
+  }
+}
+
 assertIrFragmentsSkipChainDecoder();
+assertGp5UsbDumpLengths();

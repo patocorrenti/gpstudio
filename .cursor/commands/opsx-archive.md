@@ -139,13 +139,28 @@ Archive a completed change in the experimental workflow.
    mv "<changeRoot>" "<planningHome.changesDir>/archive/<target-name>"
    ```
 
-6. **Display summary**
+6. **Leave git for the user**
+
+   After the archive move (and any synced main specs) succeed, **do not**
+   `git add`, `git commit`, or `git push`. The user reviews the working tree
+   and commits themselves.
+
+   In the summary, optionally suggest this subject (do not run it):
+
+   ```text
+   doc: archive change <name>
+   ```
+
+   Example: change `tuner-on-off` → `doc: archive change tuner-on-off`.
+
+7. **Display summary**
 
    Show archive completion summary including:
    - Change name
    - Schema that was used
    - Archive location
    - Spec sync status (synced / sync skipped / no delta specs)
+   - That git was left for the user (suggested subject if useful)
    - Note about any warnings (incomplete artifacts/tasks)
 
 **Output On Success**
@@ -157,6 +172,7 @@ Archive a completed change in the experimental workflow.
 **Schema:** <schema-name>
 **Archived to:** the archive path derived from `planningHome.changesDir`/<target-name>/
 **Specs:** ✓ Synced to main specs
+**Git:** left for you to review and commit (suggested: `doc: archive change <change-name>`)
 
 All artifacts complete. All tasks complete.
 ```
@@ -170,6 +186,7 @@ All artifacts complete. All tasks complete.
 **Schema:** <schema-name>
 **Archived to:** the archive path derived from `planningHome.changesDir`/<target-name>/
 **Specs:** No delta specs
+**Git:** left for you to review and commit (suggested: `doc: archive change <change-name>`)
 
 All artifacts complete. All tasks complete.
 ```
@@ -183,6 +200,7 @@ All artifacts complete. All tasks complete.
 **Schema:** <schema-name>
 **Archived to:** the archive path derived from `planningHome.changesDir`/<target-name>/
 **Specs:** Sync skipped (user chose to skip)
+**Git:** left for you to review and commit (suggested: `doc: archive change <change-name>`)
 
 **Warnings:**
 - Archived with 2 incomplete artifacts
@@ -214,6 +232,7 @@ Target archive directory already exists.
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened
+- Do not commit or push as part of archive — the user owns git
 - If sync is requested, run the `/opsx-sync` workflow inline (agent-driven)
 - Never archive while a spec sync is still in flight — run the sync inline and verify the main specs before moving `changeRoot`
 - If delta specs exist, always run the sync assessment and show the combined summary before prompting

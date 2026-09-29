@@ -1,12 +1,12 @@
 ---
 name: openspec-archive-change
 description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
-allowed-tools: Bash(openspec:*)
+allowed-tools: Bash(openspec:*), Bash(mkdir:*), Bash(mv:*)
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
   author: openspec
-  version: "1.0"
+  version: "1.1"
   generatedBy: "1.13.0"
 ---
 
@@ -144,13 +144,28 @@ Archive a completed change in the experimental workflow.
    mv "<changeRoot>" "<planningHome.changesDir>/archive/<target-name>"
    ```
 
-6. **Display summary**
+6. **Leave git for the user**
+
+   After the archive move (and any synced main specs) succeed, **do not**
+   `git add`, `git commit`, or `git push`. The user reviews the working tree
+   and commits themselves.
+
+   In the summary, optionally suggest this subject (do not run it):
+
+   ```text
+   doc: archive change <name>
+   ```
+
+   Example: change `tuner-on-off` → `doc: archive change tuner-on-off`.
+
+7. **Display summary**
 
    Show archive completion summary including:
    - Change name
    - Schema that was used
    - Archive location
    - Whether specs were synced (if applicable)
+   - That git was left for the user (suggested subject if useful)
    - Note about any warnings (incomplete artifacts/tasks)
 
 **Output On Success**
@@ -162,6 +177,7 @@ Archive a completed change in the experimental workflow.
 **Schema:** <schema-name>
 **Archived to:** the archive path derived from `planningHome.changesDir`/<target-name>/
 **Specs:** <"✓ Synced to main specs" only if the step 4 verification passed; otherwise "No delta specs" or "Sync skipped">
+**Git:** left for you to review and commit (suggested: `doc: archive change <change-name>`)
 
 <"All artifacts complete. All tasks complete." — or, if archived with warnings, list them instead (e.g. "Archived with 2 incomplete tasks")>
 ```
@@ -172,6 +188,7 @@ Archive a completed change in the experimental workflow.
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened
+- Do not commit or push as part of archive — the user owns git
 - If sync is requested, run the `openspec-sync-specs` workflow inline (agent-driven)
 - Never archive while a spec sync is still in flight — run the sync inline and verify the main specs before moving `changeRoot`
 - If delta specs exist, always run the sync assessment and show the combined summary before prompting
