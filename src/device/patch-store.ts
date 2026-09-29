@@ -165,10 +165,12 @@ function prstLayout(model: DeviceModel): {
       bpmAt: GP50_DUMP_BPM_AT,
     };
   }
+  // Chain body is shifted −86 vs GP-50; patch volume stays at dump word 100
+  // (same as the GP-5 reference editor). BPM is unused on GP-5 UI.
   return {
     bodyAt: GP5_PRST_BODY_AT,
     bodyLength: GP5_PRST_BODY_LENGTH,
-    volAt: GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT,
+    volAt: GP50_DUMP_VOL_AT,
     bpmAt: GP50_DUMP_BPM_AT - GP5_DUMP_SHIFT,
   };
 }
@@ -648,10 +650,18 @@ function assertPatchStoreFixtures(): void {
   if (
     packedWord(decodedGp50.dump, GP50_DUMP_VOL_AT) !== decodedGp50.volume ||
     readDumpPatchBpm("gp50", decodedGp50.dump) !== decodedGp50.bpm ||
-    packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT - GP5_DUMP_SHIFT) !== decodedGp5.volume ||
+    packedWord(decodedGp5.dump, GP50_DUMP_VOL_AT) !== decodedGp5.volume ||
+    readDumpPatchVolume("gp5", decodedGp5.dump) !== decodedGp5.volume ||
     readDumpPatchBpm("gp5", decodedGp5.dump) !== decodedGp5.bpm
   ) {
     throw new Error("TOB decode must copy descriptor volume/BPM into dump word slots");
+  }
+  // GP-5 live dump: volume at 100 (not body-shifted 14). Byte 14 staying 0
+  // must not be read as patch volume.
+  const gp5LiveVol = new Uint8Array(decodedGp5.dump.length);
+  writePackedWord(gp5LiveVol, GP50_DUMP_VOL_AT, 80);
+  if (readDumpPatchVolume("gp5", gp5LiveVol) !== 80) {
+    throw new Error("GP-5 dump patch volume must read from offset 100");
   }
   const highBpmDump = new Uint8Array(decodedGp50.dump);
   writeDumpPatchBpm("gp50", highBpmDump, 260);
