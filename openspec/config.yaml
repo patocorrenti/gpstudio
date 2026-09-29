@@ -4,7 +4,9 @@ schema: spec-driven
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
   Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
-  Patch recall and module on/off (CC 48–57) use official MIDI CC.   A Patone-owned SysEx subset
+  USB patch recall uses official MIDI CC 0; Bluetooth patch recall uses SET family
+  1143 (CC 0 over GATT does not move the pedal). Module on/off (CC 48–57) uses
+  official MIDI CC.   A Patone-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
   factory model and control values for the ten effect slots, plus the twenty
   onboard user-IR CAB slots)
@@ -54,7 +56,7 @@ context: |
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
     GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
-    (CC 0, module CC 48–57, stomp press CC 69 / CC 70, tuner CC 58, identity, chain dump, chain-order SET, slot
+    (Bluetooth patch recall SET 1143, module CC 48–57, stomp press CC 69 / CC 70, tuner CC 58, identity, chain dump, chain-order SET, slot
     model/control SET, or current-patch store SET wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
     - USB-MIDI uses MidiTransport (byte pipe + endpoint discovery, not MIDIPort types)
@@ -260,7 +262,8 @@ context: |
     from that dump; current-patch upload is the inverse into the working patch
     (owned writes, not a dump SET and not store 114a). Do not paste reference/
     builders or convert across models.
-  - Patch recall uses MIDI CC published in the official manuals.
+  - Patch recall: USB uses MIDI CC 0 from the official manuals; Bluetooth uses
+    parameter-write SET family 1143 (reference editors; not CC 0 over GATT).
   - Full editor SysEx is documented in its own design.md when that change starts.
   - Two workflow lanes (see docs/architecture.md). Specs in openspec/specs/
     are the durable behavior contract; a change is not required for every task.

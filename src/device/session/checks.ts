@@ -183,7 +183,18 @@ function packetsEqual(left: Uint8Array, right: Uint8Array): boolean {
 
 function isPatchRecall(bytes: Uint8Array): boolean {
   const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
-  return midi[0] === 0xb0 && midi[1] === 0x00;
+  if (midi[0] === 0xb0 && midi[1] === 0x00) {
+    return true;
+  }
+  // Bluetooth recall is packed family `1143` (nibble-expanded after CRC).
+  return (
+    midi[0] === 0xf0 &&
+    midi.length >= 15 &&
+    midi[9] === 0x01 &&
+    midi[10] === 0x01 &&
+    midi[11] === 0x04 &&
+    midi[12] === 0x03
+  );
 }
 
 function bluetoothNameList(): Uint8Array {
@@ -514,10 +525,25 @@ async function assertAppRecallKeepsPendingSlot(): Promise<void> {
   const session = new DeviceSession(usb.transport, bluetooth.link);
   try {
     await connectBluetoothReady(session, bluetooth, 10);
+    const sentBefore = bluetooth.sent.length;
     await session.setPatch(42);
     const afterSelect = session.getSnapshot();
     if (afterSelect.status !== "connected" || afterSelect.patch !== 42) {
       throw new Error("setPatch must select patch 42");
+    }
+    const recallPackets = bluetooth.sent.slice(sentBefore).filter(isPatchRecall);
+    if (recallPackets.length !== 1) {
+      throw new Error("Bluetooth setPatch must send exactly one patch recall");
+    }
+    const midi =
+      recallPackets[0][0] === 0x80 && recallPackets[0][1] === 0x80
+        ? recallPackets[0].subarray(2)
+        : recallPackets[0];
+    if (midi[0] === 0xb0) {
+      throw new Error("Bluetooth setPatch must not send official CC 0");
+    }
+    if (midi[0] !== 0xf0 || midi[12] !== 0x03 || midi[13] !== 0x02 || midi[14] !== 0x0a) {
+      throw new Error("Bluetooth setPatch must send SET family 1143 for patch 42");
     }
     bluetooth.push(currentPatchAt(17));
     await tick();

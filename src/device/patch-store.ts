@@ -5,6 +5,8 @@ import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
 /** Packed SET header: size `0x10`, path `01 01 04`, family `114a` (store). */
 const STORE_SET_PREFIX = [0x01, 0x00, 0x10, 0x11, 0x4a] as const;
+/** Packed SET header: size `0x06`, family `1143` (Bluetooth patch recall). */
+const PATCH_RECALL_SET_PREFIX = [0x01, 0x00, 0x06, 0x11, 0x43] as const;
 /** Packed SET header: size `0x0A`, family `1142` (patch volume / BPM). */
 const PATCH_GLOBAL_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x42] as const;
 const PATCH_VOL_KIND = [0x01, 0x20, 0x00, 0x00] as const;
@@ -104,6 +106,20 @@ function nulNameBytes(name: string): Uint8Array {
     bytes[index] = code === 0x20 ? 0x00 : code;
   }
   return bytes;
+}
+
+/**
+ * App→pedal patch recall SET (family `1143`). Packed body locked from the
+ * reference editors' listPatches handler: size `0x06` + patch 0–99 + three
+ * zero bytes. Path `01 01 04`, CRC-8 ATM, nibble-expand, `F0`…`F7`. Used on
+ * Bluetooth; USB recall stays official CC 0. Not a live notify.
+ */
+export function encodePatchRecallSysex(patch: number): Uint8Array | null {
+  if (!Number.isInteger(patch) || patch < 0 || patch > 99) {
+    return null;
+  }
+  const packed = Uint8Array.from([...PATCH_RECALL_SET_PREFIX, patch, 0x00, 0x00, 0x00]);
+  return framePackedSet(packed);
 }
 
 /**
@@ -703,6 +719,29 @@ function assertPatchStoreFixtures(): void {
   }
   if (encodePatchVolumeSysex(101) || encodePatchBpmSysex(39)) {
     throw new Error("Patch volume/BPM SET must reject out-of-range values");
+  }
+
+  const recall5 = encodePatchRecallSysex(5);
+  const recall42 = encodePatchRecallSysex(42);
+  if (!recall5 || !recall42 || recall5[0] !== 0xf0 || recall5[recall5.length - 1] !== 0xf7) {
+    throw new Error("Patch recall SET must be framed SysEx");
+  }
+  if (
+    recall5[9] !== 0x01 ||
+    recall5[10] !== 0x01 ||
+    recall5[11] !== 0x04 ||
+    recall5[12] !== 0x03
+  ) {
+    throw new Error("Patch recall SET must nibble-expand packed family 1143");
+  }
+  if (recall5[13] !== 0x00 || recall5[14] !== 0x05) {
+    throw new Error("Patch recall SET must pack patch index 5");
+  }
+  if (recall42[13] !== 0x02 || recall42[14] !== 0x0a) {
+    throw new Error("Patch recall SET must pack patch index 42");
+  }
+  if (encodePatchRecallSysex(100) || encodePatchRecallSysex(-1)) {
+    throw new Error("Patch recall SET must reject out-of-range patches");
   }
 }
 

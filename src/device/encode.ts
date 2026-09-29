@@ -15,7 +15,12 @@ import {
   encodeStompAssignmentEffectSysex,
   encodeStompAssignmentSysex,
 } from "@/device/chain-codec";
-import { encodePatchStoreSysex, encodePatchVolumeSysex, encodePatchBpmSysex } from "@/device/patch-store";
+import {
+  encodePatchRecallSysex,
+  encodePatchStoreSysex,
+  encodePatchVolumeSysex,
+  encodePatchBpmSysex,
+} from "@/device/patch-store";
 import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -67,7 +72,18 @@ export function encodeLinkMidiPackets(linkMode: LinkMode, midi: Uint8Array): Uin
   return [encodeLinkMidi(linkMode, midi)];
 }
 
+/**
+ * USB: official CC 0 (value 0–99). Bluetooth: parameter-write SET family
+ * `1143` (reference editors; CC 0 over GATT does not move the pedal).
+ */
 export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
+  if (linkMode === "bluetooth") {
+    const sysex = encodePatchRecallSysex(patch);
+    if (!sysex) {
+      throw new Error("Patch must be an integer from 0 to 99.");
+    }
+    return encodeLinkMidi(linkMode, sysex);
+  }
   return encodeLinkMidi(linkMode, midiCc(gp5Cc.patch, patch));
 }
 
@@ -545,8 +561,33 @@ function assertStompPress(): void {
 }
 
 assertUsbBluetoothWrapOnly();
+assertPatchRecall();
 assertStompPress();
 assertTuner();
+
+function assertPatchRecall(): void {
+  const usb = encodePatch("usb", 42);
+  const ble = encodePatch("bluetooth", 42);
+  const bleMidi = unwrapBlePacket(ble);
+  const recallSysex = encodePatchRecallSysex(42);
+  if (
+    usb.length !== 3 ||
+    usb[0] !== 0xb0 ||
+    usb[1] !== 0x00 ||
+    usb[2] !== 42 ||
+    !bleMidi ||
+    !recallSysex ||
+    !sameBytes(bleMidi, recallSysex) ||
+    bleMidi[0] !== 0xf0 ||
+    bleMidi[9] !== 0x01 ||
+    bleMidi[10] !== 0x01 ||
+    bleMidi[11] !== 0x04 ||
+    bleMidi[12] !== 0x03 ||
+    sameBytes(usb, bleMidi)
+  ) {
+    throw new Error("USB patch recall must stay CC 0; Bluetooth must be SET family 1143");
+  }
+}
 
 function assertTuner(): void {
   const usbOn = encodeTuner("usb", true);
