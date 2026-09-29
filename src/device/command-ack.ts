@@ -20,8 +20,9 @@ export function isCommandReceivedAck(midi: Uint8Array): boolean {
 }
 
 /**
- * If this ACK does not arrive, request the dump anyway so navigation cannot
- * stick. A few hundred milliseconds; not a second GATT conversation.
+ * If the Bluetooth command-received ACK, or the USB matching current-patch
+ * notify, does not arrive, request the dump anyway so navigation cannot stick.
+ * A few hundred milliseconds; not the chain-refresh timeout.
  */
 export const RECALL_ACK_TIMEOUT_MS = 400;
 

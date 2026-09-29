@@ -142,7 +142,9 @@ While a USB or Bluetooth session is ready and the current patch chain is syncing
 
 ### Requirement: Bluetooth session sends patch recall
 
-While a session is connected over Bluetooth and initial patch identity sync has completed or timed out, Controller MUST offer working patch previous, patch next, and patch select (00–99), the same controls as a USB session. Choosing a patch or stepping previous/next MUST update the session patch and MUST send that patch to the pedal through the device session as a parameter-write SET of packed family `1143` (path `01 01 04`, CRC-8 + nibble-expand; not live notify path `01 02 04` and not official CC 0), except when app patch recall is blocked because chain sync is syncing. After a `1143` SET is sent for an allowed recall, the session MUST wait for the pedal's command-received ACK for that write (or a short timeout if the ACK does not arrive) before requesting the current-preset dump for that patch. The confirmation dump after the first dump applies MUST still run as specified for patch changes. Connecting MUST NOT send a patch recall message by itself. USB sessions MUST keep sending patch recall through the device session using official CC 0 and MUST NOT wait for that Bluetooth ACK before their dump request.
+While a session is connected over Bluetooth and initial patch identity sync has completed or timed out, Controller MUST offer working patch previous, patch next, and patch select (00–99), the same controls as a USB session. Choosing a patch or stepping previous/next MUST update the session patch and MUST send that patch to the pedal through the device session as a parameter-write SET of packed family `1143` (path `01 01 04`, CRC-8 + nibble-expand; not live notify path `01 02 04` and not official CC 0), except when app patch recall is blocked because chain sync is syncing. After a `1143` SET is sent for an allowed recall, the session MUST wait for the pedal's command-received ACK for that write (or a short timeout if the ACK does not arrive) before requesting the current-preset dump for that patch. The confirmation dump after the first dump applies MUST still run as specified for patch changes. Connecting MUST NOT send a patch recall message by itself.
+
+USB sessions MUST keep sending patch recall through the device session using official CC 0. After an allowed USB CC 0 recall, the session MUST wait for a current-patch identity notify whose index matches the selected patch (or a short timeout if that notify does not arrive) before requesting the current-preset dump for that patch. USB MUST NOT wait for the Bluetooth `1143` command-received ACK. The confirmation dump after the first dump applies MUST still run on USB as specified for patch changes.
 
 #### Scenario: Bluetooth connected shows working patch send
 - **WHEN** the user is connected over Bluetooth, initial sync has completed or timed out, and opens Controller
@@ -164,7 +166,19 @@ While a session is connected over Bluetooth and initial patch identity sync has 
 #### Scenario: USB patch send unchanged
 - **WHEN** the user is connected over USB, chain sync is idle, and selects a patch
 - **THEN** that patch is still sent through the device session using official CC 0
-- **AND** the session does not wait for a Bluetooth `1143` ACK before requesting the dump
+- **AND** no current-preset dump request is sent for that recall until a matching current-patch identity notify arrives or the wait times out
+- **AND** the session does not wait for a Bluetooth `1143` ACK
+- **AND** after that notify or timeout, the session still requests the chain dump and still arms the confirmation dump as for other patch changes
+
+#### Scenario: USB dump after matching index notify
+- **WHEN** the user is connected over USB, chain sync is syncing after CC 0 for patch `6`, and a current-patch identity for `6` arrives before the wait times out
+- **THEN** the session requests the current-preset dump for that patch
+- **AND** no second CC 0 is sent solely because that identity arrived
+
+#### Scenario: USB dump after index wait timeout
+- **WHEN** the user is connected over USB, chain sync is syncing after CC 0, and no matching current-patch identity arrives before the wait times out
+- **THEN** the session still requests the current-preset dump for the selected patch
+- **AND** still arms the confirmation dump as for other patch changes
 
 ### Requirement: Connected session syncs the current audio chain
 
@@ -173,6 +187,8 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 While a pedal-initiated patch load is in flight (a newer current-patch index has been accepted and its chain dump has not finished applying), a later pedal current-patch report for a different slot MUST retarget that load: the connected snapshot MUST show the latest reported index, the session MUST abandon the previous dump assembly for that load, and the session MUST request one chain dump for the latest slot. The session MUST NOT leave the shown index frozen on an intermediate slot solely because an earlier dump is still outstanding. While an app-initiated patch recall is in flight, a current-patch report for a different slot MUST NOT revert the selected index.
 
 Applying the first dump of a user or pedal patch change MUST arm one confirmation dump of the current patch and MUST NOT send patch recall for it. On USB and on Bluetooth, that first apply MUST keep the patch syncing until the confirmation dump is applied or the refresh times out. Connect, Reload, download, and upload MUST NOT start a confirmation. A confirmation that decodes to the same chain already shown MUST be discarded and MUST leave the shown chain and the held dump unchanged, and MUST end syncing. A confirmation that decodes to a different chain MUST replace the shown chain and the held dump when the working patch is not modified, MUST end syncing, and MUST NOT request another confirmation. A confirmation that arrives after the user has edited the working patch MUST be discarded and MUST end syncing when the overlay was held for confirmation. Disconnect MUST drop chain state.
+
+When a chain refresh times out without applying a finished dump (including while waiting for a USB current-patch identity before the first dump, or while a confirmation dump is outstanding), the session MUST end syncing and MUST clear any in-flight patch-load gate so a later pedal current-patch report can update the shown index and start a new dump path. The session MAY re-ask current-patch identity after that timeout.
 
 #### Scenario: USB connect requests the chain
 - **WHEN** a USB session becomes connected and SysEx is available
@@ -257,6 +273,11 @@ Applying the first dump of a user or pedal patch change MUST arm one confirmatio
 - **WHEN** the session is ready, the user selects another patch, and the open USB or Bluetooth link is gone
 - **THEN** the session becomes disconnected
 - **AND** the chrome control reads Connect
+
+#### Scenario: Chain refresh timeout clears the patch-load gate
+- **WHEN** a USB or Bluetooth patch change is syncing and the chain refresh times out without a finished dump
+- **THEN** chain sync returns to idle
+- **AND** a later pedal current-patch report for a different slot updates the shown index and may start a new dump path
 
 ### Requirement: Connected session toggles audio-chain modules
 
