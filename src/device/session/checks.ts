@@ -1,5 +1,6 @@
 import type { BluetoothLink } from "@/bluetooth/types";
 import { decodePresetDump } from "@/device/chain-codec";
+import { commandReceivedAckFixture, RECALL_ACK_TIMEOUT_MS } from "@/device/command-ack";
 import {
   encodeChainOrder,
   encodeIdentity,
@@ -429,9 +430,15 @@ function patchChangedNotify(): Uint8Array {
   return midi;
 }
 
-function chainRequestCount(sent: Uint8Array[]): number {
-  const request = encodeChainRequest("bluetooth");
+function chainRequestCount(sent: Uint8Array[], linkMode: "usb" | "bluetooth" = "bluetooth"): number {
+  const request = encodeChainRequest(linkMode);
   return sent.filter((packet) => packetsEqual(packet, request)).length;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function connectBluetoothReady(
@@ -561,6 +568,140 @@ void assertAppRecallKeepsPendingSlot().catch((error) => {
   throw error;
 });
 
+async function assertAppRecallIgnoredWhileSyncing(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 10);
+    const chainsBefore = chainRequestCount(bluetooth.sent);
+    await session.setPatch(42);
+    const afterRecall = session.getSnapshot();
+    if (afterRecall.status !== "connected" || afterRecall.patch !== 42 || afterRecall.chainSync !== "syncing") {
+      throw new Error("setPatch must select patch 42 and stay syncing until the dump path finishes");
+    }
+    const recalls = bluetooth.sent.filter(isPatchRecall).length;
+    const sentAfterRecall = bluetooth.sent.length;
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore) {
+      throw new Error("Bluetooth setPatch must not request the dump before the recall ACK");
+    }
+    await session.setPatch(7);
+    await session.stepPatch(1);
+    await session.setPatch(42);
+    const blocked = session.getSnapshot();
+    if (
+      blocked.status !== "connected" ||
+      blocked.patch !== 42 ||
+      bluetooth.sent.length !== sentAfterRecall ||
+      bluetooth.sent.filter(isPatchRecall).length !== recalls ||
+      chainRequestCount(bluetooth.sent) !== chainsBefore
+    ) {
+      throw new Error("A second select or next while syncing must send nothing extra");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertAppRecallIgnoredWhileSyncing().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertBluetoothDumpWaitsForAck(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 10);
+    const chainsBefore = chainRequestCount(bluetooth.sent);
+    await session.setPatch(42);
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore) {
+      throw new Error("Bluetooth setPatch must defer the dump until the recall ACK");
+    }
+    bluetooth.push(currentPatchAt(17));
+    await tick();
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore) {
+      throw new Error("An unrelated notify must not release the deferred dump");
+    }
+    bluetooth.push(commandReceivedAckFixture());
+    await untilReady("Recall ACK did not request the chain dump", () => {
+      return chainRequestCount(bluetooth.sent) === chainsBefore + 1;
+    });
+    bluetooth.push(commandReceivedAckFixture());
+    await tick();
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore + 1) {
+      throw new Error("A late command-received ACK must not request another dump");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
+      bluetooth.push(packet);
+    }
+    const afterFirst = session.getSnapshot();
+    if (afterFirst.status !== "connected" || afterFirst.chainSync !== "syncing") {
+      throw new Error("Bluetooth patch change must stay syncing after the first dump until confirmation");
+    }
+    await untilReady("Confirmation dump was not armed after the recall ACK", () => {
+      return chainRequestCount(bluetooth.sent) === chainsBefore + 2;
+    });
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("Confirmation after ACK did not clear syncing", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    const sentBeforeNext = bluetooth.sent.length;
+    await session.setPatch(43);
+    const resumed = session.getSnapshot();
+    if (
+      resumed.status !== "connected" ||
+      resumed.patch !== 43 ||
+      bluetooth.sent.length === sentBeforeNext ||
+      !isPatchRecall(bluetooth.sent[bluetooth.sent.length - 1]!)
+    ) {
+      throw new Error("App recall must send again after chain sync returns to idle");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertBluetoothDumpWaitsForAck().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertBluetoothDumpAfterAckTimeout(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(session, bluetooth, 4);
+    const chainsBefore = chainRequestCount(bluetooth.sent);
+    await session.setPatch(8);
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore) {
+      throw new Error("Bluetooth setPatch must not dump before the ACK timeout");
+    }
+    await sleep(RECALL_ACK_TIMEOUT_MS + 150);
+    if (chainRequestCount(bluetooth.sent) !== chainsBefore + 1) {
+      throw new Error("Bluetooth setPatch must request the dump when the recall ACK times out");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 40)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("Timeout dump did not arm confirmation", () => {
+      return chainRequestCount(bluetooth.sent) === chainsBefore + 2;
+    });
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertBluetoothDumpAfterAckTimeout().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
 function scriptedUsb(): {
   sent: Uint8Array[];
   push: (bytes: Uint8Array) => void;
@@ -633,7 +774,29 @@ async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
       const snapshot = session.getSnapshot();
       return snapshot.status === "connected" && snapshot.chainSync === "idle";
     });
+    const chainsBefore = chainRequestCount(usb.sent, "usb");
+    const recallsBefore = usb.sent.filter(isPatchRecall).length;
     await session.setPatch(6);
+    const afterRecall = session.getSnapshot();
+    if (
+      afterRecall.status !== "connected" ||
+      afterRecall.patch !== 6 ||
+      chainRequestCount(usb.sent, "usb") !== chainsBefore + 1 ||
+      usb.sent.filter(isPatchRecall).length !== recallsBefore + 1
+    ) {
+      throw new Error("USB setPatch must send CC 0 and request the dump immediately when idle");
+    }
+    const sentWhileSyncing = usb.sent.length;
+    await session.setPatch(9);
+    await session.stepPatch(1);
+    const blocked = session.getSnapshot();
+    if (
+      blocked.status !== "connected" ||
+      blocked.patch !== 6 ||
+      usb.sent.length !== sentWhileSyncing
+    ) {
+      throw new Error("USB select or next while syncing must send nothing extra");
+    }
     for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
       usb.push(packet);
     }

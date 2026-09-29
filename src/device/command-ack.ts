@@ -19,6 +19,12 @@ export function isCommandReceivedAck(midi: Uint8Array): boolean {
   );
 }
 
+/**
+ * If this ACK does not arrive, request the dump anyway so navigation cannot
+ * stick. A few hundred milliseconds; not a second GATT conversation.
+ */
+export const RECALL_ACK_TIMEOUT_MS = 400;
+
 /** Fixture for session checks: only the locked ACK fields are meaningful. */
 export function commandReceivedAckFixture(): Uint8Array {
   const midi = new Uint8Array(16);

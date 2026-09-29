@@ -328,6 +328,9 @@ export function PatchBar({
             <PatchNavTooltip enabled={modified}>{trigger}</PatchNavTooltip>
           )}
           onSelect={(next) => {
+            if (busy) {
+              return;
+            }
             void session.setPatch(next);
           }}
         />

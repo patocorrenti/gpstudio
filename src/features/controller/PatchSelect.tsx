@@ -83,6 +83,12 @@ export function PatchSelect({
   }, [open, patch]);
 
   useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
+
+  useEffect(() => {
     if (!open || filtered.length === 0) {
       return;
     }
@@ -114,7 +120,7 @@ export function PatchSelect({
   }
 
   function acceptActive() {
-    if (!filtered.includes(activeOption)) {
+    if (disabled || !filtered.includes(activeOption)) {
       return;
     }
     onSelect(activeOption);
@@ -241,6 +247,9 @@ export function PatchSelect({
                     setActiveOption(option);
                   }}
                   onClick={() => {
+                    if (disabled) {
+                      return;
+                    }
                     onSelect(option);
                     setOpen(false);
                   }}
