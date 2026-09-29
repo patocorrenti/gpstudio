@@ -8,7 +8,7 @@ GP Studio is an independent project. It is not affiliated with, endorsed by, or 
 
 ## Status
 
-Version 0.4.0. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
+Version 0.5.0. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
 
 Current scope includes connecting a GP-5 or GP-50, live patch control, the current-patch audio chain (on/off, order, factory models, and knobs), save / rename / duplicate, Valeton `.prst` download and load for the connected model, global settings, stomp control, and following live pedal changes over Bluetooth.
 

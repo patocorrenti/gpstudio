@@ -7,6 +7,14 @@ import {
 
 const CHANGELOG = [
   {
+    version: "0.5.0",
+    notes: [
+      "Added GP-5 compatibility",
+      "Improved Bluetooth connection stability",
+      "Improved USB connection stability",
+    ],
+  },
+  {
     version: "0.4.0",
     notes: [
       "Footswitch and tuner control",
