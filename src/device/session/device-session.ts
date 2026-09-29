@@ -46,6 +46,7 @@ import {
   SysexAssembler,
   type IdentityEvent,
 } from "@/device/identity";
+import { isCommandReceivedAck, RECALL_ACK_TIMEOUT_MS } from "@/device/command-ack";
 import { capabilitiesForLink, type LinkMode } from "@/device/link";
 import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
@@ -113,6 +114,7 @@ import {
   encodePatchStore,
   encodeSlotModel,
   encodeStompAssignment,
+  encodeStompAssignmentEffect,
   encodeStompPress,
   encodeTuner,
 } from "@/device/encode";
@@ -181,6 +183,9 @@ export class DeviceSession {
   private patchWaiters = new Set<() => void>();
   private chainWaiters = new Set<() => void>();
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bluetooth `1143`: first dump waits for the command-received ACK or a short timeout. */
+  private recallAckTimer: ReturnType<typeof setTimeout> | null = null;
+  private recallAckGeneration: number | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
   /**
@@ -377,8 +382,12 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       throw new Error("Patch control is not available on this link.");
     }
+    // No second app recall or dump ask while a dump or confirmation is in flight.
+    if (this.snapshot.sync === "ready" && this.snapshot.chainSync === "syncing") {
+      return;
+    }
     const next = clampPatch(patch);
-    if (next === this.snapshot.patch && this.snapshot.chainSync !== "syncing") {
+    if (next === this.snapshot.patch) {
       return;
     }
     this.dropWorkingBaseline();
@@ -401,7 +410,11 @@ export class DeviceSession {
     }
     const bytes = encodePatch(this.snapshot.linkMode, next);
     await this.sendBytes(bytes);
-    this.refreshChain(true, true);
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    // USB dumps right after CC 0. Bluetooth waits for the `1143` ACK (or timeout).
+    this.refreshChain(true, true, this.snapshot.linkMode === "bluetooth");
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -659,7 +672,8 @@ export class DeviceSession {
 
   /**
    * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
-   * Sends family `114d` with **both** stomp masks (live `0D` field order; no foot byte).
+   * GP-5: per-effect `114d` size `0x05` (foot 0, effect index, 0|1).
+   * GP-50: dual-mask `114d` size `0x0A` (both stomp masks).
    */
   async setStompAssignment(
     stompIndex: number,
@@ -694,12 +708,13 @@ export class DeviceSession {
     const nextStomps = stomps.map((list, index) =>
       index === stompIndex ? nextList : [...list],
     );
-    // Dual-mask SET always carries A then B (GP-5: B empty).
-    const wireStomps: EffectId[][] =
-      this.snapshot.model === "gp50"
-        ? [nextStomps[0] ?? [], nextStomps[1] ?? []]
-        : [nextStomps[0] ?? [], []];
-    const packets = encodeStompAssignment(this.snapshot.linkMode, wireStomps);
+    const packets =
+      this.snapshot.model === "gp5"
+        ? encodeStompAssignmentEffect(this.snapshot.linkMode, 0, effect, assigned)
+        : encodeStompAssignment(this.snapshot.linkMode, [
+            nextStomps[0] ?? [],
+            nextStomps[1] ?? [],
+          ]);
     if (!packets) {
       return;
     }
@@ -1109,6 +1124,7 @@ export class DeviceSession {
       return;
     }
     for (const message of this.sysex.push(bytes)) {
+      this.noteRecallAck(message);
       const liveVolume = applyLivePatchVolume(host, message);
       const liveOnOff = applyLiveModule(host, message);
       const liveOrder = applyLiveChainOrder(host, message);
@@ -1200,7 +1216,11 @@ export class DeviceSession {
     }
   }
 
-  private refreshChain(captureBaseline = false, confirmPatch = false): void {
+  private refreshChain(
+    captureBaseline = false,
+    confirmPatch = false,
+    deferFirstDump = false,
+  ): void {
     if (this.snapshot.status !== "connected" || this.snapshot.sync !== "ready") {
       return;
     }
@@ -1210,7 +1230,55 @@ export class DeviceSession {
     this.writes.clear();
     this.chainDump.reset();
     this.beginChainRefresh();
+    if (deferFirstDump) {
+      this.armRecallAckWait();
+      return;
+    }
+    this.clearRecallAckWait();
     void this.sendChainRequest(this.syncGeneration);
+  }
+
+  /** First Bluetooth dump after `1143`. Late ACKs are ignored once this wait ends. */
+  private armRecallAckWait(): void {
+    this.clearRecallAckWait();
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const generation = this.syncGeneration;
+    this.recallAckGeneration = generation;
+    this.recallAckTimer = setTimeout(() => {
+      this.finishRecallAckWait(generation);
+    }, RECALL_ACK_TIMEOUT_MS);
+  }
+
+  private clearRecallAckWait(): void {
+    if (this.recallAckTimer !== null) {
+      clearTimeout(this.recallAckTimer);
+      this.recallAckTimer = null;
+    }
+    this.recallAckGeneration = null;
+  }
+
+  private noteRecallAck(message: Uint8Array): void {
+    if (this.recallAckGeneration === null || !isCommandReceivedAck(message)) {
+      return;
+    }
+    this.finishRecallAckWait(this.recallAckGeneration);
+  }
+
+  private finishRecallAckWait(generation: number): void {
+    if (this.recallAckGeneration !== generation) {
+      return;
+    }
+    this.clearRecallAckWait();
+    if (
+      this.snapshot.status !== "connected" ||
+      this.snapshot.chainSync !== "syncing" ||
+      !this.isCurrentGeneration(generation)
+    ) {
+      return;
+    }
+    void this.sendChainRequest(generation);
   }
 
   /**
@@ -1485,6 +1553,7 @@ export class DeviceSession {
       if (this.snapshot.chainSync !== "syncing") {
         return;
       }
+      this.clearRecallAckWait();
       if (!this.linkIsOpen()) {
         void this.dropLink();
         return;
@@ -1544,6 +1613,7 @@ export class DeviceSession {
     this.postChainDeviceAsks = false;
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
+    this.clearRecallAckWait();
     this.writes.clear();
     this.dropPatchDump();
     this.releaseWaiters(this.namesWaiters);

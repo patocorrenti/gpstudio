@@ -12,9 +12,15 @@ import {
   encodeCurrentChainRequest,
   encodeSlotControlSysex,
   encodeSlotModelSysex,
+  encodeStompAssignmentEffectSysex,
   encodeStompAssignmentSysex,
 } from "@/device/chain-codec";
-import { encodePatchStoreSysex, encodePatchVolumeSysex, encodePatchBpmSysex } from "@/device/patch-store";
+import {
+  encodePatchRecallSysex,
+  encodePatchStoreSysex,
+  encodePatchVolumeSysex,
+  encodePatchBpmSysex,
+} from "@/device/patch-store";
 import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
@@ -66,7 +72,18 @@ export function encodeLinkMidiPackets(linkMode: LinkMode, midi: Uint8Array): Uin
   return [encodeLinkMidi(linkMode, midi)];
 }
 
+/**
+ * USB: official CC 0 (value 0–99). Bluetooth: parameter-write SET family
+ * `1143` (reference editors; CC 0 over GATT does not move the pedal).
+ */
 export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
+  if (linkMode === "bluetooth") {
+    const sysex = encodePatchRecallSysex(patch);
+    if (!sysex) {
+      throw new Error("Patch must be an integer from 0 to 99.");
+    }
+    return encodeLinkMidi(linkMode, sysex);
+  }
   return encodeLinkMidi(linkMode, midiCc(gp5Cc.patch, patch));
 }
 
@@ -238,6 +255,23 @@ export function encodeStompAssignment(
   return encodeLinkMidiPackets(linkMode, midi);
 }
 
+/**
+ * GP-5 per-effect stomp-assignment SET (family `114d`, size `0x05`).
+ * USB vs Bluetooth only differ by BLE-MIDI wrap.
+ */
+export function encodeStompAssignmentEffect(
+  linkMode: LinkMode,
+  footswitch: 0 | 1,
+  effect: EffectId,
+  assigned: boolean,
+): Uint8Array[] | null {
+  const midi = encodeStompAssignmentEffectSysex(footswitch, effect, assigned);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
 /** Parameter-write store SET (family `114a`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
 export function encodePatchStore(
   linkMode: LinkMode,
@@ -344,6 +378,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
   const usbStomp = encodeStompAssignment("usb", [["dst"], []]);
   const bleStomp = encodeStompAssignment("bluetooth", [["dst"], []]);
+  const usbStompEffect = encodeStompAssignmentEffect("usb", 0, "dst", true);
+  const bleStompEffect = encodeStompAssignmentEffect("bluetooth", 0, "dst", true);
   const usbStore = encodePatchStore("usb", 5, "Flow");
   const bleStore = encodePatchStore("bluetooth", 5, "Flow");
   const usbVol = encodePatchVolume("usb", 50);
@@ -371,6 +407,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
   const bleStompMidi = bleStomp && bleStomp.length === 1 ? unwrapBlePacket(bleStomp[0]) : null;
+  const bleStompEffectMidi =
+    bleStompEffect && bleStompEffect.length === 1 ? unwrapBlePacket(bleStompEffect[0]) : null;
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
   const bleIrMidi = unwrapBlePacket(bleIr);
@@ -389,6 +427,8 @@ function assertUsbBluetoothWrapOnly(): void {
     !bleControl ||
     !usbStomp ||
     !bleStomp ||
+    !usbStompEffect ||
+    !bleStompEffect ||
     !usbStore ||
     !bleStore ||
     !usbVol ||
@@ -396,11 +436,13 @@ function assertUsbBluetoothWrapOnly(): void {
     !bleModelMidi ||
     !bleControlMidi ||
     !bleStompMidi ||
+    !bleStompEffectMidi ||
     !bleStoreMidi ||
     !bleVolMidi ||
     !sameBytes(usbModel[0], bleModelMidi) ||
     !sameBytes(usbControl[0], bleControlMidi) ||
     !sameBytes(usbStomp[0], bleStompMidi) ||
+    !sameBytes(usbStompEffect[0], bleStompEffectMidi) ||
     !sameBytes(usbStore[0], bleStoreMidi) ||
     !sameBytes(usbVol[0], bleVolMidi) ||
     !usbVolCc ||
@@ -519,8 +561,33 @@ function assertStompPress(): void {
 }
 
 assertUsbBluetoothWrapOnly();
+assertPatchRecall();
 assertStompPress();
 assertTuner();
+
+function assertPatchRecall(): void {
+  const usb = encodePatch("usb", 42);
+  const ble = encodePatch("bluetooth", 42);
+  const bleMidi = unwrapBlePacket(ble);
+  const recallSysex = encodePatchRecallSysex(42);
+  if (
+    usb.length !== 3 ||
+    usb[0] !== 0xb0 ||
+    usb[1] !== 0x00 ||
+    usb[2] !== 42 ||
+    !bleMidi ||
+    !recallSysex ||
+    !sameBytes(bleMidi, recallSysex) ||
+    bleMidi[0] !== 0xf0 ||
+    bleMidi[9] !== 0x01 ||
+    bleMidi[10] !== 0x01 ||
+    bleMidi[11] !== 0x04 ||
+    bleMidi[12] !== 0x03 ||
+    sameBytes(usb, bleMidi)
+  ) {
+    throw new Error("USB patch recall must stay CC 0; Bluetooth must be SET family 1143");
+  }
+}
 
 function assertTuner(): void {
   const usbOn = encodeTuner("usb", true);
