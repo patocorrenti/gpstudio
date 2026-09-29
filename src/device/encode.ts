@@ -12,6 +12,7 @@ import {
   encodeCurrentChainRequest,
   encodeSlotControlSysex,
   encodeSlotModelSysex,
+  encodeStompAssignmentEffectSysex,
   encodeStompAssignmentSysex,
 } from "@/device/chain-codec";
 import { encodePatchStoreSysex, encodePatchVolumeSysex, encodePatchBpmSysex } from "@/device/patch-store";
@@ -238,6 +239,23 @@ export function encodeStompAssignment(
   return encodeLinkMidiPackets(linkMode, midi);
 }
 
+/**
+ * GP-5 per-effect stomp-assignment SET (family `114d`, size `0x05`).
+ * USB vs Bluetooth only differ by BLE-MIDI wrap.
+ */
+export function encodeStompAssignmentEffect(
+  linkMode: LinkMode,
+  footswitch: 0 | 1,
+  effect: EffectId,
+  assigned: boolean,
+): Uint8Array[] | null {
+  const midi = encodeStompAssignmentEffectSysex(footswitch, effect, assigned);
+  if (!midi) {
+    return null;
+  }
+  return encodeLinkMidiPackets(linkMode, midi);
+}
+
 /** Parameter-write store SET (family `114a`). USB vs Bluetooth only differ by BLE-MIDI wrap. */
 export function encodePatchStore(
   linkMode: LinkMode,
@@ -344,6 +362,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleControl = encodeSlotControl("bluetooth", "amp", 0, 45);
   const usbStomp = encodeStompAssignment("usb", [["dst"], []]);
   const bleStomp = encodeStompAssignment("bluetooth", [["dst"], []]);
+  const usbStompEffect = encodeStompAssignmentEffect("usb", 0, "dst", true);
+  const bleStompEffect = encodeStompAssignmentEffect("bluetooth", 0, "dst", true);
   const usbStore = encodePatchStore("usb", 5, "Flow");
   const bleStore = encodePatchStore("bluetooth", 5, "Flow");
   const usbVol = encodePatchVolume("usb", 50);
@@ -371,6 +391,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleControlMidi =
     bleControl && bleControl.length === 1 ? unwrapBlePacket(bleControl[0]) : null;
   const bleStompMidi = bleStomp && bleStomp.length === 1 ? unwrapBlePacket(bleStomp[0]) : null;
+  const bleStompEffectMidi =
+    bleStompEffect && bleStompEffect.length === 1 ? unwrapBlePacket(bleStompEffect[0]) : null;
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
   const bleIrMidi = unwrapBlePacket(bleIr);
@@ -389,6 +411,8 @@ function assertUsbBluetoothWrapOnly(): void {
     !bleControl ||
     !usbStomp ||
     !bleStomp ||
+    !usbStompEffect ||
+    !bleStompEffect ||
     !usbStore ||
     !bleStore ||
     !usbVol ||
@@ -396,11 +420,13 @@ function assertUsbBluetoothWrapOnly(): void {
     !bleModelMidi ||
     !bleControlMidi ||
     !bleStompMidi ||
+    !bleStompEffectMidi ||
     !bleStoreMidi ||
     !bleVolMidi ||
     !sameBytes(usbModel[0], bleModelMidi) ||
     !sameBytes(usbControl[0], bleControlMidi) ||
     !sameBytes(usbStomp[0], bleStompMidi) ||
+    !sameBytes(usbStompEffect[0], bleStompEffectMidi) ||
     !sameBytes(usbStore[0], bleStoreMidi) ||
     !sameBytes(usbVol[0], bleVolMidi) ||
     !usbVolCc ||

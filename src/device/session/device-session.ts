@@ -113,6 +113,7 @@ import {
   encodePatchStore,
   encodeSlotModel,
   encodeStompAssignment,
+  encodeStompAssignmentEffect,
   encodeStompPress,
   encodeTuner,
 } from "@/device/encode";
@@ -659,7 +660,8 @@ export class DeviceSession {
 
   /**
    * Assign or clear one effect on one stomp. Optimistic snapshot update; no chainSync overlay.
-   * Sends family `114d` with **both** stomp masks (live `0D` field order; no foot byte).
+   * GP-5: per-effect `114d` size `0x05` (foot 0, effect index, 0|1).
+   * GP-50: dual-mask `114d` size `0x0A` (both stomp masks).
    */
   async setStompAssignment(
     stompIndex: number,
@@ -694,12 +696,13 @@ export class DeviceSession {
     const nextStomps = stomps.map((list, index) =>
       index === stompIndex ? nextList : [...list],
     );
-    // Dual-mask SET always carries A then B (GP-5: B empty).
-    const wireStomps: EffectId[][] =
-      this.snapshot.model === "gp50"
-        ? [nextStomps[0] ?? [], nextStomps[1] ?? []]
-        : [nextStomps[0] ?? [], []];
-    const packets = encodeStompAssignment(this.snapshot.linkMode, wireStomps);
+    const packets =
+      this.snapshot.model === "gp5"
+        ? encodeStompAssignmentEffect(this.snapshot.linkMode, 0, effect, assigned)
+        : encodeStompAssignment(this.snapshot.linkMode, [
+            nextStomps[0] ?? [],
+            nextStomps[1] ?? [],
+          ]);
     if (!packets) {
       return;
     }
