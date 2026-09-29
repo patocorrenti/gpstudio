@@ -161,7 +161,7 @@ export type SessionSnapshot =
 
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
-const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
+export const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
 
 export class DeviceSession {
   private readonly transport: MidiTransport;
@@ -183,9 +183,14 @@ export class DeviceSession {
   private patchWaiters = new Set<() => void>();
   private chainWaiters = new Set<() => void>();
   private chainRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Bluetooth `1143`: first dump waits for the command-received ACK or a short timeout. */
+  /**
+   * First dump after an app recall. Bluetooth `1143` waits for the
+   * command-received ACK. USB CC 0 waits for a matching current-patch identity.
+   * Both use the same short timeout, then request the dump.
+   */
   private recallAckTimer: ReturnType<typeof setTimeout> | null = null;
   private recallAckGeneration: number | null = null;
+  private deferredDumpGate: "ack" | "usb-identity" | null = null;
   /** Target slot for an in-flight patch change; stale current-patch reports must not revert it. */
   private pendingPatchLoad: number | null = null;
   /**
@@ -413,8 +418,8 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    // USB dumps right after CC 0. Bluetooth waits for the `1143` ACK (or timeout).
-    this.refreshChain(true, true, this.snapshot.linkMode === "bluetooth");
+    // USB waits for a matching current-patch notify. Bluetooth waits for the `1143` ACK.
+    this.refreshChain(true, true, true);
   }
 
   async stepPatch(delta: -1 | 1): Promise<void> {
@@ -1198,7 +1203,8 @@ export class DeviceSession {
       };
       this.emitSnapshot();
       this.releaseWaiters(this.patchWaiters);
-      if (changed) {
+      const releasedUsbWait = this.noteUsbCurrentPatch(next);
+      if (changed && !releasedUsbWait) {
         if (turnTunerOff && capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
           void this.sendBytes(encodeTuner(this.snapshot.linkMode, false));
         }
@@ -1231,21 +1237,25 @@ export class DeviceSession {
     this.chainDump.reset();
     this.beginChainRefresh();
     if (deferFirstDump) {
-      this.armRecallAckWait();
+      this.armRecallAckWait(this.snapshot.linkMode === "bluetooth" ? "ack" : "usb-identity");
       return;
     }
     this.clearRecallAckWait();
     void this.sendChainRequest(this.syncGeneration);
   }
 
-  /** First Bluetooth dump after `1143`. Late ACKs are ignored once this wait ends. */
-  private armRecallAckWait(): void {
+  /**
+   * Defer the first dump after an app recall. Late ACKs and late matching
+   * indices are ignored once this wait ends.
+   */
+  private armRecallAckWait(gate: "ack" | "usb-identity"): void {
     this.clearRecallAckWait();
     if (this.snapshot.status !== "connected") {
       return;
     }
     const generation = this.syncGeneration;
     this.recallAckGeneration = generation;
+    this.deferredDumpGate = gate;
     this.recallAckTimer = setTimeout(() => {
       this.finishRecallAckWait(generation);
     }, RECALL_ACK_TIMEOUT_MS);
@@ -1257,13 +1267,35 @@ export class DeviceSession {
       this.recallAckTimer = null;
     }
     this.recallAckGeneration = null;
+    this.deferredDumpGate = null;
   }
 
   private noteRecallAck(message: Uint8Array): void {
-    if (this.recallAckGeneration === null || !isCommandReceivedAck(message)) {
+    if (
+      this.deferredDumpGate !== "ack" ||
+      this.recallAckGeneration === null ||
+      !isCommandReceivedAck(message)
+    ) {
       return;
     }
     this.finishRecallAckWait(this.recallAckGeneration);
+  }
+
+  /**
+   * USB CC 0: a current-patch notify for the selected slot releases the deferred
+   * dump once. Does not send another recall.
+   */
+  private noteUsbCurrentPatch(patch: number): boolean {
+    if (
+      this.deferredDumpGate !== "usb-identity" ||
+      this.recallAckGeneration === null ||
+      this.pendingPatchSource !== "app" ||
+      this.pendingPatchLoad !== patch
+    ) {
+      return false;
+    }
+    this.finishRecallAckWait(this.recallAckGeneration);
+    return true;
   }
 
   private finishRecallAckWait(generation: number): void {
@@ -1320,6 +1352,8 @@ export class DeviceSession {
     if (!result || this.snapshot.status !== "connected") {
       return;
     }
+    // A dump already landed; the deferred first ask must not fire again.
+    this.clearRecallAckWait();
     if (this.patchConfirm === "in-flight") {
       this.applyPatchConfirmation(result);
       return;
@@ -1558,6 +1592,8 @@ export class DeviceSession {
         void this.dropLink();
         return;
       }
+      this.pendingPatchLoad = null;
+      this.pendingPatchSource = null;
       this.patchConfirm = "off";
       this.snapshot = {
         ...this.snapshot,

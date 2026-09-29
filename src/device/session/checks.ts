@@ -13,7 +13,7 @@ import {
 import { emptyUserIrNames, encodeIrNameDump, USER_IR_COUNT } from "@/device/ir-names";
 import { decodePrstFile } from "@/device/patch-store";
 import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
-import { DeviceSession } from "./device-session";
+import { CHAIN_TIMEOUT_MS, DeviceSession } from "./device-session";
 import type { MidiTransport } from "@/midi/types";
 
 function bytesFromHex(hex: string): Uint8Array {
@@ -752,28 +752,36 @@ function usbNameList(): Uint8Array {
   return midi;
 }
 
+async function connectUsbReady(
+  session: DeviceSession,
+  usb: ReturnType<typeof scriptedUsb>,
+  patch: number,
+): Promise<void> {
+  await session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+  await untilReady("USB identity did not request names", () => usb.sent.length > 0);
+  await tick();
+  usb.push(usbNameList());
+  await untilReady("USB identity did not request current patch", () => usb.sent.length > 1);
+  await tick();
+  usb.push(currentPatchAt(patch));
+  await untilReady("USB session did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+    usb.push(packet);
+  }
+  await untilReady("USB connect dump did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+}
+
 async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
   const usb = scriptedUsb();
   const session = new DeviceSession(usb.transport, stubBluetooth());
   try {
-    await session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
-    await untilReady("USB identity did not request names", () => usb.sent.length > 0);
-    await tick();
-    usb.push(usbNameList());
-    await untilReady("USB identity did not request current patch", () => usb.sent.length > 1);
-    await tick();
-    usb.push(currentPatchAt(5));
-    await untilReady("USB session did not become ready", () => {
-      const snapshot = session.getSnapshot();
-      return snapshot.status === "connected" && snapshot.sync === "ready";
-    });
-    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
-      usb.push(packet);
-    }
-    await untilReady("USB connect dump did not go idle", () => {
-      const snapshot = session.getSnapshot();
-      return snapshot.status === "connected" && snapshot.chainSync === "idle";
-    });
+    await connectUsbReady(session, usb, 5);
     const chainsBefore = chainRequestCount(usb.sent, "usb");
     const recallsBefore = usb.sent.filter(isPatchRecall).length;
     await session.setPatch(6);
@@ -781,10 +789,11 @@ async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
     if (
       afterRecall.status !== "connected" ||
       afterRecall.patch !== 6 ||
-      chainRequestCount(usb.sent, "usb") !== chainsBefore + 1 ||
+      afterRecall.chainSync !== "syncing" ||
+      chainRequestCount(usb.sent, "usb") !== chainsBefore ||
       usb.sent.filter(isPatchRecall).length !== recallsBefore + 1
     ) {
-      throw new Error("USB setPatch must send CC 0 and request the dump immediately when idle");
+      throw new Error("USB setPatch must send CC 0 and defer the dump until the matching index");
     }
     const sentWhileSyncing = usb.sent.length;
     await session.setPatch(9);
@@ -796,6 +805,36 @@ async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
       usb.sent.length !== sentWhileSyncing
     ) {
       throw new Error("USB select or next while syncing must send nothing extra");
+    }
+    usb.push(commandReceivedAckFixture());
+    await tick();
+    if (chainRequestCount(usb.sent, "usb") !== chainsBefore) {
+      throw new Error("USB dump must not wait on the Bluetooth command-received ACK");
+    }
+    usb.push(currentPatchAt(17));
+    await tick();
+    const mismatched = session.getSnapshot();
+    if (
+      chainRequestCount(usb.sent, "usb") !== chainsBefore ||
+      mismatched.status !== "connected" ||
+      mismatched.patch !== 6
+    ) {
+      throw new Error("A different current-patch must not release the USB dump");
+    }
+    usb.push(currentPatchAt(6));
+    await untilReady("Matching current-patch did not request the USB dump", () => {
+      return chainRequestCount(usb.sent, "usb") === chainsBefore + 1;
+    });
+    if (usb.sent.filter(isPatchRecall).length !== recallsBefore + 1) {
+      throw new Error("Matching current-patch must not send a second CC 0");
+    }
+    usb.push(currentPatchAt(6));
+    await tick();
+    if (
+      chainRequestCount(usb.sent, "usb") !== chainsBefore + 1 ||
+      usb.sent.filter(isPatchRecall).length !== recallsBefore + 1
+    ) {
+      throw new Error("A second matching current-patch must not ask for another dump or CC 0");
     }
     for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 55)) {
       usb.push(packet);
@@ -817,6 +856,94 @@ async function assertUsbPatchConfirmHoldsSyncing(): Promise<void> {
 }
 
 void assertUsbPatchConfirmHoldsSyncing().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertUsbDumpAfterIndexTimeout(): Promise<void> {
+  const usb = scriptedUsb();
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  try {
+    await connectUsbReady(session, usb, 4);
+    const chainsBefore = chainRequestCount(usb.sent, "usb");
+    const recallsBefore = usb.sent.filter(isPatchRecall).length;
+    await session.setPatch(8);
+    if (chainRequestCount(usb.sent, "usb") !== chainsBefore) {
+      throw new Error("USB setPatch must not dump before the index wait times out");
+    }
+    usb.push(commandReceivedAckFixture());
+    await tick();
+    if (chainRequestCount(usb.sent, "usb") !== chainsBefore) {
+      throw new Error("A command-received ACK must not release the USB dump");
+    }
+    await sleep(RECALL_ACK_TIMEOUT_MS + 150);
+    if (
+      chainRequestCount(usb.sent, "usb") !== chainsBefore + 1 ||
+      usb.sent.filter(isPatchRecall).length !== recallsBefore + 1
+    ) {
+      throw new Error("USB setPatch must request the dump when the index wait times out");
+    }
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 40)) {
+      usb.push(packet);
+    }
+    const afterFirst = session.getSnapshot();
+    if (afterFirst.status !== "connected" || afterFirst.chainSync !== "syncing") {
+      throw new Error("USB timeout dump must stay syncing until confirmation");
+    }
+    await untilReady("Timeout dump did not arm confirmation", () => {
+      return chainRequestCount(usb.sent, "usb") === chainsBefore + 2;
+    });
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertUsbDumpAfterIndexTimeout().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertChainRefreshTimeoutClearsPatchLoad(): Promise<void> {
+  const usb = scriptedUsb();
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  try {
+    await connectUsbReady(session, usb, 5);
+    const recallsBefore = usb.sent.filter(isPatchRecall).length;
+    await session.setPatch(6);
+    await sleep(RECALL_ACK_TIMEOUT_MS + 150);
+    usb.push(currentPatchAt(11));
+    await tick();
+    const duringLoad = session.getSnapshot();
+    if (duringLoad.status !== "connected" || duringLoad.patch !== 6 || duringLoad.chainSync !== "syncing") {
+      throw new Error("An in-flight app recall must ignore a different current-patch");
+    }
+    await sleep(CHAIN_TIMEOUT_MS.usb);
+    await tick();
+    const timedOut = session.getSnapshot();
+    if (timedOut.status !== "connected" || timedOut.patch !== 6 || timedOut.chainSync !== "idle") {
+      throw new Error("Chain refresh timeout must return to idle without reverting the selected patch");
+    }
+    if (usb.sent.filter(isPatchRecall).length !== recallsBefore + 1) {
+      throw new Error("Chain refresh timeout must not send another CC 0");
+    }
+    const chainsAfterTimeout = chainRequestCount(usb.sent, "usb");
+    usb.push(currentPatchAt(11));
+    await untilReady("Pedal current-patch after timeout did not update the index", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.patch === 11;
+    });
+    if (usb.sent.filter(isPatchRecall).length !== recallsBefore + 1) {
+      throw new Error("A pedal current-patch after timeout must not send CC 0");
+    }
+    await untilReady("Pedal current-patch after timeout did not request a dump", () => {
+      return chainRequestCount(usb.sent, "usb") === chainsAfterTimeout + 1;
+    });
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertChainRefreshTimeoutClearsPatchLoad().catch((error) => {
   console.error(error);
   throw error;
 });
