@@ -652,12 +652,15 @@ function classifyDump(midi: Uint8Array): DumpHeader | null {
     };
   }
 
+  // GP-5 USB current-preset: reference editor uses exact lengths — data 48,
+  // terminator 34 (`_reference/gp5usb.html`). Do not treat other short packets
+  // as end-of-dump (the old `<= 36` rule).
   const gp5Usb = commandAt(midi, 1, 9);
-  if (gp5Usb && midi.length >= 30 && midi.length <= 52) {
+  if (gp5Usb && (midi.length === 48 || midi.length === 34)) {
     return {
       dumpClass: "gp5",
       ...gp5Usb,
-      terminator: midi.length <= 36,
+      terminator: midi.length === 34,
     };
   }
 
@@ -1360,4 +1363,35 @@ function assertIrFragmentsSkipChainDecoder(): void {
   }
 }
 
+/** GP-5 USB SysEx: F0 … F7 with command `01 09` and the given total length. */
+function frameGp5UsbPreset(length: number, index: number): Uint8Array {
+  const midi = new Uint8Array(length);
+  midi[0] = 0xf0;
+  midi[3] = 1;
+  midi[4] = 9;
+  midi[5] = (index >> 4) & 0x0f;
+  midi[6] = index & 0x0f;
+  midi[length - 1] = 0xf7;
+  return midi;
+}
+
+function assertGp5UsbDumpLengths(): void {
+  const chain = new ChainDecoder();
+  // Reference (`gp5usb.html`): data == 48, terminator == 34. Not `<= 36`.
+  if (chain.push(frameGp5UsbPreset(36, 0), "gp5")) {
+    throw new Error("GP-5 USB length 36 must not classify as current-preset");
+  }
+  if (chain.push(frameGp5UsbPreset(40, 0), "gp5")) {
+    throw new Error("GP-5 USB length 40 must not classify as current-preset");
+  }
+  if (chain.push(frameGp5UsbPreset(48, 0), "gp5")) {
+    throw new Error("GP-5 USB length 48 must wait for the length-34 terminator");
+  }
+  // Terminator with a gap (index 1 only after index 0) must not invent a chain.
+  if (chain.push(frameGp5UsbPreset(34, 2), "gp5")) {
+    throw new Error("GP-5 USB terminator with a fragment gap must not finish");
+  }
+}
+
 assertIrFragmentsSkipChainDecoder();
+assertGp5UsbDumpLengths();
