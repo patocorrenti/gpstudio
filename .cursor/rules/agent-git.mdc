@@ -1,0 +1,11 @@
+---
+description: Agents do not commit or push; the user owns git (release excepted)
+alwaysApply: true
+---
+
+# Agent git
+
+- Do **not** `git add`, `git commit`, or `git push` unless the user explicitly asks in that message.
+- OpenSpec archive (`/opsx-archive`) must leave the working tree for the user to review and commit. Suggest a subject only; do not run git write commands.
+- Exception: the `release-version` skill / `npm run release` flow, which commits and tags as part of release when the user runs that process.
+- Never force-push, amend, or skip hooks unless the user explicitly asks.
