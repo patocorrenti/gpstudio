@@ -194,10 +194,10 @@ context: |
     route) and edits device globals immediately without patch Save: master
     volume via CC 1 first, then input / No CAB / REC / BT REC / monitor /
     REC mode via family 1111 SETs, Patch|Stomp via CC 28. On GP-5 the same
-    modal lists Global volume first (1111 effect 2 / flag 2, not CC 1), then
-    input / No CAB / REC / BT REC (effect 5 / flag 4) / monitor (effect 2 /
-    flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 / A-Z / CTL /
-    Tuner via family 1115, not CC 28. No REC mode and no Global BPM on GP-5.
+    modal lists input / No CAB / REC / BT REC (effect 5 / flag 4) / monitor
+    (effect 2 / flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 /
+    A-Z / CTL / Tuner via family 1115, not CC 28. No master volume, no Global
+    volume, no REC mode, and no Global BPM on GP-5.
     Bluetooth applies live global reports for the connected model; USB does not.
     Tuner write (CC 58) is in scope; inbound tuner and a pitch display stay later.
     Family 1142 stays
@@ -223,8 +223,9 @@ context: |
     GP-50 master volume (CC 1), GP-50 Patch|Stomp (CC 28), stomp press
     (GP-5 CC 69, GP-50 CC 69 and CC 70, value 127), and tuner on/off
     (CC 58, 127 on / 0 off) writes are in
-    scope on USB and Bluetooth. GP-5 global volume, levels, screen brightness,
+    scope on USB and Bluetooth. GP-5 levels, screen brightness,
     and footswitch modes are in scope via their SETs, not via CC 1 or CC 28.
+    There is no Global-settings write for GP-5 global volume.
     Inbound tuner CC and an in-app pitch display stay out.
   - Pedal GLOBAL rows with no MIDI path (EXP calibrate, bypass type, EXP/FS
     assign, GP-50 display, MIDI routing, Auto CAB, language, factory reset, About).

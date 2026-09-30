@@ -891,7 +891,7 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 
 When the dump is decoded, the connected snapshot MUST carry the global values that dump provides for the connected model. A missing dump or a timeout MUST leave those values unknown and MUST NOT invent a value that is written to the pedal. Global values are device-wide: a later current-preset dump MUST NOT clear them. Disconnect MUST drop them. The same request shape MUST be used on USB and Bluetooth. UI MUST NOT send raw MIDI.
 
-A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, REC mode left, REC mode right, footswitch mode, and master volume. A GP-5 dump MUST be able to supply global volume, input level, No CAB, REC level, BT REC, monitor level, screen brightness, and footswitch mode. A GP-5 session MUST NOT expose master volume, REC mode left, or REC mode right. A GP-5 session MUST NOT expose Patch or Stomp as its footswitch mode. A GP-5 session MUST NOT expose input level, No CAB, REC level, BT REC, monitor level, global volume, screen brightness, or footswitch mode by treating a GP-50 globals payload as a GP-5 value. A GP-50 session MUST NOT decode a GP-5 globals payload as GP-50 values.
+A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, REC mode left, REC mode right, footswitch mode, and master volume. A GP-5 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, screen brightness, and footswitch mode. A GP-5 dump MAY also carry a global-volume byte for codec fidelity, but a GP-5 session MUST NOT expose global volume or master volume as a reachable Global settings field. A GP-5 session MUST NOT expose REC mode left or REC mode right. A GP-5 session MUST NOT expose Patch or Stomp as its footswitch mode. A GP-5 session MUST NOT expose input level, No CAB, REC level, BT REC, monitor level, screen brightness, or footswitch mode by treating a GP-50 globals payload as a GP-5 value. A GP-50 session MUST NOT decode a GP-5 globals payload as GP-50 values.
 
 #### Scenario: Globals load after connect
 - **WHEN** a GP-50 session becomes connected and the globals dump decodes input level 0 and master volume 63
@@ -920,15 +920,17 @@ A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, moni
 - **AND** a GP-50 globals payload does not set GP-5 values
 
 #### Scenario: GP-5 loads its globals after connect
-- **WHEN** a GP-5 session becomes connected and the globals dump decodes input level 0 and global volume 40
-- **THEN** the snapshot carries input level 0 and global volume 40
+- **WHEN** a GP-5 session becomes connected and the globals dump decodes input level 0, No CAB off, and footswitch mode `0-99`
+- **THEN** the snapshot carries input level 0, No CAB off, and footswitch mode `0-99`
 - **AND** the session sent the globals request on the open link
 - **AND** no patch recall is sent solely because that dump arrived
+- **AND** the session does not expose master volume or global volume as a reachable Global settings field
 
 #### Scenario: GP-5 does not inherit GP-50-only globals
 - **WHEN** a GP-5 session decodes a globals dump
 - **THEN** the snapshot does not expose master volume or REC mode
 - **AND** the snapshot does not expose Patch or Stomp as the footswitch mode
+- **AND** the snapshot does not expose global volume as a reachable Global settings field
 
 #### Scenario: A GP-50 payload is not a GP-5 globals dump
 - **WHEN** a GP-5 session receives a globals payload that only a GP-50 session decodes
@@ -940,11 +942,11 @@ A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, moni
 
 ### Requirement: Connected session writes global settings immediately
 
-After a USB or Bluetooth session is ready, changing a known global setting MUST update the snapshot on-change and MUST send that write on the open link. The session MUST NOT send patch recall or an audio-chain dump solely because a global changed. A global write MUST NOT mark the working patch modified and MUST NOT change the patch baseline. Slider drags for an exposed level, for master volume, for global volume, and for screen brightness MUST coalesce writes (throttle, flush on release). No CAB, REC mode, and footswitch mode MUST send on-change.
+After a USB or Bluetooth session is ready, changing a known global setting MUST update the snapshot on-change and MUST send that write on the open link. The session MUST NOT send patch recall or an audio-chain dump solely because a global changed. A global write MUST NOT mark the working patch modified and MUST NOT change the patch baseline. Slider drags for an exposed level, for master volume (GP-50 only), and for screen brightness MUST coalesce writes (throttle, flush on release). No CAB, REC mode, and footswitch mode MUST send on-change.
 
 GP-50 master volume MUST be official CC 1 with value 0–100, not the relative master step (CC 17). GP-50 footswitch mode MUST be official CC 28, Patch as 0 and Stomp as 127. GP-50 input level, No CAB, REC level, BT REC, monitor level, and REC mode left/right MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live-notify path `01 02 04`, and MUST NOT be sent as a GP-5 write. The session MUST NOT write a global the connected model does not expose.
 
-GP-5 global volume, input level, No CAB, REC level, BT REC, monitor level, and screen brightness MUST use that same parameter-write SET family. GP-5 global volume MUST NOT be official CC 1. GP-5 footswitch mode MUST use that same framing and MUST NOT be official CC 28. A GP-5 BT REC write and a GP-5 monitor-level write MUST NOT reuse the GP-50 effect and flag pair for that row. A GP-5 write MUST NOT be sent on a GP-50 session.
+GP-5 input level, No CAB, REC level, BT REC, monitor level, and screen brightness MUST use that same parameter-write SET family. A GP-5 session MUST NOT write master volume or global volume through Global settings, and MUST NOT send official CC 1 for a GP-5 global edit. GP-5 footswitch mode MUST use that same framing and MUST NOT be official CC 28. A GP-5 BT REC write and a GP-5 monitor-level write MUST NOT reuse the GP-50 effect and flag pair for that row. A GP-5 write MUST NOT be sent on a GP-50 session.
 
 When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inbound report for an exposed global MUST update that snapshot value and MUST NOT mark the working patch modified. A GP-5 live report MUST be applied with the GP-5 row mapping, so a GP-5 monitor report MUST NOT change BT REC and a GP-5 BT REC report MUST NOT change REC mode. USB MUST NOT apply those inbound reports. Inbound CC 1 and CC 28 MUST NOT update the audio chain. Inbound CC 1 and CC 28 MUST NOT change GP-5 global values.
 
@@ -980,10 +982,17 @@ When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inboun
 - **WHEN** a GP-50 USB session has master volume 63 and an inbound master-volume report arrives
 - **THEN** the snapshot master volume stays 63
 
-#### Scenario: GP-5 global volume is not CC 1
-- **WHEN** a GP-5 session has global volume 40 and the user sets it to 55
-- **THEN** the snapshot global volume is 55
+#### Scenario: GP-5 input level write is not CC 1
+- **WHEN** a GP-5 session has input level 0 and the user sets it to 6
+- **THEN** the snapshot input level is 6
+- **AND** that change is sent on the open link as a parameter-write SET
 - **AND** the pedal is not sent official CC 1 for that edit
+- **AND** the working patch is not marked modified
+
+#### Scenario: GP-5 global volume is not CC 1
+- **WHEN** a GP-5 session is ready
+- **THEN** Global settings does not expose a global-volume or master-volume write
+- **AND** no official CC 1 is sent solely as a GP-5 Global settings edit
 - **AND** the working patch is not marked modified
 
 #### Scenario: GP-5 footswitch mode is not CC 28
@@ -999,8 +1008,8 @@ When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inboun
 - **AND** the working patch is not marked modified
 
 #### Scenario: USB ignores a GP-5 live global report
-- **WHEN** a GP-5 USB session has global volume 40 and an inbound global-volume report arrives
-- **THEN** the snapshot global volume stays 40
+- **WHEN** a GP-5 USB session has input level 0 and an inbound input-level report arrives
+- **THEN** the snapshot input level stays 0
 
 ### Requirement: Connected session reads and writes stomp assignment
 

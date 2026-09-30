@@ -3,9 +3,12 @@ import { decodePresetDump } from "@/device/chain-codec";
 import { commandReceivedAckFixture, RECALL_ACK_TIMEOUT_MS } from "@/device/command-ack";
 import {
   encodeChainOrder,
+  encodeChainRequest,
+  encodeGlobals,
+  encodeGp5FootswitchMode,
+  encodeGp5GlobalSetting,
   encodeIdentity,
   encodeIrNames,
-  encodeChainRequest,
   encodePatch,
   encodePatchStore,
   encodeSlotModel,
@@ -980,6 +983,308 @@ async function assertDownloadLeavesConfirmOff(): Promise<void> {
 }
 
 void assertDownloadLeavesConfirmOff().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+function writeSignedNibbles(target: Uint8Array, at: number, value: number): void {
+  const wire = value < 0 ? 0x100 + value : value;
+  target[at] = (wire >> 4) & 0x0f;
+  target[at + 1] = wire & 0x0f;
+}
+
+function frameSysex(
+  command0: number,
+  command1: number,
+  length: number,
+  index: number,
+  payload: Uint8Array,
+): Uint8Array {
+  const midi = new Uint8Array(length);
+  midi[0] = 0xf0;
+  midi[3] = command0;
+  midi[4] = command1;
+  midi[5] = (index >> 4) & 0x0f;
+  midi[6] = index & 0x0f;
+  midi.set(payload, 9);
+  midi[length - 1] = 0xf7;
+  return midi;
+}
+
+/** Minimal GP-5 current-preset so the post-chain globals ask can fire. */
+function gp5ChainPackets(link: "usb" | "bluetooth"): Uint8Array[] {
+  if (link === "usb") {
+    const merged = new Uint8Array(38 * 4 + 24);
+    for (let slot = 0; slot < 10; slot += 1) {
+      merged[157 + slot * 2] = slot;
+    }
+    const packets: Uint8Array[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      packets.push(
+        frameSysex(1, 9, 48, index, merged.subarray(index * 38, (index + 1) * 38)),
+      );
+    }
+    packets.push(frameSysex(1, 9, 34, 4, merged.subarray(152)));
+    return packets;
+  }
+  const merged = new Uint8Array(190 * 4 + 140);
+  for (let slot = 0; slot < 10; slot += 1) {
+    merged[157 + slot * 2] = slot;
+  }
+  const packets: Uint8Array[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    packets.push(
+      frameSysex(0, 5, 200, index, merged.subarray(index * 190, (index + 1) * 190)),
+    );
+  }
+  packets.push(frameSysex(0, 5, 150, 4, merged.subarray(760)));
+  return packets;
+}
+
+/**
+ * GP-5 globals with volume nibbles at 101 (out of 0–100). Settings rows stay valid.
+ * USB payload offsets are the Bluetooth F0 offsets minus 9.
+ */
+function gp5GlobalsPackets(link: "usb" | "bluetooth"): Uint8Array[] {
+  if (link === "bluetooth") {
+    const midi = new Uint8Array(164);
+    midi[0] = 0xf0;
+    midi[3] = 0;
+    midi[4] = 1;
+    midi[9] = 1;
+    midi[10] = 2;
+    midi[11] = 1;
+    midi[163] = 0xf7;
+    writeSignedNibbles(midi, 53, 101);
+    writeSignedNibbles(midi, 79, 80);
+    writeSignedNibbles(midi, 89, 0);
+    writeSignedNibbles(midi, 99, -6);
+    writeSignedNibbles(midi, 109, 2);
+    writeSignedNibbles(midi, 139, 3);
+    midi[150] = 0;
+    midi[160] = 0;
+    return [midi];
+  }
+  const payload = new Uint8Array(38 * 4 + 2);
+  writeSignedNibbles(payload, 44, 101);
+  writeSignedNibbles(payload, 70, 80);
+  writeSignedNibbles(payload, 80, 0);
+  writeSignedNibbles(payload, 90, -6);
+  writeSignedNibbles(payload, 100, 2);
+  writeSignedNibbles(payload, 130, 3);
+  payload[141] = 0;
+  payload[151] = 0;
+  const packets: Uint8Array[] = [];
+  let offset = 0;
+  let index = 0;
+  while (offset + 38 < payload.length) {
+    packets.push(frameSysex(0, 5, 48, index, payload.subarray(offset, offset + 38)));
+    offset += 38;
+    index += 1;
+  }
+  packets.push(frameSysex(0, 5, 12, index, payload.subarray(offset)));
+  return packets;
+}
+
+function liveMonitorNotify(level: number): Uint8Array {
+  const midi = new Uint8Array(24);
+  midi[0] = 0xf0;
+  midi[3] = 0;
+  midi[4] = 1;
+  midi[8] = 0x07;
+  midi[9] = 1;
+  midi[10] = 2;
+  midi[14] = 2;
+  midi[16] = 4;
+  const wire = level < 0 ? 0x100 + level : level;
+  midi[21] = (wire >> 4) & 0x0f;
+  midi[22] = wire & 0x0f;
+  midi[23] = 0xf7;
+  return midi;
+}
+
+function isControlChange(bytes: Uint8Array, controller: number): boolean {
+  const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
+  return midi.length >= 3 && (midi[0] & 0xf0) === 0xb0 && midi[1] === controller;
+}
+
+async function settleWrites(): Promise<void> {
+  for (let step = 0; step < 8; step += 1) {
+    await tick();
+  }
+}
+
+async function assertGp5GlobalsSession(): Promise<void> {
+  const usb = scriptedUsb();
+  const usbSession = new DeviceSession(usb.transport, stubBluetooth());
+  try {
+    await usbSession.connect({ id: "usb-1", label: "GP-5", kind: "usb-midi" }, "gp5");
+    await untilReady("GP-5 USB identity did not request names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await untilReady("GP-5 USB identity did not request current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(3));
+    await untilReady("GP-5 USB session did not become ready", () => {
+      const snapshot = usbSession.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    const recallsBeforeDump = usb.sent.filter(isPatchRecall).length;
+    for (const packet of gp5ChainPackets("usb")) {
+      usb.push(packet);
+    }
+    const globalsAsk = encodeGlobals("usb");
+    await untilReady("GP-5 USB did not ask for globals after the chain", () => {
+      return usb.sent.some((packet) => packetsEqual(packet, globalsAsk));
+    });
+    if (usb.sent.filter(isPatchRecall).length !== recallsBeforeDump) {
+      throw new Error("The GP-5 globals ask must not send patch recall");
+    }
+    for (const packet of gp5GlobalsPackets("usb")) {
+      usb.push(packet);
+    }
+    const loaded = usbSession.getSnapshot();
+    if (
+      loaded.status !== "connected" ||
+      loaded.globals?.model !== "gp5" ||
+      loaded.globals.globalVolume !== null ||
+      loaded.globals.inputLevel !== 0 ||
+      loaded.globals.noCab !== false ||
+      loaded.globals.recLevel !== -6 ||
+      loaded.globals.btRec !== 3 ||
+      loaded.globals.monLevel !== 2 ||
+      loaded.globals.screenBrightness !== 80 ||
+      loaded.globals.footswitchMode !== "0-99" ||
+      loaded.modified ||
+      loaded.chainSync !== "idle"
+    ) {
+      throw new Error("GP-5 USB globals must fill Settings rows when volume is out of range");
+    }
+    usb.push(liveMonitorNotify(-6));
+    const afterLive = usbSession.getSnapshot();
+    if (
+      afterLive.status !== "connected" ||
+      afterLive.globals?.model !== "gp5" ||
+      afterLive.globals.monLevel !== 2 ||
+      afterLive.globals.btRec !== 3
+    ) {
+      throw new Error("GP-5 USB must ignore a live monitor report");
+    }
+    const sentBeforeWrites = usb.sent.length;
+    await usbSession.setGlobalSysex("inputLevel", 6, { flush: true });
+    await usbSession.setGlobalSysex("noCab", true, { flush: true });
+    await usbSession.setGlobalSysex("screenBrightness", 40, { flush: true });
+    await usbSession.setGp5FootswitchMode("CTL");
+    await usbSession.setMasterVolume(80);
+    await settleWrites();
+    const written = usb.sent.slice(sentBeforeWrites);
+    const inputSet = encodeGp5GlobalSetting("usb", "inputLevel", 6);
+    const footSet = encodeGp5FootswitchMode("usb", "CTL");
+    const afterWrite = usbSession.getSnapshot();
+    if (
+      !inputSet ||
+      !footSet ||
+      !written.some((packet) => packetsEqual(packet, inputSet[0])) ||
+      !written.some((packet) => packetsEqual(packet, footSet[0])) ||
+      written.some((packet) => isControlChange(packet, 1) || isControlChange(packet, 28)) ||
+      afterWrite.status !== "connected" ||
+      afterWrite.modified ||
+      afterWrite.globals?.model !== "gp5" ||
+      afterWrite.globals.inputLevel !== 6 ||
+      afterWrite.globals.noCab !== true ||
+      afterWrite.globals.screenBrightness !== 40 ||
+      afterWrite.globals.footswitchMode !== "CTL" ||
+      afterWrite.globals.globalVolume !== null
+    ) {
+      throw new Error("GP-5 USB Global settings writes must be SETs and must not dirty the patch");
+    }
+  } finally {
+    await usbSession.disconnect();
+  }
+  if (usbSession.getSnapshot().status !== "disconnected") {
+    throw new Error("Disconnect must drop GP-5 globals");
+  }
+
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  try {
+    await bleSession.connect({ id: "ble-1", label: "GP-5", kind: "bluetooth" }, "gp5");
+    await untilReady("GP-5 Bluetooth identity did not request names", () => bluetooth.sent.length > 0);
+    await tick();
+    bluetooth.push(bluetoothNameList());
+    await untilReady("GP-5 Bluetooth identity did not request current patch", () => bluetooth.sent.length > 1);
+    await tick();
+    bluetooth.push(currentPatchAt(4));
+    await untilReady("GP-5 Bluetooth session did not become ready", () => {
+      const snapshot = bleSession.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp5ChainPackets("bluetooth")) {
+      bluetooth.push(packet);
+    }
+    const globalsAsk = encodeGlobals("bluetooth");
+    await untilReady("GP-5 Bluetooth did not ask for globals after the chain", () => {
+      return bluetooth.sent.some((packet) => packetsEqual(packet, globalsAsk));
+    });
+    for (const packet of gp5GlobalsPackets("bluetooth")) {
+      bluetooth.push(packet);
+    }
+    const loaded = bleSession.getSnapshot();
+    if (
+      loaded.status !== "connected" ||
+      loaded.globals?.model !== "gp5" ||
+      loaded.globals.inputLevel !== 0 ||
+      loaded.globals.noCab !== false ||
+      loaded.globals.recLevel !== -6 ||
+      loaded.globals.btRec !== 3 ||
+      loaded.globals.monLevel !== 2 ||
+      loaded.globals.screenBrightness !== 80 ||
+      loaded.globals.footswitchMode !== "0-99" ||
+      loaded.globals.globalVolume !== null ||
+      loaded.modified
+    ) {
+      throw new Error("GP-5 Bluetooth globals must fill Settings rows when volume is out of range");
+    }
+    bluetooth.push(liveMonitorNotify(-6));
+    const afterLive = bleSession.getSnapshot();
+    if (
+      afterLive.status !== "connected" ||
+      afterLive.globals?.model !== "gp5" ||
+      afterLive.globals.monLevel !== -6 ||
+      afterLive.globals.btRec !== 3 ||
+      afterLive.modified
+    ) {
+      throw new Error("GP-5 Bluetooth monitor report must not change BT REC or the patch");
+    }
+    const sentBeforeWrites = bluetooth.sent.length;
+    await bleSession.setGlobalSysex("recLevel", -4, { flush: true });
+    await bleSession.setGp5FootswitchMode("Tuner");
+    await bleSession.setMasterVolume(50);
+    await settleWrites();
+    const written = bluetooth.sent.slice(sentBeforeWrites);
+    const recSet = encodeGp5GlobalSetting("bluetooth", "recLevel", -4);
+    const footSet = encodeGp5FootswitchMode("bluetooth", "Tuner");
+    const afterWrite = bleSession.getSnapshot();
+    if (
+      !recSet ||
+      !footSet ||
+      !written.some((packet) => packetsEqual(packet, recSet[0])) ||
+      !written.some((packet) => packetsEqual(packet, footSet[0])) ||
+      written.some((packet) => isControlChange(packet, 1) || isControlChange(packet, 28)) ||
+      afterWrite.status !== "connected" ||
+      afterWrite.modified ||
+      afterWrite.globals?.model !== "gp5" ||
+      afterWrite.globals.recLevel !== -4 ||
+      afterWrite.globals.footswitchMode !== "Tuner"
+    ) {
+      throw new Error("GP-5 Bluetooth Global settings writes must be SETs and must not dirty the patch");
+    }
+  } finally {
+    await bleSession.disconnect();
+  }
+}
+
+void assertGp5GlobalsSession().catch((error) => {
   console.error(error);
   throw error;
 });

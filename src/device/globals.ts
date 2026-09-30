@@ -57,8 +57,8 @@ export type GlobalSysexKey =
   | "recModeLeft"
   | "recModeRight";
 
+/** Reachable GP-5 Global settings rows. Dump volume is not a write. */
 export type Gp5GlobalSysexKey =
-  | "globalVolume"
   | "inputLevel"
   | "noCab"
   | "recLevel"
@@ -72,7 +72,7 @@ export type LiveGlobalChange =
   | { model: "gp50"; key: "recModeLeft" | "recModeRight"; value: RecMode }
   | { model: "gp50"; key: "footswitchMode"; value: FootswitchMode }
   | { model: "gp50"; key: "masterVolume"; value: number }
-  | { model: "gp5"; key: "inputLevel" | "recLevel" | "btRec" | "monLevel" | "globalVolume"; value: number }
+  | { model: "gp5"; key: "inputLevel" | "recLevel" | "btRec" | "monLevel"; value: number }
   | { model: "gp5"; key: "noCab"; value: boolean }
   | { model: "gp5"; key: "footswitchMode"; value: Gp5FootswitchMode };
 
@@ -351,14 +351,18 @@ function parseGp5Table(
   if (data.length <= offsets.foot) {
     return null;
   }
-  const globalVolume = clampMaster(fromSignedByte(nibble(data, offsets.volume)));
+  // Volume stays in the dump for codec fidelity. An unused or out-of-range
+  // byte must not block the Settings rows (reference Settings omits Global Vol).
+  const globalVolume =
+    data.length > offsets.volume + 1
+      ? clampMaster(fromSignedByte(nibble(data, offsets.volume)))
+      : null;
   const inputLevel = clampLevel(fromSignedByte(nibble(data, offsets.input)));
   const recLevel = clampLevel(fromSignedByte(nibble(data, offsets.rec)));
   const btRec = clampLevel(fromSignedByte(nibble(data, offsets.bt)));
   const monLevel = clampLevel(fromSignedByte(nibble(data, offsets.mon)));
   const footswitchMode = gp5FootFromWire(data[offsets.foot] ?? -1);
   if (
-    globalVolume === null ||
     inputLevel === null ||
     recLevel === null ||
     btRec === null ||
@@ -616,7 +620,6 @@ export function isGp50SysexKey(key: string): key is GlobalSysexKey {
 }
 
 const GP5_SYSEX_ROWS: Record<Gp5GlobalSysexKey, { effect: number; flag: number }> = {
-  globalVolume: { effect: 2, flag: 2 },
   inputLevel: { effect: 1, flag: 3 },
   noCab: { effect: 3, flag: 3 },
   recLevel: { effect: 1, flag: 4 },
@@ -632,7 +635,7 @@ export function isGp5SysexKey(key: string): key is Gp5GlobalSysexKey {
 /**
  * Parameter-write SET for a GP-5 global row (family `1111`).
  * BT REC is effect 5 / flag 4 and monitor is effect 2 / flag 4 — not the GP-50 pairs.
- * Path `01 01 04` after CRC + nibble-expand. Not CC 1.
+ * Path `01 01 04` after CRC + nibble-expand. Not CC 1 and not global volume.
  */
 export function encodeGp5GlobalSysex(
   key: Gp5GlobalSysexKey,
@@ -645,11 +648,6 @@ export function encodeGp5GlobalSysex(
       return null;
     }
     wire = value ? 1 : 0;
-  } else if (key === "globalVolume") {
-    if (typeof value !== "number") {
-      return null;
-    }
-    wire = clampMaster(value);
   } else if (key === "screenBrightness") {
     if (typeof value !== "number") {
       return null;
@@ -782,24 +780,6 @@ function decodeGp50LiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
 function decodeGp5LiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
   const midi = midiPayload(bytes);
   if (
-    midi.length === 30 &&
-    midi[0] === 0xf0 &&
-    midi[29] === 0xf7 &&
-    midi[3] === 0 &&
-    midi[4] === 1 &&
-    midi[8] === 0x0a &&
-    midi[9] === 1 &&
-    midi[10] === 2 &&
-    midi[14] === 2 &&
-    midi[16] === 2
-  ) {
-    const volume = liveVolume((midi[21] ?? 0) * 16 + (midi[22] ?? 0));
-    if (volume === null) {
-      return null;
-    }
-    return { model: "gp5", key: "globalVolume", value: volume };
-  }
-  if (
     midi.length === 18 &&
     midi[0] === 0xf0 &&
     midi[17] === 0xf7 &&
@@ -853,21 +833,14 @@ function decodeGp5LiveGlobal(bytes: Uint8Array): LiveGlobalChange | null {
     }
     return { model: "gp5", key: "monLevel", value: level };
   }
-  if (effect === 2 && flag === 2) {
-    const volume = liveVolume(valueByte);
-    if (volume === null) {
-      return null;
-    }
-    return { model: "gp5", key: "globalVolume", value: volume };
-  }
   return null;
 }
 
 /**
  * Pedal→app live global notify (Bluetooth). The 24-byte layout is shared;
  * effect/flag meaning depends on the connected model. GP-5 also accepts the
- * length-30 global-volume notify and the length-18 footswitch notify.
- * Screen brightness has no live packet.
+ * length-18 footswitch notify. Global volume (length-30 or effect 2 / flag 2)
+ * is not a Settings row. Screen brightness has no live packet.
  */
 export function decodeLiveGlobal(bytes: Uint8Array, model: "gp50" | "gp5" = "gp50"): LiveGlobalChange | null {
   return model === "gp5" ? decodeGp5LiveGlobal(bytes) : decodeGp50LiveGlobal(bytes);
@@ -1105,6 +1078,30 @@ function assertGlobalsCodec(): void {
   if (decodeGp5BluetoothGlobalsDump(badInput) !== null) {
     throw new Error("An out-of-range GP-5 input level must not apply the dump");
   }
+  const unusedVolume = gp5.slice();
+  writeSignedAt(unusedVolume, GP5_BT_VOL_AT, 101);
+  const relaxed = decodeGp5BluetoothGlobalsDump(unusedVolume);
+  if (
+    !relaxed ||
+    relaxed.globalVolume !== null ||
+    relaxed.inputLevel !== 0 ||
+    relaxed.noCab !== true ||
+    relaxed.recLevel !== -6 ||
+    relaxed.btRec !== 3 ||
+    relaxed.monLevel !== 2 ||
+    relaxed.screenBrightness !== 80 ||
+    relaxed.footswitchMode !== "CTL"
+  ) {
+    throw new Error("An out-of-range GP-5 volume byte must not block Settings rows");
+  }
+  const longPreset = new Uint8Array(200);
+  longPreset[0] = 0xf0;
+  longPreset[3] = 0;
+  longPreset[4] = 5;
+  longPreset[199] = 0xf7;
+  if (isGlobalsDump(longPreset) || isGp5UsbGlobalsDumpFragment(longPreset)) {
+    throw new Error("A long GP-5 Bluetooth preset fragment must not classify as USB globals");
+  }
 
   const gp5UsbPayload = new Uint8Array(38 * 4 + 2);
   writeSignedAt(gp5UsbPayload, GP5_USB_VOL_AT, 40);
@@ -1169,27 +1166,32 @@ function assertGlobalsCodec(): void {
   const gp5BtSet = encodeGp5GlobalSysex("btRec", 0);
   const gp50BtSet = encodeGlobalSysex("btRec", 0);
   const gp5BtPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x05, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-  const gp5Vol = encodeGp5GlobalSysex("globalVolume", 40);
-  const gp5VolPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x02, 0x02, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00]);
+  const gp5Screen = encodeGp5GlobalSysex("screenBrightness", 40);
+  const gp5ScreenPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x03, 0x02, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00]);
+  const gp5Input = encodeGp5GlobalSysex("inputLevel", 6);
+  const gp5InputPacked = Uint8Array.from([0x01, 0x00, 0x0a, 0x11, 0x11, 0x01, 0x03, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00]);
   const gp5Foot = encodeGp5Footswitch("CTL");
   const gp5FootPacked = framePackedSet(Uint8Array.from([0x01, 0x00, 0x04, 0x11, 0x15, 0x00, 0x03]));
   if (
+    isGp5SysexKey("globalVolume") ||
     !gp5BtSet ||
     !gp50BtSet ||
-    !gp5Vol ||
+    !gp5Screen ||
+    !gp5Input ||
     !gp5Foot ||
     sameBytes(gp5BtSet, gp50BtSet) ||
     !sameBytes(gp5BtSet, framePackedSet(gp5BtPacked)) ||
-    !sameBytes(gp5Vol, framePackedSet(gp5VolPacked)) ||
+    !sameBytes(gp5Screen, framePackedSet(gp5ScreenPacked)) ||
+    !sameBytes(gp5Input, framePackedSet(gp5InputPacked)) ||
     !sameBytes(gp5Foot, gp5FootPacked) ||
-    gp5Vol[0] === 0xb0 ||
-    gp5Vol.length === 3 ||
+    gp5Screen[0] === 0xb0 ||
+    gp5Input[0] === 0xb0 ||
+    gp5Input.length === 3 ||
     gp5Foot.length === 24 ||
     gp5Foot[0] === 0xb0 ||
-    encodeGp5GlobalSysex("globalVolume", 101) !== null ||
     encodeGp5GlobalSysex("screenBrightness", 0) !== null
   ) {
-    throw new Error("GP-5 SETs must use GP-5 pairs and must not be CC 1, CC 28, or a live notify");
+    throw new Error("GP-5 SETs must use GP-5 pairs, omit global volume, and must not be CC 1, CC 28, or a live notify");
   }
 
   const crossed = liveNotify(2, 4, -6);
@@ -1229,7 +1231,6 @@ function assertGlobalsCodec(): void {
   volNotify[21] = 0x02;
   volNotify[22] = 0x08;
   volNotify[29] = 0xf7;
-  const volChange = decodeLiveGlobal(volNotify, "gp5");
   const footNotify = new Uint8Array(18);
   footNotify[0] = 0xf0;
   footNotify[3] = 0;
@@ -1243,15 +1244,14 @@ function assertGlobalsCodec(): void {
   footNotify[17] = 0xf7;
   const footChange = decodeLiveGlobal(footNotify, "gp5");
   if (
-    !volChange ||
-    volChange.key !== "globalVolume" ||
-    volChange.value !== 40 ||
+    decodeLiveGlobal(volNotify, "gp5") !== null ||
+    decodeLiveGlobal(liveNotify(2, 2, 40), "gp5") !== null ||
     !footChange ||
     footChange.key !== "footswitchMode" ||
     footChange.value !== "0-9" ||
     decodeLiveGlobal(volNotify, "gp50") !== null
   ) {
-    throw new Error("GP-5 length-30 volume and length-18 footswitch notifies must decode only on GP-5");
+    throw new Error("GP-5 volume notifies are not Settings rows; the length-18 footswitch notify stays GP-5 only");
   }
 }
 

@@ -250,20 +250,6 @@ function Gp5GlobalSettingsForm({ globals }: { globals: Gp5Globals }) {
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-foreground">Master</h3>
-        <LevelRow
-          label="Global volume"
-          value={globals.globalVolume}
-          min={0}
-          max={100}
-          unit=""
-          disabled={false}
-          onChange={(value) => setLevel("globalVolume", value, false)}
-          onCommit={(value) => setLevel("globalVolume", value, true)}
-        />
-      </section>
-
-      <section className="flex flex-col gap-3 border-t border-border pt-5">
         <h3 className="text-sm font-medium text-foreground">Input / Output</h3>
         <LevelRow
           label="Input level"
