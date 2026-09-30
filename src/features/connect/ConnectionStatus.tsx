@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { LinkEndpoint } from "@/device/endpoint";
 import type { LinkMode } from "@/device/link";
-import type { DeviceModel } from "@/device/models";
+import { displayModelName, type DeviceModel } from "@/device/models";
 import type { MidiEndpoint } from "@/midi/types";
 import { ConnectedPanel } from "@/features/connect/ConnectedPanel";
 import {
@@ -174,6 +174,7 @@ export function ConnectionStatus() {
   }
 
   const label = connected ? snapshot.endpoint.label : "Disconnected";
+  const modelLabel = connected ? displayModelName(snapshot.model) : "Disconnected";
 
   return (
     <>
@@ -198,12 +199,13 @@ export function ConnectionStatus() {
               : "size-2 shrink-0 rounded-full bg-muted-foreground/50"
           }
         />
-        {label}
+        <span className="md:hidden">{modelLabel}</span>
+        <span className="hidden md:inline">{label}</span>
         {connected ? (
           snapshot.linkMode === "bluetooth" ? (
-            <Bluetooth className="text-muted-foreground" />
+            <Bluetooth className="hidden text-muted-foreground md:inline" />
           ) : (
-            <Usb className="text-muted-foreground" />
+            <Usb className="hidden text-muted-foreground md:inline" />
           )
         ) : null}
       </Button>

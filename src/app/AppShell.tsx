@@ -16,8 +16,8 @@ export function AppShell() {
     <ConnectDialogProvider>
       <Toaster />
       <div className="flex min-h-svh flex-col bg-background text-foreground">
-      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-6 py-3">
-        <Link to="/" className="w-fit" aria-label="GP Studio">
+      <header className="flex items-center gap-2 border-b px-6 py-3 md:grid md:grid-cols-[1fr_auto_1fr] md:gap-4">
+        <Link to="/" className="mr-auto w-fit md:mr-0" aria-label="GP Studio">
           <img
             src={logo}
             alt="GP Studio"
@@ -30,14 +30,16 @@ export function AppShell() {
             className="hidden h-5 w-auto dark:block"
           />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-2 md:pr-0">
           <GlobalSettingsControl />
           <ConnectionStatus />
           <PedalFootControls />
         </div>
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center gap-2 md:justify-end md:gap-3">
           <MainMenu />
-          <ThemeToggle />
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col p-6">
