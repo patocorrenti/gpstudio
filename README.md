@@ -8,7 +8,13 @@ I built it because I wanted a real desktop workflow — every control on screen 
 
 The official app is at [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com).
 
-I put a lot of care into the small details; this app was built with a lot of ❤️. Hopefully more people will join in and we can extend support to more models and platforms.
+I put a lot of care into the small details; this app was built with a lot of ❤️.
+Hopefully more people will join in and we can extend support to more models and platforms.
+
+## Supported devices
+
+- **Valeton GP-5** — USB and Bluetooth
+- **Valeton GP-50** — USB and Bluetooth
 
 ## Status
 
