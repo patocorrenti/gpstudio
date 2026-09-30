@@ -29,4 +29,5 @@ export interface BluetoothLink {
   isOpen(): boolean;
   resetInbound(): void;
   close(): Promise<void>;
+  forget(id: string): Promise<void>;
 }

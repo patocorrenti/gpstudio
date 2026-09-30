@@ -105,6 +105,7 @@ function stubBluetooth(): BluetoothLink {
     close: async () => {
       open = false;
     },
+    forget: async () => undefined,
   };
 }
 
@@ -476,6 +477,7 @@ function scriptedBluetooth(): {
       close: async () => {
         open = false;
       },
+      forget: async () => undefined,
     },
   };
 }

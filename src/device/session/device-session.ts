@@ -314,6 +314,10 @@ export class DeviceSession {
     return this.bluetooth.discover(options);
   }
 
+  forgetBluetooth(id: string): Promise<void> {
+    return this.bluetooth.forget(id);
+  }
+
   async connect(endpoint: LinkEndpoint, model: DeviceModel): Promise<void> {
     this.beginGeneration();
     await Promise.all([this.transport.close(), this.bluetooth.close()]);

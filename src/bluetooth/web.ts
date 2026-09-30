@@ -11,6 +11,11 @@ import {
   CONTROL_CHARACTERISTIC_UUID,
   CONTROL_SERVICE_UUID,
 } from "@/bluetooth/uuids";
+import {
+  dismissedBluetoothIds,
+  dismissBluetooth,
+  undismissBluetooth,
+} from "@/app/preferences";
 import { looksLikePedalName, suggestModelFromLabel } from "@/device/models";
 
 type NotifyEvent = {
@@ -62,6 +67,7 @@ type BluetoothDeviceLike = {
     type: "gattserverdisconnected",
     listener: () => void,
   ) => void;
+  forget?: () => Promise<void>;
 };
 
 type BluetoothApi = {
@@ -172,7 +178,12 @@ export class WebBluetoothLink implements BluetoothLink {
     try {
       if (typeof bluetooth.getDevices === "function") {
         const granted = await bluetooth.getDevices();
+        const hidden = dismissedBluetoothIds();
         for (const device of granted) {
+          if (hidden.has(device.id)) {
+            this.devicesById.delete(device.id);
+            continue;
+          }
           this.remember(device);
         }
       }
@@ -185,6 +196,7 @@ export class WebBluetoothLink implements BluetoothLink {
           })),
           optionalServices: [CONTROL_SERVICE_UUID],
         });
+        undismissBluetooth(picked.id);
         this.remember(picked);
         selectedId = picked.id;
       }
@@ -260,6 +272,39 @@ export class WebBluetoothLink implements BluetoothLink {
 
   resetInbound(): void {
     this.decoder.reset();
+  }
+
+  async forget(id: string): Promise<void> {
+    if (this.openDevice?.id === id) {
+      await this.close();
+    }
+    let device = this.devicesById.get(id);
+    if (!device) {
+      const bluetooth = bluetoothApi();
+      if (typeof bluetooth?.getDevices === "function") {
+        try {
+          const granted = await bluetooth.getDevices();
+          device = granted.find((item) => item.id === id);
+        } catch {
+          device = undefined;
+        }
+      }
+    }
+    let released = false;
+    if (typeof device?.forget === "function") {
+      try {
+        await device.forget();
+        released = true;
+      } catch {
+        released = false;
+      }
+    }
+    this.devicesById.delete(id);
+    if (released) {
+      undismissBluetooth(id);
+    } else {
+      dismissBluetooth(id);
+    }
   }
 
   async close(): Promise<void> {

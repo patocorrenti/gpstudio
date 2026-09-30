@@ -65,7 +65,7 @@ context: |
       - Browser: Web MIDI (navigator.requestMIDIAccess)
       - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
     - A USB endpoint has id, label, kind usb-midi, optional suggestedModel
-    - Bluetooth uses BluetoothLink (discover / open / send / subscribe / close)
+    - Bluetooth uses BluetoothLink (discover / open / send / subscribe / close / forget)
       - Browser: Web Bluetooth
       - Desktop: Rust btleplug via Tauri commands (WebView2 does not expose Web Bluetooth)
       - A Bluetooth endpoint has id, label, kind bluetooth, optional suggestedModel
@@ -150,9 +150,13 @@ context: |
     modal. Toasts are not a route.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
   - Disconnected control label: Connect. Activating it opens a modal with USB
-    and Bluetooth tabs (default USB). USB: MIDI permission, endpoints, connect,
-    suggested/confirm model, copy as one-way and super fast. Bluetooth: two-way
-    and slower; scan/connect GATT; patch previous/select/next over the encoder.
+    and Bluetooth tabs (default USB). The modal remembers chosen pedals and
+    lists them with the current scan on the matching tab. USB: MIDI permission,
+    endpoints, connect from the list, suggested/confirm model, copy as one-way
+    and super fast. Bluetooth: two-way and slower; scan GATT. The web picker
+    lists the chosen pedal without connecting; the user connects by picking it
+    in the list. An optional startup pedal connects on launch. Patch
+    previous/select/next over the encoder.
     Connected label and link
     mode are defined in device-connection.
   - Controller: patch bar (previous / 00–99 select / next, plus Reload, Save, rename,

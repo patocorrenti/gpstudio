@@ -94,6 +94,10 @@ export class TauriBluetoothLink implements BluetoothLink {
     await invoke("ble_close");
   }
 
+  async forget(_id: string): Promise<void> {
+    return;
+  }
+
   private noteClosed(): void {
     if (!this.sessionOpen) {
       return;
