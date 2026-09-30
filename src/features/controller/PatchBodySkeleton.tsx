@@ -5,7 +5,7 @@ const EFFECT_SLOT_COUNT = 10;
 const MODULE_CONTROL_COUNTS = [4, 3, 5] as const;
 
 function ChainSlotSkeleton() {
-  return <Skeleton className="h-[8.25rem] w-18 rounded-lg" />;
+  return <Skeleton className="h-[8.25rem] w-18 shrink-0 rounded-lg" />;
 }
 
 function ModulePanelSkeleton({ controls }: { controls: number }) {
@@ -39,10 +39,12 @@ export function PatchBodySkeleton({ pedal }: { pedal: DeviceModel }) {
       aria-label="Loading patch"
       aria-busy="true"
     >
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {Array.from({ length: slotCount }, (_, index) => (
-          <ChainSlotSkeleton key={index} />
-        ))}
+      <div className="w-full overflow-x-auto">
+        <div className="mx-auto flex w-max min-w-full items-center justify-center gap-2 px-3">
+          {Array.from({ length: slotCount }, (_, index) => (
+            <ChainSlotSkeleton key={index} />
+          ))}
+        </div>
       </div>
       <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-2 px-2 pb-6 md:grid-cols-2 lg:grid-cols-3">
         {MODULE_CONTROL_COUNTS.slice(0, 2).map((controls, index) => (

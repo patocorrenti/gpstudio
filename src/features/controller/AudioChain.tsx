@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  rectSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -193,25 +193,27 @@ export function AudioChainRow({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={ids} strategy={rectSortingStrategy}>
-        <ol
-          aria-label="Audio chain"
-          className="flex flex-wrap items-center justify-center gap-2 overflow-visible"
-        >
-          {chain.map((slot, index) => (
-            <li key={slot.id} className="overflow-visible">
-              <AudioChainSlotView
-                slot={slot}
-                chain={chain}
-                stomps={stomps}
-                pedal={pedal}
-                disabled={disabled}
-                isFirst={index === 0}
-                isLast={index === chain.length - 1}
-              />
-            </li>
-          ))}
-        </ol>
+      <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
+        <div className="w-full overflow-x-auto">
+          <ol
+            aria-label="Audio chain"
+            className="mx-auto flex w-max min-w-full items-center justify-center gap-2 px-3"
+          >
+            {chain.map((slot, index) => (
+              <li key={slot.id} className="shrink-0 overflow-visible">
+                <AudioChainSlotView
+                  slot={slot}
+                  chain={chain}
+                  stomps={stomps}
+                  pedal={pedal}
+                  disabled={disabled}
+                  isFirst={index === 0}
+                  isLast={index === chain.length - 1}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
       </SortableContext>
     </DndContext>
   );
