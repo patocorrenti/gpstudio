@@ -32,11 +32,17 @@ export function ConnectionStatus() {
   const connected = snapshot.status === "connected";
   const askingModel = pending !== null && !connected;
   const previousStatus = useRef(snapshot.status);
+  /** Suppress disconnect toast/modal-close when connect opens then fails (e.g. silent name-list). */
+  const suppressDisconnectFeedback = useRef(false);
 
   useEffect(() => {
     const previous = previousStatus.current;
     previousStatus.current = snapshot.status;
     if (previous !== "connected" || snapshot.status !== "disconnected") {
+      return;
+    }
+    if (suppressDisconnectFeedback.current) {
+      suppressDisconnectFeedback.current = false;
       return;
     }
     setOpen(false);
@@ -131,6 +137,9 @@ export function ConnectionStatus() {
   async function connectWith(endpoint: LinkEndpoint, model: DeviceModel) {
     setBusy(true);
     setError(null);
+    setPending(null);
+    setOpen(false);
+    suppressDisconnectFeedback.current = true;
     try {
       await toast
         .promise(session.connect(endpoint, model), {
@@ -140,10 +149,9 @@ export function ConnectionStatus() {
             cause instanceof Error ? cause.message : "Could not connect.",
         })
         .unwrap();
-      setPending(null);
-      setOpen(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not connect.");
+      suppressDisconnectFeedback.current = false;
+    } catch {
+      // Error toast from toast.promise; modal already closed so the user can reopen Connect.
     } finally {
       setBusy(false);
     }

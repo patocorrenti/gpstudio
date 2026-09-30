@@ -105,12 +105,30 @@ function stubBluetooth(): BluetoothLink {
 }
 
 async function assertUploadRejectsWithoutMidi(): Promise<void> {
-  const usb = recordingUsb();
+  const usb = scriptedUsb();
   const session = new DeviceSession(usb.transport, stubBluetooth());
-  await session.connect(
+  const connecting = session.connect(
     { id: "usb-1", label: "GP-50", kind: "usb-midi" },
     "gp50",
   );
+  await untilReady("Upload reject fixture did not ask for names", () => usb.sent.length > 0);
+  await tick();
+  usb.push(usbNameList());
+  await connecting;
+  await untilReady("Upload reject fixture did not ask for current patch", () => usb.sent.length > 1);
+  await tick();
+  usb.push(currentPatchAt(0));
+  await untilReady("Upload reject fixture did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+    usb.push(packet);
+  }
+  await untilReady("Upload reject fixture chain did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
   const sentAfterConnect = usb.sent.length;
   const invalid = await session.uploadCurrentPatch(new Uint8Array([0x00, 0x01, 0x02]));
   const wrong = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
@@ -298,10 +316,14 @@ async function assertUserIrSession(): Promise<void> {
   const irRequest = encodeIrNames("bluetooth");
   const irCount = () => bluetooth.sent.filter((packet) => packetsEqual(packet, irRequest)).length;
   try {
-    await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+    const connecting = session.connect(
+      { id: "ble-1", label: "GP-50", kind: "bluetooth" },
+      "gp50",
+    );
     await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
     await tick();
     bluetooth.push(bluetoothNameList());
+    await connecting;
     await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
     await tick();
     bluetooth.push(currentPatchZero());
@@ -449,10 +471,14 @@ async function connectBluetoothReady(
   bluetooth: ReturnType<typeof scriptedBluetooth>,
   patch: number,
 ): Promise<void> {
-  await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+  const connecting = session.connect(
+    { id: "ble-1", label: "GP-50", kind: "bluetooth" },
+    "gp50",
+  );
   await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
   await tick();
   bluetooth.push(bluetoothNameList());
+  await connecting;
   await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
   await tick();
   bluetooth.push(currentPatchAt(patch));
@@ -760,10 +786,14 @@ async function connectUsbReady(
   usb: ReturnType<typeof scriptedUsb>,
   patch: number,
 ): Promise<void> {
-  await session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+  const connecting = session.connect(
+    { id: "usb-1", label: "GP-50", kind: "usb-midi" },
+    "gp50",
+  );
   await untilReady("USB identity did not request names", () => usb.sent.length > 0);
   await tick();
   usb.push(usbNameList());
+  await connecting;
   await untilReady("USB identity did not request current patch", () => usb.sent.length > 1);
   await tick();
   usb.push(currentPatchAt(patch));
@@ -1118,10 +1148,14 @@ async function assertGp5GlobalsSession(): Promise<void> {
   const usb = scriptedUsb();
   const usbSession = new DeviceSession(usb.transport, stubBluetooth());
   try {
-    await usbSession.connect({ id: "usb-1", label: "GP-5", kind: "usb-midi" }, "gp5");
+    const usbConnecting = usbSession.connect(
+      { id: "usb-1", label: "GP-5", kind: "usb-midi" },
+      "gp5",
+    );
     await untilReady("GP-5 USB identity did not request names", () => usb.sent.length > 0);
     await tick();
     usb.push(usbNameList());
+    await usbConnecting;
     await untilReady("GP-5 USB identity did not request current patch", () => usb.sent.length > 1);
     await tick();
     usb.push(currentPatchAt(3));
@@ -1208,10 +1242,14 @@ async function assertGp5GlobalsSession(): Promise<void> {
   const bluetooth = scriptedBluetooth();
   const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
   try {
-    await bleSession.connect({ id: "ble-1", label: "GP-5", kind: "bluetooth" }, "gp5");
+    const bleConnecting = bleSession.connect(
+      { id: "ble-1", label: "GP-5", kind: "bluetooth" },
+      "gp5",
+    );
     await untilReady("GP-5 Bluetooth identity did not request names", () => bluetooth.sent.length > 0);
     await tick();
     bluetooth.push(bluetoothNameList());
+    await bleConnecting;
     await untilReady("GP-5 Bluetooth identity did not request current patch", () => bluetooth.sent.length > 1);
     await tick();
     bluetooth.push(currentPatchAt(4));
@@ -1285,6 +1323,63 @@ async function assertGp5GlobalsSession(): Promise<void> {
 }
 
 void assertGp5GlobalsSession().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertSilentNameListFailsConnect(): Promise<void> {
+  const usb = scriptedUsb();
+  const usbSession = new DeviceSession(usb.transport, stubBluetooth());
+  usbSession.setNameTimeoutMsForTests({ usb: 20, bluetooth: 20 });
+  let usbError: unknown;
+  try {
+    await usbSession.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+  } catch (cause) {
+    usbError = cause;
+  }
+  if (
+    !(usbError instanceof Error) ||
+    usbError.message !== "Check that the pedal is powered on." ||
+    usbSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("USB silent name-list must fail connect with a power-on hint");
+  }
+
+  const noSysex = recordingUsb();
+  const noSysexSession = new DeviceSession(noSysex.transport, stubBluetooth());
+  let sysexError: unknown;
+  try {
+    await noSysexSession.connect({ id: "usb-2", label: "GP-50", kind: "usb-midi" }, "gp50");
+  } catch (cause) {
+    sysexError = cause;
+  }
+  if (
+    !(sysexError instanceof Error) ||
+    sysexError.message !== "MIDI SysEx is not available on this connection." ||
+    noSysexSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("USB without SysEx must fail connect");
+  }
+
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  bleSession.setNameTimeoutMsForTests({ usb: 20, bluetooth: 20 });
+  let bleError: unknown;
+  try {
+    await bleSession.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+  } catch (cause) {
+    bleError = cause;
+  }
+  if (
+    !(bleError instanceof Error) ||
+    bleError.message !== "The pedal did not respond with patch names." ||
+    bleSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("Bluetooth silent name-list must fail connect with a no-response message");
+  }
+}
+
+void assertSilentNameListFailsConnect().catch((error) => {
   console.error(error);
   throw error;
 });

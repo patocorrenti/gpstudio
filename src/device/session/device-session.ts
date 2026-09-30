@@ -163,6 +163,13 @@ const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
 export const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
 
+const USB_NAME_LIST_MISSING =
+  "Check that the pedal is powered on.";
+const BLUETOOTH_NAME_LIST_MISSING =
+  "The pedal did not respond with patch names.";
+const USB_SYSEX_UNAVAILABLE =
+  "MIDI SysEx is not available on this connection.";
+
 export class DeviceSession {
   private readonly transport: MidiTransport;
   private readonly bluetooth: BluetoothLink;
@@ -221,6 +228,10 @@ export class DeviceSession {
    */
   private postChainDeviceAsks = false;
   private dropping = false;
+  /** True once a name-list identity event was applied for the current connect. */
+  private nameListReceived = false;
+  /** Test hook so checks can fail a silent name-list without waiting 8–15s. */
+  private nameTimeoutMsOverride: { usb: number; bluetooth: number } | null = null;
   private readonly writes: SessionWriteQueue;
 
   constructor(
@@ -248,6 +259,11 @@ export class DeviceSession {
 
   getSnapshot(): SessionSnapshot {
     return this.snapshot;
+  }
+
+  /** Shorten name-list wait for session self-checks only. */
+  setNameTimeoutMsForTests(next: { usb: number; bluetooth: number } | null): void {
+    this.nameTimeoutMsOverride = next;
   }
 
   getInboundLog(): InboundMidiEvent[] {
@@ -306,6 +322,7 @@ export class DeviceSession {
     this.sysex.reset();
     this.writes.clear();
     this.postChainDeviceAsks = false;
+    this.nameListReceived = false;
     this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -353,7 +370,8 @@ export class DeviceSession {
     }
     this.emitSnapshot();
     this.emitLog();
-    void this.runIdentitySync(generation);
+    await this.awaitNameList(generation);
+    void this.runPostNameIdentity(generation);
   }
 
   async disconnect(): Promise<void> {
@@ -373,6 +391,7 @@ export class DeviceSession {
       this.globalsDump.reset();
       this.sysex.reset();
       this.postChainDeviceAsks = false;
+      this.nameListReceived = false;
       this.dropPatchDump();
       this.dropping = false;
       this.emitSnapshot();
@@ -1008,24 +1027,45 @@ export class DeviceSession {
     this.writes.flush(writeKey);
   }
 
-  private async runIdentitySync(generation: number): Promise<void> {
+  /**
+   * Blocks `connect` until a name-list identity event arrives. Missing names
+   * disconnect and reject; current-patch / chain continue after resolve.
+   */
+  private async awaitNameList(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    const linkMode = this.snapshot.linkMode;
+    if (linkMode === "usb" && !this.transport.sysexEnabled()) {
+      await this.disconnect();
+      throw new Error(USB_SYSEX_UNAVAILABLE);
+    }
+
+    await this.sendIdentity("name-list", generation);
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    await this.waitFor(
+      this.namesWaiters,
+      (this.nameTimeoutMsOverride ?? NAME_TIMEOUT_MS)[linkMode],
+      generation,
+    );
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    if (!this.nameListReceived) {
+      await this.disconnect();
+      throw new Error(
+        linkMode === "usb" ? USB_NAME_LIST_MISSING : BLUETOOTH_NAME_LIST_MISSING,
+      );
+    }
+  }
+
+  private async runPostNameIdentity(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
     }
     const linkMode = this.snapshot.linkMode;
-    if (linkMode === "usb" && !this.transport.sysexEnabled()) {
-      this.finishSync(generation);
-      return;
-    }
-
-    await this.sendIdentity("name-list", generation);
-    if (!this.isCurrentGeneration(generation)) {
-      return;
-    }
-    await this.waitFor(this.namesWaiters, NAME_TIMEOUT_MS[linkMode], generation);
-    if (!this.isCurrentGeneration(generation)) {
-      return;
-    }
 
     await this.sendIdentity("current-patch", generation);
     if (!this.isCurrentGeneration(generation)) {
@@ -1178,6 +1218,7 @@ export class DeviceSession {
       return;
     }
     if (event.type === "name-list") {
+      this.nameListReceived = true;
       this.snapshot = { ...this.snapshot, patchNames: event.names };
       this.emitSnapshot();
       this.releaseWaiters(this.namesWaiters);
