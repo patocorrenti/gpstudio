@@ -52,12 +52,6 @@ Mobile layout (responsive; the app is desktop-first):
 
 Replace these placeholders with real PNGs when ready (same filenames, or update the links above).
 
-## Status
-
-Version 1.0.0-beta.1. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
-
-Current scope includes connecting a GP-5 or GP-50, live patch control, the current-patch audio chain (on/off, order, factory models, and knobs), save / rename / duplicate, Valeton `.prst` download and load for the connected model, global settings, stomp control, and following live pedal changes over Bluetooth.
-
 ## Development
 
 Requirements: Node.js and npm.
@@ -67,7 +61,9 @@ npm install
 npm run dev
 ```
 
-The Tauri shell is optional and is not an official release. Building it locally also needs a Rust toolchain and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform:
+### Desktop shell (optional)
+
+The [Tauri](https://tauri.app/) shell is not an official release. To run it locally you also need a Rust toolchain and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform:
 
 ```bash
 npm run tauri dev
