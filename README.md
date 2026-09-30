@@ -36,6 +36,22 @@ Tested in **Google Chrome**. USB and Bluetooth need a Chromium-based browser wit
 
 Official desktop builds are not distributed yet. A [Tauri](https://tauri.app/) shell is in this repository and can be compiled locally (see [Development](#development)). Builds for Windows, macOS, and Linux are planned.
 
+## Screenshots
+
+Controller — full desktop workflow:
+
+![Controller](docs/screenshots/controller.svg)
+
+Connect — USB / Bluetooth:
+
+![Connect](docs/screenshots/connect.svg)
+
+Mobile layout (responsive; the app is desktop-first):
+
+![Mobile](docs/screenshots/mobile.svg)
+
+Replace these placeholders with real PNGs when ready (same filenames, or update the links above).
+
 ## Status
 
 Version 1.0.0-beta.1. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
