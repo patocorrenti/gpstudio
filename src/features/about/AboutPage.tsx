@@ -7,6 +7,16 @@ import {
 
 const CHANGELOG = [
   {
+    version: "1.0.0-beta.1",
+    notes: [
+      "Quick connect remembers your pedals and connection preferences and connects automatically when the app opens",
+      "Import and export presets between GP-5 and GP-50",
+      "Global settings for GP-5",
+      "Verifies the GP-50 is powered on when connecting over USB",
+      "Responsive layout for phones",
+    ],
+  },
+  {
     version: "0.5.0",
     notes: [
       "Added GP-5 compatibility",
