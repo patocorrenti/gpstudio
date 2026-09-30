@@ -16,6 +16,14 @@ Hopefully more people will join in and we can extend support to more models and 
 - **Valeton GP-5** — USB and Bluetooth
 - **Valeton GP-50** — USB and Bluetooth
 
+## Features
+
+- Quick connect (remembers your pedals and preferences) over USB or Bluetooth
+- Full control of patches and modules at once, in real time
+- Transparent GP-5 ↔ GP-50 compatibility — export presets from one model to the other
+- Control the pedal footswitches from the app
+- Prepared to be compiled as a desktop application
+
 ## Status
 
 Version 1.0.0-beta.1. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
