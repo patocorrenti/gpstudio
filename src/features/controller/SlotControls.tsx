@@ -20,6 +20,7 @@ import {
 import { userIrDisplayName } from "@/device/ir-names";
 import type { DeviceModel } from "@/device/models";
 import {
+  EFFECT_IDS,
   chainSlotBypassed,
   chainSlotLabel,
   isEffectSlot,
@@ -31,6 +32,41 @@ import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceS
 import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { ModelSelect } from "@/features/controller/ModelSelect";
 import { cn } from "@/lib/utils";
+
+const EXPANDED_PANELS_KEY = "gpstudio.slot-controls.expanded";
+const EFFECT_ID_SET = new Set<string>(EFFECT_IDS);
+
+function readExpandedPanels(): Set<EffectId> {
+  try {
+    const raw = localStorage.getItem(EXPANDED_PANELS_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(
+      parsed.filter((id): id is EffectId => typeof id === "string" && EFFECT_ID_SET.has(id)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function writeExpandedPanels(ids: Set<EffectId>): void {
+  localStorage.setItem(EXPANDED_PANELS_KEY, JSON.stringify([...ids]));
+}
+
+function setPanelExpanded(id: EffectId, expanded: boolean): void {
+  const next = readExpandedPanels();
+  if (expanded) {
+    next.add(id);
+  } else {
+    next.delete(id);
+  }
+  writeExpandedPanels(next);
+}
 
 function formatControlValue(control: FxControl, value: number): string {
   if (control.display === "toggle") {
@@ -120,7 +156,8 @@ function SlotControlPanel({
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(() => readExpandedPanels().has(slot.id));
+  const collapsed = !expanded;
   const model = modelById(slot.modelId);
   if (!model) {
     return null;
@@ -193,14 +230,18 @@ function SlotControlPanel({
           variant="ghost"
           size="icon-sm"
           className="shrink-0 text-muted-foreground md:hidden"
-          aria-expanded={!collapsed}
+          aria-expanded={expanded}
           aria-label={
             collapsed
               ? `Expand ${kindLabel} controls`
               : `Collapse ${kindLabel} controls`
           }
           onClick={() => {
-            setCollapsed((next) => !next);
+            setExpanded((current) => {
+              const next = !current;
+              setPanelExpanded(slot.id, next);
+              return next;
+            });
           }}
         >
           <ChevronDown
