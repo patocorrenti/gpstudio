@@ -6,9 +6,9 @@ GP Studio is an independent controller for Valeton GP-5 and GP-50 pedals.
 
 I built it because I wanted a real desktop workflow — every control on screen at once, with instant connection over USB or Bluetooth.
 
-This project is open source so that, with a bit of luck, more people will join in and we can extend support to more models and platforms.
-
 The official app is at [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com).
+
+I put a lot of care into the small details; this app was built with a lot of ❤️. Hopefully more people will join in and we can extend support to more models and platforms.
 
 ## Status
 
