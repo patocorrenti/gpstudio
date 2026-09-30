@@ -37,7 +37,9 @@ export function AppShell() {
         </div>
         <div className="flex items-center justify-end gap-3">
           <MainMenu />
-          <ThemeToggle />
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col p-6">
