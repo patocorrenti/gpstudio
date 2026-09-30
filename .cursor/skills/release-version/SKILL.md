@@ -13,7 +13,7 @@ Do not edit version files by hand. `scripts/release.mjs` updates them together s
 
 ## Before running
 
-1. Get the target version (`x.y.z`, greater than `package.json`) and the user-facing changes. If they were not given, ask.
+1. Get the target version (`x.y.z`, `x.y.z-beta.N`, or `x.y.z-rc.N`, greater than `package.json`) and the user-facing changes. If they were not given, ask. A release build is greater than any beta or rc of the same numbers. Beta is less than rc. A higher prerelease number is greater.
 2. Changelog bullets are English, one line each, in the voice of the About page. Translate Spanish notes. Do not invent changes.
 3. Show the version and the exact English bullets, then stop. Do not run the release until the user explicitly confirms those texts. If they change the wording, show the revised list and wait again.
 4. The working tree must be clean, and the branch must not be behind its upstream. If not, stop and say so. The check can happen before the confirmation. The release command runs only after the user accepts the texts.
@@ -23,7 +23,7 @@ Do not edit version files by hand. `scripts/release.mjs` updates them together s
 From the repo root:
 
 ```bash
-npm run release -- <x.y.z> --note "English bullet" --note "Another bullet"
+npm run release -- <version> --note "English bullet" --note "Another bullet"
 ```
 
 That command:
