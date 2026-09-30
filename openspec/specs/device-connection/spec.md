@@ -560,7 +560,7 @@ After a USB or Bluetooth session is ready, changing an effect slot's loaded mode
 - **WHEN** a USB session is ready with AMP Gain at 30 and an unsolicited live parameter report for AMP Gain 45 arrives
 - **THEN** the snapshot AMP Gain stays 30
 
-### Requirement: Connected session stores, duplicates, and downloads the current patch
+### Requirement: Connected session stores, duplicates, downloads, and uploads the current patch
 
 After a USB or Bluetooth session is ready and the current patch is not syncing, Save MUST store the current working patch on the pedal in the current slot through the open link. Rename MUST store that working patch in the current slot with the new onboard name (at most 10 characters) and MUST update the snapshot name list for that slot. Duplicate onto a different 00–99 slot MUST store the current working patch in that destination slot, MUST update the snapshot name list for the destination, and MUST NOT change the current patch index. Duplicate MUST NOT send patch recall of the destination solely because duplicate ran. A blank name MUST NOT be stored.
 
@@ -568,7 +568,7 @@ Those store writes MUST use the parameter-write SET family (path `01 01 04`, CRC
 
 Download MUST produce a Valeton `.prst` of the current patch for the connected pedal from the current-preset dump the session already holds or re-requests (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the dump to the other model's `.prst`. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file.
 
-Upload MUST apply a Valeton `.prst` of the connected pedal onto the current working patch through the open link (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Upload MUST NOT send a store write. Upload MUST NOT change the current patch index. Upload MUST NOT update the snapshot name list. Upload MUST NOT convert a file from the other model. A file whose model does not match the connected pedal, or that is not a valid Valeton `.prst`, MUST NOT send a write. Upload MUST NOT send extra patch recall solely because upload ran. After a successful upload, the session MUST refresh the current-preset dump for the current patch so the snapshot matches the working buffer. While the current patch is syncing, upload MUST leave the snapshot unchanged and MUST NOT send a write. Disconnect MUST drop working store state.
+Upload MUST apply a valid Valeton `.prst` from either model onto the current working patch through the open link. A same-model file MUST apply that file's chain order, module on/off, factory models, controls the connected catalog includes, and patch volume. A GP-50 file uploaded to a GP-50 session MUST also apply that file's patch BPM. A file from the other model MUST be decoded as that file's model and MUST still be applied: the session MUST write chain order, module on/off, patch volume, every factory model the connected catalog includes (including a user-IR CAB slot both catalogs list), and every control of those models that the connected catalog includes. The session MUST NOT write a factory model the connected catalog does not include, and MUST NOT write a control the connected catalog does not include. The session MUST NOT invent a substitute factory model for an omitted slot; that slot's order and on/off from the file MUST still be written, and the model already on the pedal for that slot MUST be left in place. A GP-50 file's patch BPM MUST NOT be written on a GP-5 session. A GP-5 file MUST NOT overwrite GP-50 patch BPM. The session MUST NOT send a stomp-assignment write or an EXP write solely because upload ran. When the file contains one or more factory models the connected catalog does not include, the session MUST report those omitted models (slot kind and model label) and MUST still apply the rest. When every factory model in the file is in the connected catalog, the session MUST NOT report an omission. A control that exists only on the other model MUST NOT be reported as an omission. Upload MUST NOT send a store write. Upload MUST NOT change the current patch index. Upload MUST NOT update the snapshot name list. Bytes that are not a valid Valeton `.prst` MUST NOT send a write. Upload MUST NOT send extra patch recall solely because upload ran. After a successful upload, the session MUST refresh the current-preset dump for the current patch so the snapshot matches the working buffer. While the current patch is syncing, upload MUST leave the snapshot unchanged and MUST NOT send a write. Disconnect MUST drop working store state.
 
 #### Scenario: USB Save stores the current slot
 - **WHEN** a USB session is ready, the current patch is `42` and synced, and the user Saves
@@ -620,17 +620,49 @@ Upload MUST apply a Valeton `.prst` of the connected pedal onto the current work
 - **AND** the snapshot name for `05` stays `Flow`
 - **AND** the snapshot current patch stays `05`
 - **AND** no extra patch recall is sent solely because upload ran
+- **AND** no omission is reported
 
 #### Scenario: GP-5 upload loads the working patch
 - **WHEN** a GP-5 session is ready, the current patch is synced, and the user uploads a valid GP-5 `.prst`
 - **THEN** that file is applied onto the working patch through the open link
 - **AND** no store write is sent solely because upload ran
 - **AND** the snapshot current patch does not change
+- **AND** no omission is reported
 
-#### Scenario: Wrong-model upload does not write
-- **WHEN** a GP-50 session is ready and the user would upload a GP-5 `.prst`
-- **THEN** the snapshot does not change
-- **AND** no upload write is sent
+#### Scenario: GP-5 session loads a shared GP-50 file
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose factory models are all in the GP-5 catalog
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** no patch BPM write is sent
+- **AND** no omission is reported
+- **AND** the snapshot current patch does not change
+
+#### Scenario: GP-50 session loads a GP-5 file
+- **WHEN** a GP-50 session is ready and the user uploads a valid GP-5 `.prst`
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** GP-50 patch BPM is not overwritten by that file
+- **AND** no omission is reported
+- **AND** the snapshot current patch does not change
+
+#### Scenario: GP-50-only model is omitted on GP-5
+- **WHEN** a GP-5 session is ready, PRE is currently a model the GP-5 catalog includes, and the user uploads a valid GP-50 `.prst` whose PRE model is C-Wah
+- **THEN** the session reports that PRE C-Wah was omitted
+- **AND** no model write for C-Wah is sent
+- **AND** the other transferable slots are still written
+- **AND** PRE order and on/off from the file are still written
+- **AND** no store write is sent solely because upload ran
+
+#### Scenario: Shared model drops a GP-50-only control without an omission
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose MOD model exists on both pedals and includes a Sync control that only GP-50 has
+- **THEN** that MOD model is written
+- **AND** no Sync control write is sent
+- **AND** no omission is reported for Sync
+
+#### Scenario: User IR slot transfers across models
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose CAB model is User IR 03
+- **THEN** a model write for that user-IR slot is sent
+- **AND** no omission is reported for that CAB slot
 
 #### Scenario: Invalid upload does not write
 - **WHEN** a session is ready and the user would upload bytes that are not a valid Valeton `.prst`

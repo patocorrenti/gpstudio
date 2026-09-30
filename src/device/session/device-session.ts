@@ -20,7 +20,6 @@ import {
 } from "@/device/chain";
 import {
   ChainDecoder,
-  decodePresetDump,
   emptyStomps,
   type ChainDumpResult,
   type StompAssignment,
@@ -52,7 +51,6 @@ import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import {
   currentPatchFilename,
-  decodePrstFile,
   encodePrstFile,
   readDumpPatchBpm,
   readDumpPatchVolume,
@@ -77,11 +75,12 @@ import {
   type LiveFollowHost,
 } from "@/device/session/inbound";
 import {
-  encodeUploadedPatchWrites,
   overlayDumpPatchGlobals,
+  planUploadedPatch,
   UPLOAD_COMMIT_GAP_MS,
   UPLOAD_MODEL_GAP_MS,
   UPLOAD_WRITE_GAP_MS,
+  type OmittedFactoryModel,
 } from "@/device/session/patch-io";
 import {
   clampPatch,
@@ -130,9 +129,13 @@ const PATCH_BPM_MAX = 260;
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
+export type UploadPatchPreview =
+  | { ok: false; reason: "invalid" }
+  | { ok: true; fileModel: DeviceModel; omissions: OmittedFactoryModel[] };
 export type UploadPatchResult =
-  | { ok: true }
-  | { ok: false; reason: "invalid" | "wrong-model" | "busy" | "disconnected" };
+  | { ok: true; omissions: OmittedFactoryModel[] }
+  | { ok: false; reason: "invalid" | "busy" | "disconnected" };
+export type { OmittedFactoryModel };
 
 export type SessionSnapshot =
   | { status: "disconnected" }
@@ -526,6 +529,21 @@ export class DeviceSession {
     };
   }
 
+  previewUploadPatch(bytes: Uint8Array): UploadPatchPreview {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "invalid" };
+    }
+    const planned = planUploadedPatch(bytes, this.snapshot.model, this.snapshot.linkMode);
+    if (!planned.ok) {
+      return { ok: false, reason: "invalid" };
+    }
+    return {
+      ok: true,
+      fileModel: planned.fileModel,
+      omissions: planned.omissions,
+    };
+  }
+
   async uploadCurrentPatch(bytes: Uint8Array): Promise<UploadPatchResult> {
     if (this.snapshot.status !== "connected") {
       return { ok: false, reason: "disconnected" };
@@ -536,18 +554,10 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       return { ok: false, reason: "disconnected" };
     }
-    const parsed = decodePrstFile(bytes);
-    if (!parsed) {
+    const planned = planUploadedPatch(bytes, this.snapshot.model, this.snapshot.linkMode);
+    if (!planned.ok) {
       return { ok: false, reason: "invalid" };
     }
-    if (parsed.model !== this.snapshot.model) {
-      return { ok: false, reason: "wrong-model" };
-    }
-    const chain = decodePresetDump(parsed.dump, parsed.model, parsed.model);
-    if (!chain) {
-      return { ok: false, reason: "invalid" };
-    }
-    const previousExport = this.snapshot.canExportPatch;
     this.patchConfirm = "off";
     this.snapshot = {
       ...this.snapshot,
@@ -556,27 +566,9 @@ export class DeviceSession {
       modified: false,
     };
     this.emitSnapshot();
-    const steps = encodeUploadedPatchWrites(
-      this.snapshot.model,
-      this.snapshot.linkMode,
-      chain,
-      parsed.volume,
-      parsed.bpm,
-    );
-    if (!steps) {
-      if (this.snapshot.status === "connected") {
-        this.snapshot = {
-          ...this.snapshot,
-          chainSync: "idle",
-          canExportPatch: previousExport,
-          modified: this.isWorkingModified(this.snapshot.chain, "idle"),
-        };
-        this.emitSnapshot();
-      }
-      return { ok: false, reason: "invalid" };
-    }
     this.writes.clear();
     const linkMode = this.snapshot.linkMode;
+    const { steps, omissions } = planned;
     for (let index = 0; index < steps.length; index += 1) {
       if (this.snapshot.status !== "connected") {
         return { ok: false, reason: "disconnected" };
@@ -596,7 +588,7 @@ export class DeviceSession {
       return { ok: false, reason: "disconnected" };
     }
     this.refreshChain(false);
-    return { ok: true };
+    return { ok: true, omissions };
   }
 
   async toggleChainSlot(id: ChainSlotId): Promise<void> {

@@ -29,11 +29,12 @@ context: |
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
   current-patch store SETs of that family (114a: Save / rename / duplicate
-  onto another slot), current-patch file export of the dump we already request
-  (Valeton .prst for the connected model; not Library import, not cross-model conversion),
+  onto another slot),   current-patch file export of the dump we already request
+  (Valeton .prst for the connected model; not Library import),
   current-patch .prst import onto the selected slot (working-buffer writes;
-  Save / rename / duplicate remain store 114a;
-  GP-50 file → GP-50 session, GP-5 file → GP-5 session; not Library import, not conversion),
+  Save / rename / duplicate remain store 114a; either model's .prst may apply
+  through catalog overlap with omitted factory models reported; download stays
+  native; not Library import),
   Bluetooth live model (command 07) and live control (command 08) follow,
   Controller drag-and-drop of movable modules, per-patch stomp
   assignment (dump decode + SET family 114d; GP-5 one stomp, GP-50 two;
@@ -209,8 +210,8 @@ context: |
   - Mobile Tauri app
   - Full preset library read/write, import, library reorder, Library .prst
     import (current-patch store / rename / duplicate / connected-model .prst
-    export and current-patch .prst import onto the selected slot are in scope;
-    not the Library route and not GP-5/GP-50 conversion)
+    export and current-patch .prst import onto the selected slot from either
+    model are in scope; not the Library route)
   - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
@@ -261,8 +262,9 @@ context: |
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
     Current-patch download encodes a Valeton .prst for the connected model
     from that dump; current-patch upload is the inverse into the working patch
-    (owned writes, not a dump SET and not store 114a). Do not paste reference/
-    builders or convert across models.
+    (owned writes, not a dump SET and not store 114a) and may apply the other
+    model's .prst through catalog overlap. Do not paste reference/ builders.
+    Download stays native to the connected model.
   - Patch recall: USB uses MIDI CC 0 from the official manuals; Bluetooth uses
     parameter-write SET family 1143 (reference editors; not CC 0 over GATT).
   - Full editor SysEx is documented in its own design.md when that change starts.
@@ -299,8 +301,8 @@ rules:
       import, IR/NAM file upload, or mobile packaging in phase 1 changes.
       IR-name read and user-IR CAB catalog/select are in scope.
     - Current-patch store SET of the existing parameter-write family and
-      current-patch .prst export/import for the connected model are allowed; they are
-      not the Library route and not cross-model conversion
+      current-patch .prst export (native) plus import from either model are
+      allowed; they are not the Library route
     - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
     - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
       refactor, Purpose/typo in specs), do not scaffold a change; say it is
@@ -340,7 +342,7 @@ rules:
       and GP-50 tempo is CC 73/74; family 1142 stays
       the upload path; Library import/reorder of .prst stay later
       (current-patch .prst export of the connected model and load into the
-      working patch are in scope; no GP-5/GP-50 conversion)
+      working patch from either model are in scope; download stays native)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - NS on bypasses AMP/CAB visually (prohibition overlay); do not rewrite
