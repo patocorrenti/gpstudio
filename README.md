@@ -24,6 +24,18 @@ Hopefully more people will join in and we can extend support to more models and 
 - Control the pedal footswitches from the app
 - Prepared to be compiled as a desktop application
 
+## Installation
+
+### Web app
+
+Use the official app at [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com).
+
+Tested in **Google Chrome**. USB and Bluetooth need a Chromium-based browser with Web MIDI / Web Bluetooth support.
+
+### Desktop
+
+Official desktop builds are not distributed yet. A [Tauri](https://tauri.app/) shell is in this repository and can be compiled locally (see [Development](#development)). Builds for Windows, macOS, and Linux are planned.
+
 ## Status
 
 Version 1.0.0-beta.1. The official app is [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com). A [Tauri](https://tauri.app/) shell is in the repository and can be compiled locally; official desktop builds are not distributed.
