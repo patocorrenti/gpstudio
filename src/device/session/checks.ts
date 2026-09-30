@@ -3,18 +3,25 @@ import { decodePresetDump } from "@/device/chain-codec";
 import { commandReceivedAckFixture, RECALL_ACK_TIMEOUT_MS } from "@/device/command-ack";
 import {
   encodeChainOrder,
+  encodeChainRequest,
+  encodeGlobals,
+  encodeGp5FootswitchMode,
+  encodeGp5GlobalSetting,
   encodeIdentity,
   encodeIrNames,
-  encodeChainRequest,
   encodePatch,
+  encodePatchBpm,
   encodePatchStore,
+  encodePatchTempoCc,
   encodeSlotModel,
 } from "@/device/encode";
 import { emptyUserIrNames, encodeIrNameDump, USER_IR_COUNT } from "@/device/ir-names";
-import { decodePrstFile } from "@/device/patch-store";
+import { decodePrstFile, encodePrstFile } from "@/device/patch-store";
 import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
+import { planUploadedPatch } from "@/device/session/patch-io";
 import { CHAIN_TIMEOUT_MS, DeviceSession } from "./device-session";
 import type { MidiTransport } from "@/midi/types";
+import type { EffectId } from "@/device/chain";
 
 function bytesFromHex(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -98,38 +105,342 @@ function stubBluetooth(): BluetoothLink {
     close: async () => {
       open = false;
     },
+    forget: async () => undefined,
   };
 }
 
 async function assertUploadRejectsWithoutMidi(): Promise<void> {
-  const usb = recordingUsb();
+  const usb = scriptedUsb();
   const session = new DeviceSession(usb.transport, stubBluetooth());
-  await session.connect(
+  const connecting = session.connect(
     { id: "usb-1", label: "GP-50", kind: "usb-midi" },
     "gp50",
   );
+  await untilReady("Upload reject fixture did not ask for names", () => usb.sent.length > 0);
+  await tick();
+  usb.push(usbNameList());
+  await connecting;
+  await untilReady("Upload reject fixture did not ask for current patch", () => usb.sent.length > 1);
+  await tick();
+  usb.push(currentPatchAt(0));
+  await untilReady("Upload reject fixture did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+    usb.push(packet);
+  }
+  await untilReady("Upload reject fixture chain did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
   const sentAfterConnect = usb.sent.length;
+  const beforeSnap = session.getSnapshot();
+  const patchBefore = beforeSnap.status === "connected" ? beforeSnap.patch : -1;
   const invalid = await session.uploadCurrentPatch(new Uint8Array([0x00, 0x01, 0x02]));
-  const wrong = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
-  const disconnected = await new DeviceSession(
-    recordingUsb().transport,
-    stubBluetooth(),
-  ).uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
   if (invalid.ok || invalid.reason !== "invalid") {
     throw new Error("Invalid bytes must return without sending MIDI");
-  }
-  if (wrong.ok || wrong.reason !== "wrong-model") {
-    throw new Error("Wrong-model bytes must return without sending MIDI");
-  }
-  if (disconnected.ok || disconnected.reason !== "disconnected") {
-    throw new Error("Disconnected upload must no-op");
   }
   if (usb.sent.length !== sentAfterConnect) {
     throw new Error("Rejected upload must not send MIDI");
   }
+  const disconnected = await new DeviceSession(
+    recordingUsb().transport,
+    stubBluetooth(),
+  ).uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (disconnected.ok || disconnected.reason !== "disconnected") {
+    throw new Error("Disconnected upload must no-op");
+  }
+
+  const cross = await session.uploadCurrentPatch(bytesFromHex(GP5_TOB_PRST_HEX));
+  if (!cross.ok || cross.omissions.length !== 0) {
+    throw new Error("GP-5 TOB on a GP-50 session must apply with no omission");
+  }
+  const afterCross = session.getSnapshot();
+  if (afterCross.status !== "connected" || afterCross.patch !== patchBefore) {
+    throw new Error("Cross-model upload must not change the patch index");
+  }
+  const applied = usb.sent.slice(sentAfterConnect);
+  if (applied.some(isStore114a) || applied.some(isPatchRecall)) {
+    throw new Error("Upload must not send store 114a or extra patch recall");
+  }
+  const preview = session.previewUploadPatch(bytesFromHex(GP5_TOB_PRST_HEX));
+  if (!preview.ok || preview.omissions.length !== 0 || preview.fileModel !== "gp5") {
+    throw new Error("Preview must report a GP-5 file with no omissions on GP-50");
+  }
 }
 
 void assertUploadRejectsWithoutMidi();
+
+function isStore114a(bytes: Uint8Array): boolean {
+  const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
+  return (
+    midi[0] === 0xf0 &&
+    midi.length >= 15 &&
+    midi[9] === 0x01 &&
+    midi[10] === 0x01 &&
+    midi[11] === 0x04 &&
+    midi[12] === 0x0a
+  );
+}
+
+function writeIdentityNibbles(data: Uint8Array, start: number, packed: Uint8Array): void {
+  for (let index = 0; index < packed.length; index += 1) {
+    data[start + index * 2] = (packed[index] >> 4) & 0x0f;
+    data[start + index * 2 + 1] = packed[index] & 0x0f;
+  }
+}
+
+function gp50PrstWithIdentity(kind: EffectId, wire: Uint8Array): Uint8Array {
+  const parsed = decodePrstFile(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (!parsed) {
+    throw new Error("GP-50 TOB must decode for upload fixtures");
+  }
+  const dump = parsed.dump.slice();
+  const identityAt: Partial<Record<EffectId, number>> = {
+    pre: 278,
+    cab: 302,
+    mod: 318,
+  };
+  const at = identityAt[kind];
+  if (at === undefined) {
+    throw new Error(`Upload fixture has no identity offset for ${kind}`);
+  }
+  writeIdentityNibbles(dump, at, wire);
+  const encoded = encodePrstFile({ model: "gp50", name: parsed.name || "TOB", dump });
+  if (!encoded) {
+    throw new Error("Mutated GP-50 dump must re-encode as .prst");
+  }
+  return encoded;
+}
+
+function packetsInclude(sent: Uint8Array[], packets: Uint8Array[] | null): boolean {
+  if (!packets) {
+    return false;
+  }
+  return packets.some((packet) => sent.some((item) => packetsEqual(item, packet)));
+}
+
+async function readyGp5UsbSession(): Promise<{
+  session: DeviceSession;
+  usb: ReturnType<typeof scriptedUsb>;
+}> {
+  const usb = scriptedUsb();
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  const connecting = session.connect(
+    { id: "usb-1", label: "GP-5", kind: "usb-midi" },
+    "gp5",
+  );
+  await untilReady("GP-5 upload fixture did not ask for names", () => usb.sent.length > 0);
+  await tick();
+  usb.push(usbNameList());
+  await connecting;
+  await untilReady("GP-5 upload fixture did not ask for current patch", () => usb.sent.length > 1);
+  await tick();
+  usb.push(currentPatchAt(5));
+  await untilReady("GP-5 upload fixture did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp5ChainPackets("usb")) {
+    usb.push(packet);
+  }
+  await untilReady("GP-5 upload fixture chain did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+  return { session, usb };
+}
+
+async function readyGp5BluetoothSession(): Promise<{
+  session: DeviceSession;
+  bluetooth: ReturnType<typeof scriptedBluetooth>;
+}> {
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  const connecting = session.connect(
+    { id: "bt-1", label: "GP-5", kind: "bluetooth" },
+    "gp5",
+  );
+  await untilReady("GP-5 Bluetooth upload fixture did not ask for names", () => {
+    return bluetooth.sent.length > 0;
+  });
+  await tick();
+  bluetooth.push(bluetoothNameList());
+  await connecting;
+  await untilReady("GP-5 Bluetooth upload fixture did not ask for current patch", () => {
+    return bluetooth.sent.length > 1;
+  });
+  await tick();
+  bluetooth.push(currentPatchAt(5));
+  await untilReady("GP-5 Bluetooth upload fixture did not become ready", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.sync === "ready";
+  });
+  for (const packet of gp5ChainPackets("bluetooth")) {
+    bluetooth.push(packet);
+  }
+  await untilReady("GP-5 Bluetooth upload fixture chain did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+  return { session, bluetooth };
+}
+
+function settleGp5UsbChain(usb: ReturnType<typeof scriptedUsb>): void {
+  for (const packet of gp5ChainPackets("usb")) {
+    usb.push(packet);
+  }
+}
+
+async function assertCrossModelUploadSession(): Promise<void> {
+  const { session, usb } = await readyGp5UsbSession();
+  const snapshotBefore = session.getSnapshot();
+  const patchBefore = snapshotBefore.status === "connected" ? snapshotBefore.patch : -1;
+
+  const shared = await session.uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (!shared.ok || shared.omissions.length !== 0) {
+    throw new Error("Shared GP-50 TOB on GP-5 must apply with no omission");
+  }
+  const afterShared = usb.sent.slice();
+  const tob = decodePrstFile(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (tob?.bpm !== null && tob?.bpm !== undefined) {
+    const bpmPackets =
+      tob.bpm > 255 ? encodePatchTempoCc("usb", tob.bpm) : encodePatchBpm("usb", tob.bpm);
+    if (packetsInclude(afterShared, bpmPackets)) {
+      throw new Error("GP-50 file on GP-5 must not send a BPM write");
+    }
+  }
+  const afterSharedSnap = session.getSnapshot();
+  if (afterSharedSnap.status !== "connected" || afterSharedSnap.patch !== patchBefore) {
+    throw new Error("Shared upload must not change the patch index");
+  }
+  settleGp5UsbChain(usb);
+  await untilReady("Shared upload dump reply did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+
+  const cWahBytes = gp50PrstWithIdentity("pre", Uint8Array.from([0x08, 0x00, 0x00, 0x05]));
+  const sentBeforeCwah = usb.sent.length;
+  const cWah = await session.uploadCurrentPatch(cWahBytes);
+  if (
+    !cWah.ok ||
+    cWah.omissions.length !== 1 ||
+    cWah.omissions[0]?.kind !== "pre" ||
+    cWah.omissions[0]?.label !== "C-Wah"
+  ) {
+    throw new Error("PRE C-Wah upload must report that omission");
+  }
+  const cWahSent = usb.sent.slice(sentBeforeCwah);
+  const cWahModel = encodeSlotModel("usb", "pre", [0x08, 0x00, 0x00, 0x05]);
+  if (packetsInclude(cWahSent, cWahModel)) {
+    throw new Error("PRE C-Wah upload must not send C-Wah model bytes");
+  }
+  const planned = planUploadedPatch(cWahBytes, "gp5", "usb");
+  if (!planned.ok) {
+    throw new Error("PRE C-Wah must still plan writable steps");
+  }
+  const order = planned.steps.filter((step) => step.kind === "order");
+  const modules = planned.steps.filter((step) => step.kind === "module");
+  if (
+    !order.every((step) => cWahSent.some((packet) => packetsEqual(packet, step.bytes))) ||
+    !modules.every((step) => cWahSent.some((packet) => packetsEqual(packet, step.bytes)))
+  ) {
+    throw new Error("PRE C-Wah upload must still write order and module on/off");
+  }
+  if (planned.steps.filter((step) => step.kind === "model").length === 0) {
+    throw new Error("PRE C-Wah upload must still write other transferable models");
+  }
+  if (
+    !planned.steps
+      .filter((step) => step.kind === "model")
+      .every((step) => cWahSent.some((packet) => packetsEqual(packet, step.bytes)))
+  ) {
+    throw new Error("PRE C-Wah upload must send the other model SETs");
+  }
+  settleGp5UsbChain(usb);
+  await untilReady("C-Wah upload dump reply did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+
+  const userIrBytes = gp50PrstWithIdentity("cab", Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
+  const sentBeforeIr = usb.sent.length;
+  const userIr = await session.uploadCurrentPatch(userIrBytes);
+  if (!userIr.ok || userIr.omissions.some((item) => item.kind === "cab")) {
+    throw new Error("User IR 03 must transfer with no CAB omission");
+  }
+  const irModel = encodeSlotModel("usb", "cab", [0x02, 0x00, 0x10, 0x0a]);
+  if (!packetsInclude(usb.sent.slice(sentBeforeIr), irModel)) {
+    throw new Error("User IR 03 must send a model write");
+  }
+  settleGp5UsbChain(usb);
+  await untilReady("User IR upload dump reply did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+
+  const syncPlan = planUploadedPatch(bytesFromHex(GP50_TOB_PRST_HEX), "gp5", "usb");
+  if (!syncPlan.ok || syncPlan.omissions.some((item) => item.label === "Sync")) {
+    throw new Error("Shared model with Sync must not report a Sync omission");
+  }
+  const fullPlan = planUploadedPatch(bytesFromHex(GP50_TOB_PRST_HEX), "gp50", "usb");
+  if (!fullPlan.ok) {
+    throw new Error("GP-50 TOB must plan against GP-50");
+  }
+  const gp50OnlyControls = fullPlan.steps.filter(
+    (step) =>
+      step.kind === "control" &&
+      !syncPlan.steps.some((other) => packetsEqual(other.bytes, step.bytes)),
+  );
+  const sentBeforeSync = usb.sent.length;
+  const syncUpload = await session.uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (!syncUpload.ok) {
+    throw new Error("Shared Sync model upload must apply");
+  }
+  const syncSent = usb.sent.slice(sentBeforeSync);
+  if (gp50OnlyControls.some((step) => syncSent.some((packet) => packetsEqual(packet, step.bytes)))) {
+    throw new Error("Shared model upload must not send Sync");
+  }
+  const modModels = syncPlan.steps.filter((step) => step.kind === "model");
+  if (
+    modModels.length === 0 ||
+    !modModels.some((step) => syncSent.some((packet) => packetsEqual(packet, step.bytes)))
+  ) {
+    throw new Error("Shared model upload must still write the model");
+  }
+  settleGp5UsbChain(usb);
+  await untilReady("Sync upload dump reply did not go idle", () => {
+    const snapshot = session.getSnapshot();
+    return snapshot.status === "connected" && snapshot.chainSync === "idle";
+  });
+
+  const sentBeforeInvalid = usb.sent.length;
+  const invalid = await session.uploadCurrentPatch(new Uint8Array([0xff, 0x00]));
+  if (invalid.ok || invalid.reason !== "invalid" || usb.sent.length !== sentBeforeInvalid) {
+    throw new Error("Invalid bytes on GP-5 must send nothing");
+  }
+
+  const { session: bleSession, bluetooth } = await readyGp5BluetoothSession();
+  const blePreview = bleSession.previewUploadPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (!blePreview.ok || blePreview.fileModel !== "gp50") {
+    throw new Error("Bluetooth GP-5 session must use the same upload planner");
+  }
+  const bleSentBefore = bluetooth.sent.length;
+  const bleUpload = await bleSession.uploadCurrentPatch(bytesFromHex(GP50_TOB_PRST_HEX));
+  if (!bleUpload.ok || bleUpload.omissions.length !== 0) {
+    throw new Error("Bluetooth GP-5 must apply a shared GP-50 file");
+  }
+  if (bluetooth.sent.length <= bleSentBefore) {
+    throw new Error("Bluetooth upload must send planned writes");
+  }
+  if (bluetooth.sent.slice(bleSentBefore).some(isStore114a)) {
+    throw new Error("Bluetooth upload must not send store 114a");
+  }
+}
+
+void assertCrossModelUploadSession();
 
 function scriptedBluetooth(): {
   sent: Uint8Array[];
@@ -166,6 +477,7 @@ function scriptedBluetooth(): {
       close: async () => {
         open = false;
       },
+      forget: async () => undefined,
     },
   };
 }
@@ -295,10 +607,14 @@ async function assertUserIrSession(): Promise<void> {
   const irRequest = encodeIrNames("bluetooth");
   const irCount = () => bluetooth.sent.filter((packet) => packetsEqual(packet, irRequest)).length;
   try {
-    await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+    const connecting = session.connect(
+      { id: "ble-1", label: "GP-50", kind: "bluetooth" },
+      "gp50",
+    );
     await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
     await tick();
     bluetooth.push(bluetoothNameList());
+    await connecting;
     await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
     await tick();
     bluetooth.push(currentPatchZero());
@@ -446,10 +762,14 @@ async function connectBluetoothReady(
   bluetooth: ReturnType<typeof scriptedBluetooth>,
   patch: number,
 ): Promise<void> {
-  await session.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+  const connecting = session.connect(
+    { id: "ble-1", label: "GP-50", kind: "bluetooth" },
+    "gp50",
+  );
   await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
   await tick();
   bluetooth.push(bluetoothNameList());
+  await connecting;
   await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
   await tick();
   bluetooth.push(currentPatchAt(patch));
@@ -757,10 +1077,14 @@ async function connectUsbReady(
   usb: ReturnType<typeof scriptedUsb>,
   patch: number,
 ): Promise<void> {
-  await session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+  const connecting = session.connect(
+    { id: "usb-1", label: "GP-50", kind: "usb-midi" },
+    "gp50",
+  );
   await untilReady("USB identity did not request names", () => usb.sent.length > 0);
   await tick();
   usb.push(usbNameList());
+  await connecting;
   await untilReady("USB identity did not request current patch", () => usb.sent.length > 1);
   await tick();
   usb.push(currentPatchAt(patch));
@@ -980,6 +1304,373 @@ async function assertDownloadLeavesConfirmOff(): Promise<void> {
 }
 
 void assertDownloadLeavesConfirmOff().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+function writeSignedNibbles(target: Uint8Array, at: number, value: number): void {
+  const wire = value < 0 ? 0x100 + value : value;
+  target[at] = (wire >> 4) & 0x0f;
+  target[at + 1] = wire & 0x0f;
+}
+
+function frameSysex(
+  command0: number,
+  command1: number,
+  length: number,
+  index: number,
+  payload: Uint8Array,
+): Uint8Array {
+  const midi = new Uint8Array(length);
+  midi[0] = 0xf0;
+  midi[3] = command0;
+  midi[4] = command1;
+  midi[5] = (index >> 4) & 0x0f;
+  midi[6] = index & 0x0f;
+  midi.set(payload, 9);
+  midi[length - 1] = 0xf7;
+  return midi;
+}
+
+/** Minimal GP-5 current-preset so the post-chain globals ask can fire. */
+function gp5ChainPackets(link: "usb" | "bluetooth"): Uint8Array[] {
+  if (link === "usb") {
+    const merged = new Uint8Array(38 * 4 + 24);
+    for (let slot = 0; slot < 10; slot += 1) {
+      merged[157 + slot * 2] = slot;
+    }
+    const packets: Uint8Array[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      packets.push(
+        frameSysex(1, 9, 48, index, merged.subarray(index * 38, (index + 1) * 38)),
+      );
+    }
+    packets.push(frameSysex(1, 9, 34, 4, merged.subarray(152)));
+    return packets;
+  }
+  const merged = new Uint8Array(190 * 4 + 140);
+  for (let slot = 0; slot < 10; slot += 1) {
+    merged[157 + slot * 2] = slot;
+  }
+  const packets: Uint8Array[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    packets.push(
+      frameSysex(0, 5, 200, index, merged.subarray(index * 190, (index + 1) * 190)),
+    );
+  }
+  packets.push(frameSysex(0, 5, 150, 4, merged.subarray(760)));
+  return packets;
+}
+
+/**
+ * GP-5 globals with volume nibbles at 101 (out of 0–100). Settings rows stay valid.
+ * USB payload offsets are the Bluetooth F0 offsets minus 9.
+ */
+function gp5GlobalsPackets(link: "usb" | "bluetooth"): Uint8Array[] {
+  if (link === "bluetooth") {
+    const midi = new Uint8Array(164);
+    midi[0] = 0xf0;
+    midi[3] = 0;
+    midi[4] = 1;
+    midi[9] = 1;
+    midi[10] = 2;
+    midi[11] = 1;
+    midi[163] = 0xf7;
+    writeSignedNibbles(midi, 53, 101);
+    writeSignedNibbles(midi, 79, 80);
+    writeSignedNibbles(midi, 89, 0);
+    writeSignedNibbles(midi, 99, -6);
+    writeSignedNibbles(midi, 109, 2);
+    writeSignedNibbles(midi, 139, 3);
+    midi[150] = 0;
+    midi[160] = 0;
+    return [midi];
+  }
+  const payload = new Uint8Array(38 * 4 + 2);
+  writeSignedNibbles(payload, 44, 101);
+  writeSignedNibbles(payload, 70, 80);
+  writeSignedNibbles(payload, 80, 0);
+  writeSignedNibbles(payload, 90, -6);
+  writeSignedNibbles(payload, 100, 2);
+  writeSignedNibbles(payload, 130, 3);
+  payload[141] = 0;
+  payload[151] = 0;
+  const packets: Uint8Array[] = [];
+  let offset = 0;
+  let index = 0;
+  while (offset + 38 < payload.length) {
+    packets.push(frameSysex(0, 5, 48, index, payload.subarray(offset, offset + 38)));
+    offset += 38;
+    index += 1;
+  }
+  packets.push(frameSysex(0, 5, 12, index, payload.subarray(offset)));
+  return packets;
+}
+
+function liveMonitorNotify(level: number): Uint8Array {
+  const midi = new Uint8Array(24);
+  midi[0] = 0xf0;
+  midi[3] = 0;
+  midi[4] = 1;
+  midi[8] = 0x07;
+  midi[9] = 1;
+  midi[10] = 2;
+  midi[14] = 2;
+  midi[16] = 4;
+  const wire = level < 0 ? 0x100 + level : level;
+  midi[21] = (wire >> 4) & 0x0f;
+  midi[22] = wire & 0x0f;
+  midi[23] = 0xf7;
+  return midi;
+}
+
+function isControlChange(bytes: Uint8Array, controller: number): boolean {
+  const midi = bytes[0] === 0x80 && bytes[1] === 0x80 ? bytes.subarray(2) : bytes;
+  return midi.length >= 3 && (midi[0] & 0xf0) === 0xb0 && midi[1] === controller;
+}
+
+async function settleWrites(): Promise<void> {
+  for (let step = 0; step < 8; step += 1) {
+    await tick();
+  }
+}
+
+async function assertGp5GlobalsSession(): Promise<void> {
+  const usb = scriptedUsb();
+  const usbSession = new DeviceSession(usb.transport, stubBluetooth());
+  try {
+    const usbConnecting = usbSession.connect(
+      { id: "usb-1", label: "GP-5", kind: "usb-midi" },
+      "gp5",
+    );
+    await untilReady("GP-5 USB identity did not request names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await usbConnecting;
+    await untilReady("GP-5 USB identity did not request current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(3));
+    await untilReady("GP-5 USB session did not become ready", () => {
+      const snapshot = usbSession.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    const recallsBeforeDump = usb.sent.filter(isPatchRecall).length;
+    for (const packet of gp5ChainPackets("usb")) {
+      usb.push(packet);
+    }
+    const globalsAsk = encodeGlobals("usb");
+    await untilReady("GP-5 USB did not ask for globals after the chain", () => {
+      return usb.sent.some((packet) => packetsEqual(packet, globalsAsk));
+    });
+    if (usb.sent.filter(isPatchRecall).length !== recallsBeforeDump) {
+      throw new Error("The GP-5 globals ask must not send patch recall");
+    }
+    for (const packet of gp5GlobalsPackets("usb")) {
+      usb.push(packet);
+    }
+    const loaded = usbSession.getSnapshot();
+    if (
+      loaded.status !== "connected" ||
+      loaded.globals?.model !== "gp5" ||
+      loaded.globals.globalVolume !== null ||
+      loaded.globals.inputLevel !== 0 ||
+      loaded.globals.noCab !== false ||
+      loaded.globals.recLevel !== -6 ||
+      loaded.globals.btRec !== 3 ||
+      loaded.globals.monLevel !== 2 ||
+      loaded.globals.screenBrightness !== 80 ||
+      loaded.globals.footswitchMode !== "0-99" ||
+      loaded.modified ||
+      loaded.chainSync !== "idle"
+    ) {
+      throw new Error("GP-5 USB globals must fill Settings rows when volume is out of range");
+    }
+    usb.push(liveMonitorNotify(-6));
+    const afterLive = usbSession.getSnapshot();
+    if (
+      afterLive.status !== "connected" ||
+      afterLive.globals?.model !== "gp5" ||
+      afterLive.globals.monLevel !== 2 ||
+      afterLive.globals.btRec !== 3
+    ) {
+      throw new Error("GP-5 USB must ignore a live monitor report");
+    }
+    const sentBeforeWrites = usb.sent.length;
+    await usbSession.setGlobalSysex("inputLevel", 6, { flush: true });
+    await usbSession.setGlobalSysex("noCab", true, { flush: true });
+    await usbSession.setGlobalSysex("screenBrightness", 40, { flush: true });
+    await usbSession.setGp5FootswitchMode("CTL");
+    await usbSession.setMasterVolume(80);
+    await settleWrites();
+    const written = usb.sent.slice(sentBeforeWrites);
+    const inputSet = encodeGp5GlobalSetting("usb", "inputLevel", 6);
+    const footSet = encodeGp5FootswitchMode("usb", "CTL");
+    const afterWrite = usbSession.getSnapshot();
+    if (
+      !inputSet ||
+      !footSet ||
+      !written.some((packet) => packetsEqual(packet, inputSet[0])) ||
+      !written.some((packet) => packetsEqual(packet, footSet[0])) ||
+      written.some((packet) => isControlChange(packet, 1) || isControlChange(packet, 28)) ||
+      afterWrite.status !== "connected" ||
+      afterWrite.modified ||
+      afterWrite.globals?.model !== "gp5" ||
+      afterWrite.globals.inputLevel !== 6 ||
+      afterWrite.globals.noCab !== true ||
+      afterWrite.globals.screenBrightness !== 40 ||
+      afterWrite.globals.footswitchMode !== "CTL" ||
+      afterWrite.globals.globalVolume !== null
+    ) {
+      throw new Error("GP-5 USB Global settings writes must be SETs and must not dirty the patch");
+    }
+  } finally {
+    await usbSession.disconnect();
+  }
+  if (usbSession.getSnapshot().status !== "disconnected") {
+    throw new Error("Disconnect must drop GP-5 globals");
+  }
+
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  try {
+    const bleConnecting = bleSession.connect(
+      { id: "ble-1", label: "GP-5", kind: "bluetooth" },
+      "gp5",
+    );
+    await untilReady("GP-5 Bluetooth identity did not request names", () => bluetooth.sent.length > 0);
+    await tick();
+    bluetooth.push(bluetoothNameList());
+    await bleConnecting;
+    await untilReady("GP-5 Bluetooth identity did not request current patch", () => bluetooth.sent.length > 1);
+    await tick();
+    bluetooth.push(currentPatchAt(4));
+    await untilReady("GP-5 Bluetooth session did not become ready", () => {
+      const snapshot = bleSession.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp5ChainPackets("bluetooth")) {
+      bluetooth.push(packet);
+    }
+    const globalsAsk = encodeGlobals("bluetooth");
+    await untilReady("GP-5 Bluetooth did not ask for globals after the chain", () => {
+      return bluetooth.sent.some((packet) => packetsEqual(packet, globalsAsk));
+    });
+    for (const packet of gp5GlobalsPackets("bluetooth")) {
+      bluetooth.push(packet);
+    }
+    const loaded = bleSession.getSnapshot();
+    if (
+      loaded.status !== "connected" ||
+      loaded.globals?.model !== "gp5" ||
+      loaded.globals.inputLevel !== 0 ||
+      loaded.globals.noCab !== false ||
+      loaded.globals.recLevel !== -6 ||
+      loaded.globals.btRec !== 3 ||
+      loaded.globals.monLevel !== 2 ||
+      loaded.globals.screenBrightness !== 80 ||
+      loaded.globals.footswitchMode !== "0-99" ||
+      loaded.globals.globalVolume !== null ||
+      loaded.modified
+    ) {
+      throw new Error("GP-5 Bluetooth globals must fill Settings rows when volume is out of range");
+    }
+    bluetooth.push(liveMonitorNotify(-6));
+    const afterLive = bleSession.getSnapshot();
+    if (
+      afterLive.status !== "connected" ||
+      afterLive.globals?.model !== "gp5" ||
+      afterLive.globals.monLevel !== -6 ||
+      afterLive.globals.btRec !== 3 ||
+      afterLive.modified
+    ) {
+      throw new Error("GP-5 Bluetooth monitor report must not change BT REC or the patch");
+    }
+    const sentBeforeWrites = bluetooth.sent.length;
+    await bleSession.setGlobalSysex("recLevel", -4, { flush: true });
+    await bleSession.setGp5FootswitchMode("Tuner");
+    await bleSession.setMasterVolume(50);
+    await settleWrites();
+    const written = bluetooth.sent.slice(sentBeforeWrites);
+    const recSet = encodeGp5GlobalSetting("bluetooth", "recLevel", -4);
+    const footSet = encodeGp5FootswitchMode("bluetooth", "Tuner");
+    const afterWrite = bleSession.getSnapshot();
+    if (
+      !recSet ||
+      !footSet ||
+      !written.some((packet) => packetsEqual(packet, recSet[0])) ||
+      !written.some((packet) => packetsEqual(packet, footSet[0])) ||
+      written.some((packet) => isControlChange(packet, 1) || isControlChange(packet, 28)) ||
+      afterWrite.status !== "connected" ||
+      afterWrite.modified ||
+      afterWrite.globals?.model !== "gp5" ||
+      afterWrite.globals.recLevel !== -4 ||
+      afterWrite.globals.footswitchMode !== "Tuner"
+    ) {
+      throw new Error("GP-5 Bluetooth Global settings writes must be SETs and must not dirty the patch");
+    }
+  } finally {
+    await bleSession.disconnect();
+  }
+}
+
+void assertGp5GlobalsSession().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertSilentNameListFailsConnect(): Promise<void> {
+  const usb = scriptedUsb();
+  const usbSession = new DeviceSession(usb.transport, stubBluetooth());
+  usbSession.setNameTimeoutMsForTests({ usb: 20, bluetooth: 20 });
+  let usbError: unknown;
+  try {
+    await usbSession.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+  } catch (cause) {
+    usbError = cause;
+  }
+  if (
+    !(usbError instanceof Error) ||
+    usbError.message !== "Check that the pedal is powered on." ||
+    usbSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("USB silent name-list must fail connect with a power-on hint");
+  }
+
+  const noSysex = recordingUsb();
+  const noSysexSession = new DeviceSession(noSysex.transport, stubBluetooth());
+  let sysexError: unknown;
+  try {
+    await noSysexSession.connect({ id: "usb-2", label: "GP-50", kind: "usb-midi" }, "gp50");
+  } catch (cause) {
+    sysexError = cause;
+  }
+  if (
+    !(sysexError instanceof Error) ||
+    sysexError.message !== "MIDI SysEx is not available on this connection." ||
+    noSysexSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("USB without SysEx must fail connect");
+  }
+
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  bleSession.setNameTimeoutMsForTests({ usb: 20, bluetooth: 20 });
+  let bleError: unknown;
+  try {
+    await bleSession.connect({ id: "ble-1", label: "GP-50", kind: "bluetooth" }, "gp50");
+  } catch (cause) {
+    bleError = cause;
+  }
+  if (
+    !(bleError instanceof Error) ||
+    bleError.message !== "The pedal did not respond with patch names." ||
+    bleSession.getSnapshot().status !== "disconnected"
+  ) {
+    throw new Error("Bluetooth silent name-list must fail connect with a no-response message");
+  }
+}
+
+void assertSilentNameListFailsConnect().catch((error) => {
   console.error(error);
   throw error;
 });

@@ -8,7 +8,7 @@ Lets the user connect a Valeton GP-5 or GP-50 over USB-MIDI or Bluetooth from th
 
 ### Requirement: Connect modal lists USB devices then resolves the model
 
-Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST start Bluetooth discovery. On the desktop app, the Bluetooth tab MUST list discovered Bluetooth pedals for the user to pick. On the web app, when the browser Bluetooth picker returns a chosen pedal, the system MUST treat that choice as the pick and MUST NOT require a second click in the modal list; if the picker is cancelled, the modal MUST still list already-authorized Bluetooth pedals when any are available. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
+Activating the disconnected Connect control SHALL open a modal (not a route) with USB and Bluetooth method tabs. The USB tab MUST start USB-MIDI discovery and MUST list discovered USB-MIDI devices and any remembered USB pedals for the user to pick. The USB tab MUST describe a one-way connection that is super fast. The Bluetooth tab MUST list discovered Bluetooth pedals and any remembered Bluetooth pedals, as specified for that tab. On the web app, choosing a pedal in the browser Bluetooth picker MUST remember and list that pedal and MUST NOT connect until the user picks it in the modal list. If the chosen device has a suggested model, the system MUST use that model and MUST NOT ask. If it has none, the system MUST ask GP-5 vs GP-50 before opening the link. The model MUST be known before the session is marked connected. Opening the modal MUST default to the USB tab. Switching tabs MUST NOT by itself connect a device.
 
 #### Scenario: Discover then pick a USB device
 - **WHEN** the user opens Connect while disconnected
@@ -29,7 +29,7 @@ Activating the disconnected Connect control SHALL open a modal (not a route) wit
 - **AND** the link is opened only after the user chooses a model
 
 #### Scenario: No USB devices
-- **WHEN** the USB tab is active, discovery succeeds, and finds no USB-MIDI devices
+- **WHEN** the USB tab is active, discovery succeeds, finds no USB-MIDI devices, and no USB pedal is remembered
 - **THEN** the modal states that none were found
 - **AND** the user can retry discovery
 
@@ -83,11 +83,11 @@ After a USB or Bluetooth session is marked connected, the chrome connection cont
 
 ### Requirement: Bluetooth tab lists pedals then connects
 
-While the Bluetooth tab is selected, the modal MUST scan for Bluetooth pedals. It MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan.
+While the Bluetooth tab is selected, the modal MUST keep the two-way / slower tradeoff copy. It MUST NOT list USB-MIDI devices. If the chosen Bluetooth device has a suggested model, the system MUST use that model and MUST NOT ask. Connecting MUST mark the session connected with Bluetooth link mode. The user MUST be able to retry the scan. The session MUST stay disconnected until the user picks a device from the modal list.
 
-On the desktop app, the modal MUST list discovered Bluetooth pedals for the user to pick, and the session MUST stay disconnected until the user picks a device from that list.
+On the desktop app, selecting the Bluetooth tab MUST scan for nearby pedals and MUST list those pedals together with any remembered Bluetooth pedals.
 
-On the web app, an interactive scan MUST open the browser Bluetooth picker. When the user chooses a pedal there, the system MUST proceed with that device as the pick without requiring another click in the modal list. When the user cancels the picker, the modal MUST list already-authorized Bluetooth pedals when any remain available, and the session MUST stay disconnected until the user picks one from that list or runs another scan.
+On the web app, an interactive scan MUST open the browser Bluetooth picker. When the user chooses a pedal there, the modal MUST list that pedal and MUST NOT connect until the user picks it in the list. When the user cancels the picker, the modal MUST keep listing remembered Bluetooth pedals and any already-authorized Bluetooth pedals that are still available. Selecting the Bluetooth tab when a remembered Bluetooth pedal is already listed MUST NOT open the browser picker by itself. Selecting the Bluetooth tab when no Bluetooth pedal is listed MUST open the browser picker.
 
 #### Scenario: Desktop Bluetooth scan then pick
 - **WHEN** the user selects the Bluetooth tab while disconnected in the desktop app
@@ -98,22 +98,28 @@ On the web app, an interactive scan MUST open the browser Bluetooth picker. When
 
 #### Scenario: Web Bluetooth picker connects without a second click
 - **WHEN** the user runs an interactive Bluetooth scan in the web app and chooses a pedal in the browser picker
-- **THEN** the system treats that pedal as the chosen device without requiring another click in the modal list
-- **AND** if the label suggests GP-5 or GP-50, the system connects using that model without asking
+- **THEN** the modal lists that pedal and does not connect yet
+- **AND** the session stays disconnected until the user picks it in the list
+- **AND** picking it, when the label suggests GP-5 or GP-50, connects using that model without asking
 - **AND** the connected session link mode is Bluetooth
 
 #### Scenario: Web Bluetooth picker cancelled keeps authorized list
-- **WHEN** the user runs an interactive Bluetooth scan in the web app, cancels the browser picker, and at least one already-authorized Bluetooth pedal is available
-- **THEN** the modal lists those authorized pedals
+- **WHEN** the user runs an interactive Bluetooth scan in the web app, cancels the browser picker, and a remembered or already-authorized Bluetooth pedal is available
+- **THEN** the modal lists that pedal
 - **AND** the session stays disconnected until the user picks a device from that list or scans again
 
+#### Scenario: Remembered Bluetooth pedal does not open the picker
+- **WHEN** the user selects the Bluetooth tab in the web app and a remembered Bluetooth pedal is already listed
+- **THEN** the browser picker does not open
+- **AND** the modal lists that pedal
+
 #### Scenario: Known Bluetooth model connects without asking
-- **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50
+- **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50 from the modal list
 - **THEN** the system connects using that model without asking which pedal it is
 - **AND** the connected session link mode is Bluetooth
 
 #### Scenario: No Bluetooth pedals
-- **WHEN** the Bluetooth tab is active, discovery succeeds, and finds no matching pedals
+- **WHEN** the Bluetooth tab is active, discovery succeeds, and finds no matching pedals and none are remembered
 - **THEN** the modal states that none were found
 - **AND** the user can retry discovery
 
@@ -121,6 +127,88 @@ On the web app, an interactive scan MUST open the browser Bluetooth picker. When
 - **WHEN** the Bluetooth tab is active and Bluetooth access is denied or Bluetooth is unavailable
 - **THEN** the modal shows an English error
 - **AND** the session stays disconnected
+
+### Requirement: Connect remembers chosen pedals
+
+The Connect modal MUST remember pedals the user has chosen and MUST show them again on the matching tab after the app is closed and opened, on the web app and on the desktop app. USB remembered pedals MUST appear only on the USB tab. Bluetooth remembered pedals MUST appear only on the Bluetooth tab. Each tab's list MUST be those remembered pedals plus the pedals the current scan found, without listing the same pedal twice. A remembered pedal MUST stay listed when the current scan does not find it.
+
+A pedal is remembered when the user chooses it. On the web app, choosing a pedal in the browser Bluetooth picker MUST remember it and MUST NOT connect. On USB, and on desktop Bluetooth, picking the pedal in the list MUST remember it when the model is known and connect starts. Choosing a model after an unknown-model ask MUST remember that pedal. Leaving the model ask without choosing MUST NOT remember it.
+
+Each remembered pedal MUST offer a remove control. Activating it MUST forget that pedal, MUST clear the startup pedal when that pedal was the startup pedal, and MUST NOT connect. The pedal MUST leave the list until a later scan lists it and the user chooses it again. A pedal that is only in the current scan, and is not remembered, MUST NOT offer that remove control.
+
+Remembered pedals and the startup pedal MUST survive restarting the app on this computer. They MUST NOT be sent to a server.
+
+#### Scenario: Web picker remembers without connecting
+- **WHEN** the user chooses a pedal in the browser Bluetooth picker
+- **THEN** that pedal is listed on the Bluetooth tab
+- **AND** the session stays disconnected until the user picks it in the list
+
+#### Scenario: Remembered pedal is listed on the next launch
+- **WHEN** the user has chosen a Bluetooth pedal, closes the app, and opens it again
+- **THEN** the Bluetooth tab lists that pedal before the user opens the browser picker again
+
+#### Scenario: Remembered USB pedal stays listed while unplugged
+- **WHEN** the user has chosen a USB pedal and later opens Connect while that pedal is not detected
+- **THEN** the USB tab still lists that pedal
+- **AND** the Bluetooth tab does not list it
+
+#### Scenario: Scan results join the remembered list
+- **WHEN** the USB tab has one remembered pedal and discovery finds a different USB pedal
+- **THEN** the USB tab lists both
+
+#### Scenario: Remove forgets the pedal
+- **WHEN** the user removes a remembered pedal
+- **THEN** that pedal leaves the list
+- **AND** the session stays disconnected
+- **AND** a later scan can list it again
+- **AND** choosing it then remembers it again
+
+#### Scenario: Removing the startup pedal clears startup
+- **WHEN** the remembered pedal the user removes is the startup pedal
+- **THEN** the next launch does not try to connect automatically
+
+### Requirement: Optional startup pedal connects on launch
+
+The disconnected Connect scan body MUST show one English checkbox, “Always connect this way, don't ask again”, at the bottom of the body and above the Scan again footer. The checkbox MUST NOT appear on the connected panel. Checking it MUST NOT connect. It MUST be disabled when the active tab lists no pedals.
+
+While the checkbox is checked, the next pedal the user picks MUST become the only startup pedal, on the link of the tab selected at that pick, together with the model used to connect. Picking another pedal while the checkbox stays checked MUST replace the startup pedal. Unchecking MUST clear the startup pedal and MUST leave the remembered list unchanged. When a startup pedal is saved, the checkbox MUST show checked, and that pedal MUST be indicated in its tab's list with a favorite star icon. Activating that star MUST clear the startup pedal and MUST leave the remembered list unchanged.
+
+When a startup pedal with a known model is saved, opening the app while disconnected MUST try once to connect to that pedal on its saved link without opening Connect first and without opening the browser Bluetooth picker. A successful attempt MUST use the same connect success toast as a manual connect. A failed attempt MUST show one English toast that the favorite pedal failed or is not connected, MUST open Connect on that pedal's tab, and MUST NOT also show the manual connect error toast or the pedal-disconnected toast for that same attempt. If the startup pedal has no known model, the app MUST NOT connect automatically and MUST NOT show that failure toast.
+
+#### Scenario: Checkbox sits above Scan again
+- **WHEN** the user opens Connect while disconnected
+- **THEN** the scan body shows “Always connect this way, don't ask again” above the Scan again footer
+
+#### Scenario: Checking does not connect
+- **WHEN** the user checks “Always connect this way, don't ask again” and does not pick a pedal
+- **THEN** the session stays disconnected
+
+#### Scenario: Next pick becomes the startup pedal
+- **WHEN** the user checks the checkbox and then picks a listed Bluetooth pedal whose label suggests GP-50
+- **THEN** that pedal on Bluetooth is the startup pedal
+- **AND** the session connects with Bluetooth link mode
+
+#### Scenario: Unchecking clears startup only
+- **WHEN** a startup pedal is saved and the user unchecks the checkbox
+- **THEN** the next launch does not try to connect automatically
+- **AND** that pedal remains in the remembered list
+
+#### Scenario: Favorite star clears startup only
+- **WHEN** a startup pedal is saved and the user activates its favorite star
+- **THEN** the next launch does not try to connect automatically
+- **AND** that pedal remains in the remembered list
+
+#### Scenario: Launch connects to the startup pedal
+- **WHEN** a startup pedal with a known model is saved and the user opens the app while that pedal can be opened
+- **THEN** the app connects to it on the saved link without opening Connect first
+- **AND** a connect success toast appears after the onboard name-list arrives
+
+#### Scenario: Failed startup opens Connect
+- **WHEN** a startup pedal is saved and the user opens the app while that pedal cannot be opened
+- **THEN** an English toast says the favorite pedal failed or is not connected
+- **AND** Connect opens on that pedal's tab
+- **AND** the session stays disconnected
+- **AND** the browser Bluetooth picker does not open as part of that attempt
 
 ### Requirement: App patch recall waits for chain sync
 
@@ -560,7 +648,7 @@ After a USB or Bluetooth session is ready, changing an effect slot's loaded mode
 - **WHEN** a USB session is ready with AMP Gain at 30 and an unsolicited live parameter report for AMP Gain 45 arrives
 - **THEN** the snapshot AMP Gain stays 30
 
-### Requirement: Connected session stores, duplicates, and downloads the current patch
+### Requirement: Connected session stores, duplicates, downloads, and uploads the current patch
 
 After a USB or Bluetooth session is ready and the current patch is not syncing, Save MUST store the current working patch on the pedal in the current slot through the open link. Rename MUST store that working patch in the current slot with the new onboard name (at most 10 characters) and MUST update the snapshot name list for that slot. Duplicate onto a different 00–99 slot MUST store the current working patch in that destination slot, MUST update the snapshot name list for the destination, and MUST NOT change the current patch index. Duplicate MUST NOT send patch recall of the destination solely because duplicate ran. A blank name MUST NOT be stored.
 
@@ -568,7 +656,7 @@ Those store writes MUST use the parameter-write SET family (path `01 01 04`, CRC
 
 Download MUST produce a Valeton `.prst` of the current patch for the connected pedal from the current-preset dump the session already holds or re-requests (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the dump to the other model's `.prst`. Download MUST NOT send extra patch recall solely to obtain that file. If no current-preset dump is available, the session MUST NOT invent a file.
 
-Upload MUST apply a Valeton `.prst` of the connected pedal onto the current working patch through the open link (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Upload MUST NOT send a store write. Upload MUST NOT change the current patch index. Upload MUST NOT update the snapshot name list. Upload MUST NOT convert a file from the other model. A file whose model does not match the connected pedal, or that is not a valid Valeton `.prst`, MUST NOT send a write. Upload MUST NOT send extra patch recall solely because upload ran. After a successful upload, the session MUST refresh the current-preset dump for the current patch so the snapshot matches the working buffer. While the current patch is syncing, upload MUST leave the snapshot unchanged and MUST NOT send a write. Disconnect MUST drop working store state.
+Upload MUST apply a valid Valeton `.prst` from either model onto the current working patch through the open link. A same-model file MUST apply that file's chain order, module on/off, factory models, controls the connected catalog includes, and patch volume. A GP-50 file uploaded to a GP-50 session MUST also apply that file's patch BPM. A file from the other model MUST be decoded as that file's model and MUST still be applied: the session MUST write chain order, module on/off, patch volume, every factory model the connected catalog includes (including a user-IR CAB slot both catalogs list), and every control of those models that the connected catalog includes. The session MUST NOT write a factory model the connected catalog does not include, and MUST NOT write a control the connected catalog does not include. The session MUST NOT invent a substitute factory model for an omitted slot; that slot's order and on/off from the file MUST still be written, and the model already on the pedal for that slot MUST be left in place. A GP-50 file's patch BPM MUST NOT be written on a GP-5 session. A GP-5 file MUST NOT overwrite GP-50 patch BPM. The session MUST NOT send a stomp-assignment write or an EXP write solely because upload ran. When the file contains one or more factory models the connected catalog does not include, the session MUST report those omitted models (slot kind and model label) and MUST still apply the rest. When every factory model in the file is in the connected catalog, the session MUST NOT report an omission. A control that exists only on the other model MUST NOT be reported as an omission. Upload MUST NOT send a store write. Upload MUST NOT change the current patch index. Upload MUST NOT update the snapshot name list. Bytes that are not a valid Valeton `.prst` MUST NOT send a write. Upload MUST NOT send extra patch recall solely because upload ran. After a successful upload, the session MUST refresh the current-preset dump for the current patch so the snapshot matches the working buffer. While the current patch is syncing, upload MUST leave the snapshot unchanged and MUST NOT send a write. Disconnect MUST drop working store state.
 
 #### Scenario: USB Save stores the current slot
 - **WHEN** a USB session is ready, the current patch is `42` and synced, and the user Saves
@@ -620,17 +708,49 @@ Upload MUST apply a Valeton `.prst` of the connected pedal onto the current work
 - **AND** the snapshot name for `05` stays `Flow`
 - **AND** the snapshot current patch stays `05`
 - **AND** no extra patch recall is sent solely because upload ran
+- **AND** no omission is reported
 
 #### Scenario: GP-5 upload loads the working patch
 - **WHEN** a GP-5 session is ready, the current patch is synced, and the user uploads a valid GP-5 `.prst`
 - **THEN** that file is applied onto the working patch through the open link
 - **AND** no store write is sent solely because upload ran
 - **AND** the snapshot current patch does not change
+- **AND** no omission is reported
 
-#### Scenario: Wrong-model upload does not write
-- **WHEN** a GP-50 session is ready and the user would upload a GP-5 `.prst`
-- **THEN** the snapshot does not change
-- **AND** no upload write is sent
+#### Scenario: GP-5 session loads a shared GP-50 file
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose factory models are all in the GP-5 catalog
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** no patch BPM write is sent
+- **AND** no omission is reported
+- **AND** the snapshot current patch does not change
+
+#### Scenario: GP-50 session loads a GP-5 file
+- **WHEN** a GP-50 session is ready and the user uploads a valid GP-5 `.prst`
+- **THEN** that file is applied onto the working patch through the open link
+- **AND** no store write is sent solely because upload ran
+- **AND** GP-50 patch BPM is not overwritten by that file
+- **AND** no omission is reported
+- **AND** the snapshot current patch does not change
+
+#### Scenario: GP-50-only model is omitted on GP-5
+- **WHEN** a GP-5 session is ready, PRE is currently a model the GP-5 catalog includes, and the user uploads a valid GP-50 `.prst` whose PRE model is C-Wah
+- **THEN** the session reports that PRE C-Wah was omitted
+- **AND** no model write for C-Wah is sent
+- **AND** the other transferable slots are still written
+- **AND** PRE order and on/off from the file are still written
+- **AND** no store write is sent solely because upload ran
+
+#### Scenario: Shared model drops a GP-50-only control without an omission
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose MOD model exists on both pedals and includes a Sync control that only GP-50 has
+- **THEN** that MOD model is written
+- **AND** no Sync control write is sent
+- **AND** no omission is reported for Sync
+
+#### Scenario: User IR slot transfers across models
+- **WHEN** a GP-5 session is ready and the user uploads a valid GP-50 `.prst` whose CAB model is User IR 03
+- **THEN** a model write for that user-IR slot is sent
+- **AND** no omission is reported for that CAB slot
 
 #### Scenario: Invalid upload does not write
 - **WHEN** a session is ready and the user would upload bytes that are not a valid Valeton `.prst`
@@ -836,33 +956,79 @@ Any later working-patch change that still differs from the baseline (module on/o
 - **WHEN** the user disconnects while the snapshot reports modified
 - **THEN** that working modified state is dropped
 
+### Requirement: Connect awaits the onboard name-list
+
+Opening a USB-MIDI or Bluetooth link MUST request the onboard patch name-list through the device session. The connect operation MUST NOT succeed until that name-list response is received. While waiting, the shell MUST keep the connect loading state (spinner toast). Current-patch identity and the audio-chain dump MUST still run after a successful name-list as today, and MUST NOT block the connect success toast.
+
+If the name-list does not arrive within the existing name-list wait for that link mode, connect MUST fail: the session MUST disconnect, and the connect error MUST be an English message. On USB that message MUST tell the user to verify the pedal is powered on. On Bluetooth that message MUST state that the pedal did not respond with patch names. The system MUST NOT treat a missing name-list as a successful connect with empty names. USB discovery MUST still list MIDI endpoints without probing power state before open.
+
+#### Scenario: USB connect succeeds after name-list
+- **WHEN** the user connects a USB pedal and the onboard name-list arrives
+- **THEN** connect succeeds
+- **AND** the session remains connected with USB link mode
+- **AND** current-patch identity and the chain dump may still continue afterward
+
+#### Scenario: Bluetooth connect succeeds after name-list
+- **WHEN** the user connects a Bluetooth pedal and the onboard name-list arrives
+- **THEN** connect succeeds
+- **AND** the session remains connected with Bluetooth link mode
+- **AND** current-patch identity and the chain dump may still continue afterward
+
+#### Scenario: USB silent name-list fails connect with power hint
+- **WHEN** the user connects a USB pedal and no onboard name-list arrives before the name-list wait ends
+- **THEN** connect fails with an English error telling the user to verify the pedal is powered on
+- **AND** the session is disconnected
+
+#### Scenario: Bluetooth silent name-list fails connect
+- **WHEN** the user connects a Bluetooth pedal and no onboard name-list arrives before the name-list wait ends
+- **THEN** connect fails with an English error that the pedal did not respond with patch names
+- **AND** the session is disconnected
+
+#### Scenario: USB scan does not probe power
+- **WHEN** the USB tab lists devices
+- **THEN** discovery does not open links or send identity solely to filter powered-off pedals
+
 ### Requirement: Connect reports status with a toast
 
-When the user connects a USB or Bluetooth pedal through the device session, the shell MUST show an English toast with a loading spinner while the link is opening, then a success toast when the session is connected or an error toast if connect fails. A failed connect MUST leave the session disconnected. The Connect modal MUST still close after a successful connect. Discovery errors on the USB or Bluetooth tab MUST keep using the modal's English error and MUST NOT by themselves emit a connect toast. The same toast behavior MUST be used on USB and Bluetooth.
+When the user connects a USB or Bluetooth pedal through the device session, the shell MUST close the Connect modal as soon as that connect attempt starts, MUST show an English toast with a loading spinner while the link opens and while the session waits for the onboard name-list, then a success toast only after that name-list has arrived, or an error toast if connect fails (including a missing name-list). A failed connect MUST leave the session disconnected. Discovery errors on the USB or Bluetooth tab MUST keep using the modal's English error and MUST NOT by themselves emit a connect toast. The same toast behavior MUST be used on USB and Bluetooth for loading and success timing; the USB missing-name-list error text MAY differ from Bluetooth as required for the power-on hint.
 
 #### Scenario: USB connect shows loading then success
-- **WHEN** the user picks a USB device whose label suggests GP-5 or GP-50
-- **THEN** a toast shows a loading spinner while the link opens
-- **AND** a success toast appears when the session is connected
+- **WHEN** the user picks a USB device whose label suggests GP-5 or GP-50 and the onboard name-list arrives
+- **THEN** the Connect modal closes as soon as connect starts
+- **AND** a toast shows a loading spinner while the link opens and names are awaited
+- **AND** a success toast appears only after that name-list arrives
 - **AND** the connected session link mode is USB
-- **AND** the Connect modal closes
 
 #### Scenario: Bluetooth connect shows loading then success
-- **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50
-- **THEN** a toast shows a loading spinner while the link opens
-- **AND** a success toast appears when the session is connected
+- **WHEN** the user picks a Bluetooth device whose label suggests GP-5 or GP-50 and the onboard name-list arrives
+- **THEN** the Connect modal closes as soon as connect starts
+- **AND** a toast shows a loading spinner while the link opens and names are awaited
+- **AND** a success toast appears only after that name-list arrives
 - **AND** the connected session link mode is Bluetooth
-- **AND** the Connect modal closes
 
 #### Scenario: Failed connect shows an error toast
 - **WHEN** the user picks a device and opening the link fails
-- **THEN** the loading toast becomes an English error toast
+- **THEN** the Connect modal has already closed when connect started
+- **AND** the loading toast becomes an English error toast
 - **AND** the session stays disconnected
-- **AND** the Connect modal stays open so the user can retry
+
+#### Scenario: USB missing name-list error toast
+- **WHEN** the user picks a USB device and no onboard name-list arrives before the wait ends
+- **THEN** the Connect modal has already closed when connect started
+- **AND** the loading toast becomes an English error toast telling the user to verify the pedal is powered on
+- **AND** the session stays disconnected
+- **AND** no success toast appears for that attempt
+
+#### Scenario: Bluetooth missing name-list error toast
+- **WHEN** the user picks a Bluetooth device and no onboard name-list arrives before the wait ends
+- **THEN** the Connect modal has already closed when connect started
+- **AND** the loading toast becomes an English error toast that the pedal did not respond with patch names
+- **AND** the session stays disconnected
+- **AND** no success toast appears for that attempt
 
 ### Requirement: Disconnect reports status and closes the Connect modal
 
-When a connected session becomes disconnected, the shell MUST show an English toast that the pedal disconnected, and the Connect modal MUST close if it is open. That MUST happen when the user disconnects from the modal and when the open USB or Bluetooth link is lost. After disconnect the chrome control MUST read Connect. Disconnect MUST still close the active link through the device session. The same behavior MUST be used on USB and Bluetooth.
+When a connected session becomes disconnected after a successful connect, the shell MUST show an English toast that the pedal disconnected, and the Connect modal MUST close if it is open. That MUST happen when the user disconnects from the modal and when the open USB or Bluetooth link is lost. After disconnect the chrome control MUST read Connect. Disconnect MUST still close the active link through the device session. The same behavior MUST be used on USB and Bluetooth. A connect attempt that fails after opening the link (including a missing name-list) MUST leave the session disconnected and MUST NOT emit that pedal-disconnected toast; the connect error toast covers that failure.
 
 #### Scenario: User disconnect closes the modal
 - **WHEN** the user disconnects a connected USB or Bluetooth session from the connection modal
@@ -884,6 +1050,12 @@ When a connected session becomes disconnected, the shell MUST show an English to
 - **AND** an English toast reports that the pedal disconnected
 - **AND** the chrome control reads Connect
 
+#### Scenario: Failed connect abort does not toast disconnect
+- **WHEN** a connect attempt opens the link then fails because the onboard name-list never arrives
+- **THEN** the session is disconnected
+- **AND** the connect error toast is shown
+- **AND** no pedal-disconnected toast is shown solely because that failed attempt closed the link
+
 
 ### Requirement: Connected session reads device global settings
 
@@ -891,7 +1063,7 @@ After a USB or Bluetooth session is marked connected, the device session SHALL r
 
 When the dump is decoded, the connected snapshot MUST carry the global values that dump provides for the connected model. A missing dump or a timeout MUST leave those values unknown and MUST NOT invent a value that is written to the pedal. Global values are device-wide: a later current-preset dump MUST NOT clear them. Disconnect MUST drop them. The same request shape MUST be used on USB and Bluetooth. UI MUST NOT send raw MIDI.
 
-A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, REC mode left, REC mode right, footswitch mode, and master volume. A GP-5 dump MUST be able to supply global volume, input level, No CAB, REC level, BT REC, monitor level, screen brightness, and footswitch mode. A GP-5 session MUST NOT expose master volume, REC mode left, or REC mode right. A GP-5 session MUST NOT expose Patch or Stomp as its footswitch mode. A GP-5 session MUST NOT expose input level, No CAB, REC level, BT REC, monitor level, global volume, screen brightness, or footswitch mode by treating a GP-50 globals payload as a GP-5 value. A GP-50 session MUST NOT decode a GP-5 globals payload as GP-50 values.
+A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, REC mode left, REC mode right, footswitch mode, and master volume. A GP-5 dump MUST be able to supply input level, No CAB, REC level, BT REC, monitor level, screen brightness, and footswitch mode. A GP-5 dump MAY also carry a global-volume byte for codec fidelity, but a GP-5 session MUST NOT expose global volume or master volume as a reachable Global settings field. A GP-5 session MUST NOT expose REC mode left or REC mode right. A GP-5 session MUST NOT expose Patch or Stomp as its footswitch mode. A GP-5 session MUST NOT expose input level, No CAB, REC level, BT REC, monitor level, screen brightness, or footswitch mode by treating a GP-50 globals payload as a GP-5 value. A GP-50 session MUST NOT decode a GP-5 globals payload as GP-50 values.
 
 #### Scenario: Globals load after connect
 - **WHEN** a GP-50 session becomes connected and the globals dump decodes input level 0 and master volume 63
@@ -920,15 +1092,17 @@ A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, moni
 - **AND** a GP-50 globals payload does not set GP-5 values
 
 #### Scenario: GP-5 loads its globals after connect
-- **WHEN** a GP-5 session becomes connected and the globals dump decodes input level 0 and global volume 40
-- **THEN** the snapshot carries input level 0 and global volume 40
+- **WHEN** a GP-5 session becomes connected and the globals dump decodes input level 0, No CAB off, and footswitch mode `0-99`
+- **THEN** the snapshot carries input level 0, No CAB off, and footswitch mode `0-99`
 - **AND** the session sent the globals request on the open link
 - **AND** no patch recall is sent solely because that dump arrived
+- **AND** the session does not expose master volume or global volume as a reachable Global settings field
 
 #### Scenario: GP-5 does not inherit GP-50-only globals
 - **WHEN** a GP-5 session decodes a globals dump
 - **THEN** the snapshot does not expose master volume or REC mode
 - **AND** the snapshot does not expose Patch or Stomp as the footswitch mode
+- **AND** the snapshot does not expose global volume as a reachable Global settings field
 
 #### Scenario: A GP-50 payload is not a GP-5 globals dump
 - **WHEN** a GP-5 session receives a globals payload that only a GP-50 session decodes
@@ -940,11 +1114,11 @@ A GP-50 dump MUST be able to supply input level, No CAB, REC level, BT REC, moni
 
 ### Requirement: Connected session writes global settings immediately
 
-After a USB or Bluetooth session is ready, changing a known global setting MUST update the snapshot on-change and MUST send that write on the open link. The session MUST NOT send patch recall or an audio-chain dump solely because a global changed. A global write MUST NOT mark the working patch modified and MUST NOT change the patch baseline. Slider drags for an exposed level, for master volume, for global volume, and for screen brightness MUST coalesce writes (throttle, flush on release). No CAB, REC mode, and footswitch mode MUST send on-change.
+After a USB or Bluetooth session is ready, changing a known global setting MUST update the snapshot on-change and MUST send that write on the open link. The session MUST NOT send patch recall or an audio-chain dump solely because a global changed. A global write MUST NOT mark the working patch modified and MUST NOT change the patch baseline. Slider drags for an exposed level, for master volume (GP-50 only), and for screen brightness MUST coalesce writes (throttle, flush on release). No CAB, REC mode, and footswitch mode MUST send on-change.
 
 GP-50 master volume MUST be official CC 1 with value 0–100, not the relative master step (CC 17). GP-50 footswitch mode MUST be official CC 28, Patch as 0 and Stomp as 127. GP-50 input level, No CAB, REC level, BT REC, monitor level, and REC mode left/right MUST use the parameter-write SET family (path `01 01 04`, CRC-8 + nibble-expand), not live-notify path `01 02 04`, and MUST NOT be sent as a GP-5 write. The session MUST NOT write a global the connected model does not expose.
 
-GP-5 global volume, input level, No CAB, REC level, BT REC, monitor level, and screen brightness MUST use that same parameter-write SET family. GP-5 global volume MUST NOT be official CC 1. GP-5 footswitch mode MUST use that same framing and MUST NOT be official CC 28. A GP-5 BT REC write and a GP-5 monitor-level write MUST NOT reuse the GP-50 effect and flag pair for that row. A GP-5 write MUST NOT be sent on a GP-50 session.
+GP-5 input level, No CAB, REC level, BT REC, monitor level, and screen brightness MUST use that same parameter-write SET family. A GP-5 session MUST NOT write master volume or global volume through Global settings, and MUST NOT send official CC 1 for a GP-5 global edit. GP-5 footswitch mode MUST use that same framing and MUST NOT be official CC 28. A GP-5 BT REC write and a GP-5 monitor-level write MUST NOT reuse the GP-50 effect and flag pair for that row. A GP-5 write MUST NOT be sent on a GP-50 session.
 
 When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inbound report for an exposed global MUST update that snapshot value and MUST NOT mark the working patch modified. A GP-5 live report MUST be applied with the GP-5 row mapping, so a GP-5 monitor report MUST NOT change BT REC and a GP-5 BT REC report MUST NOT change REC mode. USB MUST NOT apply those inbound reports. Inbound CC 1 and CC 28 MUST NOT update the audio chain. Inbound CC 1 and CC 28 MUST NOT change GP-5 global values.
 
@@ -980,10 +1154,17 @@ When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inboun
 - **WHEN** a GP-50 USB session has master volume 63 and an inbound master-volume report arrives
 - **THEN** the snapshot master volume stays 63
 
-#### Scenario: GP-5 global volume is not CC 1
-- **WHEN** a GP-5 session has global volume 40 and the user sets it to 55
-- **THEN** the snapshot global volume is 55
+#### Scenario: GP-5 input level write is not CC 1
+- **WHEN** a GP-5 session has input level 0 and the user sets it to 6
+- **THEN** the snapshot input level is 6
+- **AND** that change is sent on the open link as a parameter-write SET
 - **AND** the pedal is not sent official CC 1 for that edit
+- **AND** the working patch is not marked modified
+
+#### Scenario: GP-5 global volume is not CC 1
+- **WHEN** a GP-5 session is ready
+- **THEN** Global settings does not expose a global-volume or master-volume write
+- **AND** no official CC 1 is sent solely as a GP-5 Global settings edit
 - **AND** the working patch is not marked modified
 
 #### Scenario: GP-5 footswitch mode is not CC 28
@@ -999,8 +1180,8 @@ When the link can apply live pedal state (`liveFromPedal`, Bluetooth), an inboun
 - **AND** the working patch is not marked modified
 
 #### Scenario: USB ignores a GP-5 live global report
-- **WHEN** a GP-5 USB session has global volume 40 and an inbound global-volume report arrives
-- **THEN** the snapshot global volume stays 40
+- **WHEN** a GP-5 USB session has input level 0 and an inbound input-level report arrives
+- **THEN** the snapshot input level stays 0
 
 ### Requirement: Connected session reads and writes stomp assignment
 

@@ -4,6 +4,7 @@
  *
  * Usage:
  *   node scripts/release.mjs 0.1.2 --note "Faster reconnect"
+ *   node scripts/release.mjs 1.0.0-beta.1 --note "First beta"
  *   node scripts/release.mjs 0.1.2 --note "Faster reconnect" --note "Fewer dropouts" --no-push
  *   node scripts/release.mjs --check
  */
@@ -29,9 +30,10 @@ const versionFiles = [
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/release.mjs <x.y.z> --note "English changelog bullet" [--note "..."] [--no-push] [--dry-run]
+  node scripts/release.mjs <version> --note "English changelog bullet" [--note "..."] [--no-push] [--dry-run]
   node scripts/release.mjs --check
 
+Version is x.y.z, x.y.z-beta.N, or x.y.z-rc.N.
 Updates the changelog and every app version number, commits, creates annotated tag v<version>, and pushes the branch and the tag.
 --no-push stops after the local tag. --check only verifies the version numbers match.`);
 }
@@ -95,17 +97,35 @@ function gitInherit(args) {
   execFileSync("git", args, { cwd: root, stdio: "inherit" });
 }
 
+const VERSION_PATTERN =
+  /^(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(0|[1-9]\d*))?$/;
+
+const CHANNEL_RANK = { "": 2, beta: 0, rc: 1 };
+
 function parseSemver(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  if (!match) fail(`Version must be x.y.z, got ${version}`);
-  return match.slice(1).map(Number);
+  const match = VERSION_PATTERN.exec(version);
+  if (!match) {
+    fail(
+      `Version must be x.y.z, x.y.z-beta.N, or x.y.z-rc.N, got ${version}`,
+    );
+  }
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    channel: match[4] ?? "",
+    pre: match[5] === undefined ? -1 : Number(match[5]),
+  };
 }
 
 function compareSemver(left, right) {
-  for (let i = 0; i < 3; i++) {
-    if (left[i] !== right[i]) return left[i] - right[i];
+  if (left.major !== right.major) return left.major - right.major;
+  if (left.minor !== right.minor) return left.minor - right.minor;
+  if (left.patch !== right.patch) return left.patch - right.patch;
+  if (left.channel !== right.channel) {
+    return CHANNEL_RANK[left.channel] - CHANNEL_RANK[right.channel];
   }
-  return 0;
+  return left.pre - right.pre;
 }
 
 function count(haystack, needle) {
@@ -130,8 +150,10 @@ function replaceExactlyOnce(label, source, from, to) {
 
 function currentVersion() {
   const pkg = JSON.parse(read("package.json"));
-  if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) {
-    fail(`package.json version is not x.y.z: ${pkg.version}`);
+  if (!VERSION_PATTERN.test(pkg.version)) {
+    fail(
+      `package.json version is not x.y.z, x.y.z-beta.N, or x.y.z-rc.N: ${pkg.version}`,
+    );
   }
   return pkg.version;
 }

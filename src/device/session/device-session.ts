@@ -20,7 +20,6 @@ import {
 } from "@/device/chain";
 import {
   ChainDecoder,
-  decodePresetDump,
   emptyStomps,
   type ChainDumpResult,
   type StompAssignment,
@@ -52,7 +51,6 @@ import { describeMidi, type InboundMidiEvent } from "@/device/midi-log";
 import type { DeviceModel } from "@/device/models";
 import {
   currentPatchFilename,
-  decodePrstFile,
   encodePrstFile,
   readDumpPatchBpm,
   readDumpPatchVolume,
@@ -77,11 +75,12 @@ import {
   type LiveFollowHost,
 } from "@/device/session/inbound";
 import {
-  encodeUploadedPatchWrites,
   overlayDumpPatchGlobals,
+  planUploadedPatch,
   UPLOAD_COMMIT_GAP_MS,
   UPLOAD_MODEL_GAP_MS,
   UPLOAD_WRITE_GAP_MS,
+  type OmittedFactoryModel,
 } from "@/device/session/patch-io";
 import {
   clampPatch,
@@ -130,9 +129,13 @@ const PATCH_BPM_MAX = 260;
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
+export type UploadPatchPreview =
+  | { ok: false; reason: "invalid" }
+  | { ok: true; fileModel: DeviceModel; omissions: OmittedFactoryModel[] };
 export type UploadPatchResult =
-  | { ok: true }
-  | { ok: false; reason: "invalid" | "wrong-model" | "busy" | "disconnected" };
+  | { ok: true; omissions: OmittedFactoryModel[] }
+  | { ok: false; reason: "invalid" | "busy" | "disconnected" };
+export type { OmittedFactoryModel };
 
 export type SessionSnapshot =
   | { status: "disconnected" }
@@ -162,6 +165,13 @@ export type SessionSnapshot =
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
 export const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
+
+const USB_NAME_LIST_MISSING =
+  "Check that the pedal is powered on.";
+const BLUETOOTH_NAME_LIST_MISSING =
+  "The pedal did not respond with patch names.";
+const USB_SYSEX_UNAVAILABLE =
+  "MIDI SysEx is not available on this connection.";
 
 export class DeviceSession {
   private readonly transport: MidiTransport;
@@ -221,6 +231,10 @@ export class DeviceSession {
    */
   private postChainDeviceAsks = false;
   private dropping = false;
+  /** True once a name-list identity event was applied for the current connect. */
+  private nameListReceived = false;
+  /** Test hook so checks can fail a silent name-list without waiting 8–15s. */
+  private nameTimeoutMsOverride: { usb: number; bluetooth: number } | null = null;
   private readonly writes: SessionWriteQueue;
 
   constructor(
@@ -248,6 +262,11 @@ export class DeviceSession {
 
   getSnapshot(): SessionSnapshot {
     return this.snapshot;
+  }
+
+  /** Shorten name-list wait for session self-checks only. */
+  setNameTimeoutMsForTests(next: { usb: number; bluetooth: number } | null): void {
+    this.nameTimeoutMsOverride = next;
   }
 
   getInboundLog(): InboundMidiEvent[] {
@@ -295,6 +314,10 @@ export class DeviceSession {
     return this.bluetooth.discover(options);
   }
 
+  forgetBluetooth(id: string): Promise<void> {
+    return this.bluetooth.forget(id);
+  }
+
   async connect(endpoint: LinkEndpoint, model: DeviceModel): Promise<void> {
     this.beginGeneration();
     await Promise.all([this.transport.close(), this.bluetooth.close()]);
@@ -306,6 +329,7 @@ export class DeviceSession {
     this.sysex.reset();
     this.writes.clear();
     this.postChainDeviceAsks = false;
+    this.nameListReceived = false;
     this.dropPatchDump();
     const generation = this.syncGeneration;
     if (endpoint.kind === "bluetooth") {
@@ -353,7 +377,8 @@ export class DeviceSession {
     }
     this.emitSnapshot();
     this.emitLog();
-    void this.runIdentitySync(generation);
+    await this.awaitNameList(generation);
+    void this.runPostNameIdentity(generation);
   }
 
   async disconnect(): Promise<void> {
@@ -373,6 +398,7 @@ export class DeviceSession {
       this.globalsDump.reset();
       this.sysex.reset();
       this.postChainDeviceAsks = false;
+      this.nameListReceived = false;
       this.dropPatchDump();
       this.dropping = false;
       this.emitSnapshot();
@@ -507,6 +533,21 @@ export class DeviceSession {
     };
   }
 
+  previewUploadPatch(bytes: Uint8Array): UploadPatchPreview {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "invalid" };
+    }
+    const planned = planUploadedPatch(bytes, this.snapshot.model, this.snapshot.linkMode);
+    if (!planned.ok) {
+      return { ok: false, reason: "invalid" };
+    }
+    return {
+      ok: true,
+      fileModel: planned.fileModel,
+      omissions: planned.omissions,
+    };
+  }
+
   async uploadCurrentPatch(bytes: Uint8Array): Promise<UploadPatchResult> {
     if (this.snapshot.status !== "connected") {
       return { ok: false, reason: "disconnected" };
@@ -517,18 +558,10 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       return { ok: false, reason: "disconnected" };
     }
-    const parsed = decodePrstFile(bytes);
-    if (!parsed) {
+    const planned = planUploadedPatch(bytes, this.snapshot.model, this.snapshot.linkMode);
+    if (!planned.ok) {
       return { ok: false, reason: "invalid" };
     }
-    if (parsed.model !== this.snapshot.model) {
-      return { ok: false, reason: "wrong-model" };
-    }
-    const chain = decodePresetDump(parsed.dump, parsed.model, parsed.model);
-    if (!chain) {
-      return { ok: false, reason: "invalid" };
-    }
-    const previousExport = this.snapshot.canExportPatch;
     this.patchConfirm = "off";
     this.snapshot = {
       ...this.snapshot,
@@ -537,27 +570,9 @@ export class DeviceSession {
       modified: false,
     };
     this.emitSnapshot();
-    const steps = encodeUploadedPatchWrites(
-      this.snapshot.model,
-      this.snapshot.linkMode,
-      chain,
-      parsed.volume,
-      parsed.bpm,
-    );
-    if (!steps) {
-      if (this.snapshot.status === "connected") {
-        this.snapshot = {
-          ...this.snapshot,
-          chainSync: "idle",
-          canExportPatch: previousExport,
-          modified: this.isWorkingModified(this.snapshot.chain, "idle"),
-        };
-        this.emitSnapshot();
-      }
-      return { ok: false, reason: "invalid" };
-    }
     this.writes.clear();
     const linkMode = this.snapshot.linkMode;
+    const { steps, omissions } = planned;
     for (let index = 0; index < steps.length; index += 1) {
       if (this.snapshot.status !== "connected") {
         return { ok: false, reason: "disconnected" };
@@ -577,7 +592,7 @@ export class DeviceSession {
       return { ok: false, reason: "disconnected" };
     }
     this.refreshChain(false);
-    return { ok: true };
+    return { ok: true, omissions };
   }
 
   async toggleChainSlot(id: ChainSlotId): Promise<void> {
@@ -1008,24 +1023,45 @@ export class DeviceSession {
     this.writes.flush(writeKey);
   }
 
-  private async runIdentitySync(generation: number): Promise<void> {
+  /**
+   * Blocks `connect` until a name-list identity event arrives. Missing names
+   * disconnect and reject; current-patch / chain continue after resolve.
+   */
+  private async awaitNameList(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    const linkMode = this.snapshot.linkMode;
+    if (linkMode === "usb" && !this.transport.sysexEnabled()) {
+      await this.disconnect();
+      throw new Error(USB_SYSEX_UNAVAILABLE);
+    }
+
+    await this.sendIdentity("name-list", generation);
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    await this.waitFor(
+      this.namesWaiters,
+      (this.nameTimeoutMsOverride ?? NAME_TIMEOUT_MS)[linkMode],
+      generation,
+    );
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      throw new Error("Could not connect.");
+    }
+    if (!this.nameListReceived) {
+      await this.disconnect();
+      throw new Error(
+        linkMode === "usb" ? USB_NAME_LIST_MISSING : BLUETOOTH_NAME_LIST_MISSING,
+      );
+    }
+  }
+
+  private async runPostNameIdentity(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
       return;
     }
     const linkMode = this.snapshot.linkMode;
-    if (linkMode === "usb" && !this.transport.sysexEnabled()) {
-      this.finishSync(generation);
-      return;
-    }
-
-    await this.sendIdentity("name-list", generation);
-    if (!this.isCurrentGeneration(generation)) {
-      return;
-    }
-    await this.waitFor(this.namesWaiters, NAME_TIMEOUT_MS[linkMode], generation);
-    if (!this.isCurrentGeneration(generation)) {
-      return;
-    }
 
     await this.sendIdentity("current-patch", generation);
     if (!this.isCurrentGeneration(generation)) {
@@ -1178,6 +1214,7 @@ export class DeviceSession {
       return;
     }
     if (event.type === "name-list") {
+      this.nameListReceived = true;
       this.snapshot = { ...this.snapshot, patchNames: event.names };
       this.emitSnapshot();
       this.releaseWaiters(this.namesWaiters);

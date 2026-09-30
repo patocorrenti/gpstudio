@@ -29,11 +29,12 @@ context: |
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
   current-patch store SETs of that family (114a: Save / rename / duplicate
-  onto another slot), current-patch file export of the dump we already request
-  (Valeton .prst for the connected model; not Library import, not cross-model conversion),
+  onto another slot),   current-patch file export of the dump we already request
+  (Valeton .prst for the connected model; not Library import),
   current-patch .prst import onto the selected slot (working-buffer writes;
-  Save / rename / duplicate remain store 114a;
-  GP-50 file → GP-50 session, GP-5 file → GP-5 session; not Library import, not conversion),
+  Save / rename / duplicate remain store 114a; either model's .prst may apply
+  through catalog overlap with omitted factory models reported; download stays
+  native; not Library import),
   Bluetooth live model (command 07) and live control (command 08) follow,
   Controller drag-and-drop of movable modules, per-patch stomp
   assignment (dump decode + SET family 114d; GP-5 one stomp, GP-50 two;
@@ -64,7 +65,7 @@ context: |
       - Browser: Web MIDI (navigator.requestMIDIAccess)
       - Desktop/mobile: Rust midir via Tauri commands/events (WebView2 does not expose Web MIDI)
     - A USB endpoint has id, label, kind usb-midi, optional suggestedModel
-    - Bluetooth uses BluetoothLink (discover / open / send / subscribe / close)
+    - Bluetooth uses BluetoothLink (discover / open / send / subscribe / close / forget)
       - Browser: Web Bluetooth
       - Desktop: Rust btleplug via Tauri commands (WebView2 does not expose Web Bluetooth)
       - A Bluetooth endpoint has id, label, kind bluetooth, optional suggestedModel
@@ -149,9 +150,13 @@ context: |
     modal. Toasts are not a route.
   - Controller is the home page (`/`). Connect is global connection state, not a route.
   - Disconnected control label: Connect. Activating it opens a modal with USB
-    and Bluetooth tabs (default USB). USB: MIDI permission, endpoints, connect,
-    suggested/confirm model, copy as one-way and super fast. Bluetooth: two-way
-    and slower; scan/connect GATT; patch previous/select/next over the encoder.
+    and Bluetooth tabs (default USB). The modal remembers chosen pedals and
+    lists them with the current scan on the matching tab. USB: MIDI permission,
+    endpoints, connect from the list, suggested/confirm model, copy as one-way
+    and super fast. Bluetooth: two-way and slower; scan GATT. The web picker
+    lists the chosen pedal without connecting; the user connects by picking it
+    in the list. An optional startup pedal connects on launch. Patch
+    previous/select/next over the encoder.
     Connected label and link
     mode are defined in device-connection.
   - Controller: patch bar (previous / 00–99 select / next, plus Reload, Save, rename,
@@ -194,10 +199,10 @@ context: |
     route) and edits device globals immediately without patch Save: master
     volume via CC 1 first, then input / No CAB / REC / BT REC / monitor /
     REC mode via family 1111 SETs, Patch|Stomp via CC 28. On GP-5 the same
-    modal lists Global volume first (1111 effect 2 / flag 2, not CC 1), then
-    input / No CAB / REC / BT REC (effect 5 / flag 4) / monitor (effect 2 /
-    flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 / A-Z / CTL /
-    Tuner via family 1115, not CC 28. No REC mode and no Global BPM on GP-5.
+    modal lists input / No CAB / REC / BT REC (effect 5 / flag 4) / monitor
+    (effect 2 / flag 4) / screen brightness, and footswitch mode 0-99 / 0-9 /
+    A-Z / CTL / Tuner via family 1115, not CC 28. No master volume, no Global
+    volume, no REC mode, and no Global BPM on GP-5.
     Bluetooth applies live global reports for the connected model; USB does not.
     Tuner write (CC 58) is in scope; inbound tuner and a pitch display stay later.
     Family 1142 stays
@@ -209,8 +214,8 @@ context: |
   - Mobile Tauri app
   - Full preset library read/write, import, library reorder, Library .prst
     import (current-patch store / rename / duplicate / connected-model .prst
-    export and current-patch .prst import onto the selected slot are in scope;
-    not the Library route and not GP-5/GP-50 conversion)
+    export and current-patch .prst import onto the selected slot from either
+    model are in scope; not the Library route)
   - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
@@ -223,8 +228,9 @@ context: |
     GP-50 master volume (CC 1), GP-50 Patch|Stomp (CC 28), stomp press
     (GP-5 CC 69, GP-50 CC 69 and CC 70, value 127), and tuner on/off
     (CC 58, 127 on / 0 off) writes are in
-    scope on USB and Bluetooth. GP-5 global volume, levels, screen brightness,
+    scope on USB and Bluetooth. GP-5 levels, screen brightness,
     and footswitch modes are in scope via their SETs, not via CC 1 or CC 28.
+    There is no Global-settings write for GP-5 global volume.
     Inbound tuner CC and an in-app pitch display stay out.
   - Pedal GLOBAL rows with no MIDI path (EXP calibrate, bypass type, EXP/FS
     assign, GP-50 display, MIDI routing, Auto CAB, language, factory reset, About).
@@ -260,8 +266,9 @@ context: |
     are Patone-owned codecs. Read reference/; do not paste that source into src/.
     Current-patch download encodes a Valeton .prst for the connected model
     from that dump; current-patch upload is the inverse into the working patch
-    (owned writes, not a dump SET and not store 114a). Do not paste reference/
-    builders or convert across models.
+    (owned writes, not a dump SET and not store 114a) and may apply the other
+    model's .prst through catalog overlap. Do not paste reference/ builders.
+    Download stays native to the connected model.
   - Patch recall: USB uses MIDI CC 0 from the official manuals; Bluetooth uses
     parameter-write SET family 1143 (reference editors; not CC 0 over GATT).
   - Full editor SysEx is documented in its own design.md when that change starts.
@@ -298,8 +305,8 @@ rules:
       import, IR/NAM file upload, or mobile packaging in phase 1 changes.
       IR-name read and user-IR CAB catalog/select are in scope.
     - Current-patch store SET of the existing parameter-write family and
-      current-patch .prst export/import for the connected model are allowed; they are
-      not the Library route and not cross-model conversion
+      current-patch .prst export (native) plus import from either model are
+      allowed; they are not the Library route
     - Connect already offers USB vs Bluetooth tabs and GATT scan/connect; do not revert to USB-only copy or treat the links as interchangeable
     - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
       refactor, Purpose/typo in specs), do not scaffold a change; say it is
@@ -339,7 +346,7 @@ rules:
       and GP-50 tempo is CC 73/74; family 1142 stays
       the upload path; Library import/reorder of .prst stay later
       (current-patch .prst export of the connected model and load into the
-      working patch are in scope; no GP-5/GP-50 conversion)
+      working patch from either model are in scope; download stays native)
     - "Links are asymmetric: USB one-way/fast, Bluetooth two-way/slower. DeviceSession records linkMode; later features disable via capabilities (liveFromPedal), they do not fork the UI"
     - DeviceSession owns GP-5 vs GP-50 profiles and official CC maps
     - NS on bypasses AMP/CAB visually (prohibition overlay); do not rewrite

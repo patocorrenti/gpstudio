@@ -10,16 +10,15 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { BluetoothEndpoint } from "@/bluetooth/types";
-import type { LinkEndpoint } from "@/device/endpoint";
 import type { LinkMode } from "@/device/link";
-import type { MidiEndpoint } from "@/midi/types";
+import type { ListedPedal } from "@/app/preferences";
 import { EndpointList } from "@/features/connect/EndpointList";
 
 function ModeNotes({
@@ -49,16 +48,26 @@ export function ScanPanel({
   bleEndpoints,
   error,
   busy,
+  startupChecked,
+  startupDisabled,
+  onStartupChecked,
   onPickDevice,
+  onForget,
+  onClearFavorite,
   onRefresh,
 }: {
   linkTab: LinkMode;
   onLinkTabChange: (value: LinkMode) => void;
-  usbEndpoints: MidiEndpoint[];
-  bleEndpoints: BluetoothEndpoint[];
+  usbEndpoints: Array<ListedPedal & { favorite: boolean }>;
+  bleEndpoints: Array<ListedPedal & { favorite: boolean }>;
   error: string | null;
   busy: boolean;
-  onPickDevice: (endpoint: LinkEndpoint) => void;
+  startupChecked: boolean;
+  startupDisabled: boolean;
+  onStartupChecked: (checked: boolean) => void;
+  onPickDevice: (endpoint: ListedPedal) => void;
+  onForget: (endpoint: ListedPedal) => void;
+  onClearFavorite: () => void;
   onRefresh: () => void;
 }) {
   return (
@@ -129,6 +138,8 @@ export function ScanPanel({
             endpoints={usbEndpoints}
             busy={busy}
             onPick={onPickDevice}
+            onForget={onForget}
+            onClearFavorite={onClearFavorite}
           />
         </TabsContent>
         <TabsContent value="bluetooth" className="flex flex-col gap-4">
@@ -174,9 +185,29 @@ export function ScanPanel({
             endpoints={bleEndpoints}
             busy={busy}
             onPick={onPickDevice}
+            onForget={onForget}
+            onClearFavorite={onClearFavorite}
           />
         </TabsContent>
       </Tabs>
+      <div className="flex items-center justify-center gap-2">
+        <Checkbox
+          id="always-use-pedal"
+          checked={startupChecked}
+          disabled={startupDisabled}
+          onCheckedChange={(value) => onStartupChecked(value === true)}
+        />
+        <label
+          htmlFor="always-use-pedal"
+          className={
+            startupDisabled
+              ? "text-sm text-muted-foreground"
+              : "text-sm leading-snug"
+          }
+        >
+          Always connect this way, don't ask again
+        </label>
+      </div>
       {linkTab === "usb" || linkTab === "bluetooth" ? (
         <DialogFooter>
           <Button

@@ -51,72 +51,74 @@ export function PedalFootControls() {
   const tunerOn = snapshot.tunerOn;
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <Popover
-        open={open}
-        onOpenChange={(next) => {
-          if (busy && next) {
-            return;
-          }
-          if (next) {
-            navigate("/");
-          }
-          setOpen(next);
-        }}
-      >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+    <div className="hidden md:block">
+      <TooltipProvider delayDuration={0}>
+        <Popover
+          open={open}
+          onOpenChange={(next) => {
+            if (busy && next) {
+              return;
+            }
+            if (next) {
+              navigate("/");
+            }
+            setOpen(next);
+          }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8"
+                  disabled={busy}
+                  aria-haspopup="menu"
+                  aria-expanded={open}
+                  aria-label="Press Footswitch"
+                >
+                  <SportShoe className="size-4" aria-hidden />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Press Footswitch</TooltipContent>
+          </Tooltip>
+          <PopoverContent align="end" className="w-44 gap-0.5 p-1">
+            {presses.map((press) => (
               <Button
+                key={press.index}
                 type="button"
-                variant="outline"
-                size="icon"
-                className="size-8"
+                variant="ghost"
                 disabled={busy}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                aria-label="Press Footswitch"
+                className="h-8 w-full justify-start px-2 font-normal"
+                aria-label={press.aria}
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/");
+                  void session.pressStomp(press.index);
+                }}
               >
-                <SportShoe className="size-4" aria-hidden />
+                {press.label}
               </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Press Footswitch</TooltipContent>
-        </Tooltip>
-        <PopoverContent align="end" className="w-44 gap-0.5 p-1">
-          {presses.map((press) => (
+            ))}
             <Button
-              key={press.index}
               type="button"
-              variant="ghost"
+              variant={tunerOn ? "secondary" : "ghost"}
               disabled={busy}
               className="h-8 w-full justify-start px-2 font-normal"
-              aria-label={press.aria}
+              aria-label={tunerOn ? "Exit tuner" : "Enter tuner"}
+              aria-pressed={tunerOn}
               onClick={() => {
-                setOpen(false);
                 navigate("/");
-                void session.pressStomp(press.index);
+                void session.setTuner(!tunerOn);
               }}
             >
-              {press.label}
+              Tuner
             </Button>
-          ))}
-          <Button
-            type="button"
-            variant={tunerOn ? "secondary" : "ghost"}
-            disabled={busy}
-            className="h-8 w-full justify-start px-2 font-normal"
-            aria-label={tunerOn ? "Exit tuner" : "Enter tuner"}
-            aria-pressed={tunerOn}
-            onClick={() => {
-              navigate("/");
-              void session.setTuner(!tunerOn);
-            }}
-          >
-            Tuner
-          </Button>
-        </PopoverContent>
-      </Popover>
-    </TooltipProvider>
+          </PopoverContent>
+        </Popover>
+      </TooltipProvider>
+    </div>
   );
 }

@@ -27,13 +27,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { displayModelName, type DeviceModel } from "@/device/models";
-import { decodePrstFile } from "@/device/patch-store";
+import { type DeviceModel } from "@/device/models";
 import {
+  chainSlotLabel,
   type DeviceSession,
   formatPatch,
   formatPatchOption,
   PATCH_COUNT,
+  type OmittedFactoryModel,
 } from "@/device/session";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { PatchLevels } from "@/features/controller/PatchLevels";
@@ -167,7 +168,10 @@ export function PatchBar({
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateDest, setDuplicateDest] = useState(String((patch + 1) % PATCH_COUNT));
   const [overwriteOpen, setOverwriteOpen] = useState(false);
-  const [pendingUpload, setPendingUpload] = useState<Uint8Array | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    bytes: Uint8Array;
+    omissions: OmittedFactoryModel[];
+  } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const destIndex = Number.parseInt(duplicateDest, 10);
@@ -235,22 +239,16 @@ export function PatchBar({
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const decoded = decodePrstFile(bytes);
-    if (!decoded) {
+    const preview = session.previewUploadPatch(bytes);
+    if (!preview.ok) {
       setPendingUpload(null);
       setUploadError("This file is not a valid Valeton preset.");
       return;
     }
-    if (decoded.model !== model) {
-      setPendingUpload(null);
-      setUploadError(
-        `This preset is for ${displayModelName(decoded.model)}. Connect a ${displayModelName(decoded.model)} to upload it.`,
-      );
-      return;
-    }
     setUploadError(null);
-    if (modified) {
-      setPendingUpload(bytes);
+    const crossModel = preview.fileModel !== model;
+    if (crossModel || modified) {
+      setPendingUpload({ bytes, omissions: preview.omissions });
       return;
     }
     uploadPatchBytes(bytes);
@@ -260,7 +258,7 @@ export function PatchBar({
     if (!pendingUpload) {
       return;
     }
-    const bytes = pendingUpload;
+    const bytes = pendingUpload.bytes;
     setPendingUpload(null);
     uploadPatchBytes(bytes);
   }
@@ -275,9 +273,7 @@ export function PatchBar({
               ? "Pedal disconnected."
               : result.reason === "busy"
                 ? "The patch is still syncing."
-                : result.reason === "wrong-model"
-                  ? "This preset is for a different pedal."
-                  : "This file is not a valid Valeton preset.",
+                : "This file is not a valid Valeton preset.",
           );
         }
         if (session.getSnapshot().status !== "connected") {
@@ -586,6 +582,15 @@ export function PatchBar({
                 This will load the file into patch{" "}
                 {formatPatchOption(patch, currentName)}.
               </span>
+              {pendingUpload && pendingUpload.omissions.length > 0 ? (
+                <span className="mt-2 block">
+                  These models are not on this pedal and will be skipped:{" "}
+                  {pendingUpload.omissions
+                    .map((item) => `${chainSlotLabel(item.kind)} ${item.label}`)
+                    .join(", ")}
+                  .
+                </span>
+              ) : null}
               <span className="mt-2 block">It will overwrite any unsaved changes.</span>
             </DialogDescription>
           </DialogHeader>
