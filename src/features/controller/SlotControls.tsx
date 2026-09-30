@@ -1,4 +1,5 @@
-import { Info } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { ModelSelect } from "@/features/controller/ModelSelect";
+import { cn } from "@/lib/utils";
 
 function formatControlValue(control: FxControl, value: number): string {
   if (control.display === "toggle") {
@@ -118,6 +120,7 @@ function SlotControlPanel({
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
+  const [collapsed, setCollapsed] = useState(false);
   const model = modelById(slot.modelId);
   if (!model) {
     return null;
@@ -135,7 +138,12 @@ function SlotControlPanel({
       className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
       aria-label={`${kindLabel} controls`}
     >
-      <div className="flex items-center gap-3 -mr-2 pb-2">
+      <div
+        className={cn(
+          "flex items-center gap-3 -mr-2",
+          collapsed ? "pb-0 md:pb-2" : "pb-2",
+        )}
+      >
         <h2 className="shrink-0">
           <ChainSlotIcon id={slot.id} size="sm" />
           <span className="sr-only">{kindLabel}</span>
@@ -180,8 +188,35 @@ function SlotControlPanel({
             </Dialog>
           ) : null}
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 text-muted-foreground md:hidden"
+          aria-expanded={!collapsed}
+          aria-label={
+            collapsed
+              ? `Expand ${kindLabel} controls`
+              : `Collapse ${kindLabel} controls`
+          }
+          onClick={() => {
+            setCollapsed((next) => !next);
+          }}
+        >
+          <ChevronDown
+            className={cn(
+              "size-4 transition-transform",
+              collapsed && "-rotate-90",
+            )}
+          />
+        </Button>
       </div>
-      <div className="flex flex-col gap-3">
+      <div
+        className={cn(
+          "flex-col gap-3",
+          collapsed ? "hidden md:flex" : "flex",
+        )}
+      >
         {controlsForPedal(model, pedal).map((control) => (
           <SlotControl
             key={control.index}
