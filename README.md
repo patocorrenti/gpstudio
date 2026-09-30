@@ -69,6 +69,22 @@ The [Tauri](https://tauri.app/) shell is not an official release. To run it loca
 npm run tauri dev
 ```
 
+## Contributing
+
+Bug reports and contribution notes are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+External code contributions are not open yet. Security issues: see [SECURITY.md](SECURITY.md).
+
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 Patricio Correnti.
+This project is licensed under the [MIT License](LICENSE).
+
+Copyright (c) 2026 Patricio Correnti.
+
+## Trademark notice
+
+Valeton, GP-5, and GP-50 are trademarks of their respective owners. Use of these names is for identification only and does not imply any endorsement.
+
+## Non-affiliation notice
+
+GP Studio is an independent project. It is not affiliated with, endorsed by, or sponsored by Valeton.
