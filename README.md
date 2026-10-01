@@ -1,8 +1,10 @@
-<p align="center">
-  <img src="src/assets/img/gp-studio-logo.svg" alt="GP Studio" width="120" />
-</p>
 
-# GP Studio
+<img src="src/assets/img/gp-studio-logo.svg" alt="GP Studio" width="120" />
+
+<a href="https://gpstudio.patocorrenti.com">
+  <img src="src/assets/img/try-gp-studio.svg" alt="Try GP Studio, it's free!" />
+</a>
+
 
 ## What is GP Studio?
 
@@ -21,8 +23,6 @@ The app is available at [gpstudio.patocorrenti.com](https://gpstudio.patocorrent
 - **Valeton GP-5** — USB and Bluetooth
 - **Valeton GP-50** — USB and Bluetooth
 
-
-
 ## Features
 
 - Quick connection over USB or Bluetooth, with remembered pedals and preferences
@@ -31,11 +31,7 @@ The app is available at [gpstudio.patocorrenti.com](https://gpstudio.patocorrent
 - Control the pedal footswitches from the app
 - Runs in the browser, with a desktop version in development
 
-
-
 ## Installation
-
-
 
 ### Web app
 
@@ -70,8 +66,6 @@ npm install
 npm run dev
 ```
 
-
-
 ### Desktop shell (optional)
 
 The [Tauri](https://tauri.app/) shell is not an official release. To run it locally you also need a Rust toolchain and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform:
@@ -79,8 +73,6 @@ The [Tauri](https://tauri.app/) shell is not an official release. To run it loca
 ```bash
 npm run tauri dev
 ```
-
-
 
 ## Contributing
 
