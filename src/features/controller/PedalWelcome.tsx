@@ -1,7 +1,6 @@
-import logo from "@/assets/img/gpstudio-logo-black.svg";
-import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
-import pedalsLineBlack from "@/assets/img/gp5-50-line-black.png";
-import pedalsLineWhite from "@/assets/img/gp5-50-line-white.png";
+import logo from "@/assets/img/gp-studio-logo.svg";
+import pedalsConnectBlack from "@/assets/img/pedal-connect-black.png";
+import pedalsConnectLight from "@/assets/img/pedal-connect-light.png";
 import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
 
 export function PedalWelcome() {
@@ -15,42 +14,36 @@ export function PedalWelcome() {
       aria-label="Connect a pedal"
       onClick={openConnect}
     >
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-muted-foreground dark:text-muted-foreground/70">
           Welcome to
         </p>
         <img
           src={logo}
           alt="GP Studio"
-          className="h-[52px] w-auto dark:hidden"
-        />
-        <img
-          src={logoWhite}
-          alt=""
-          aria-hidden
-          className="hidden h-[52px] w-auto dark:block"
+          className="h-[30px] w-auto dark:invert"
         />
         <span
           aria-hidden
-          className="mt-2.5 rounded-[3px] bg-emerald-400 px-1.5 py-px text-[10px] font-bold tracking-[0.18em] text-black/80"
+          className="mt-1 rounded-[10px] bg-emerald-400 px-2 py-0.5 text-[10px] font-bold tracking-[0.18em] text-black/80"
         >
           Closed Beta
         </span>
       </div>
-      <div className="mt-2 flex flex-col items-center gap-2">
+      <div className="mt-[-30px] flex flex-col items-center gap-2">
         <img
-          src={pedalsLineBlack}
+          src={pedalsConnectBlack}
           alt=""
           aria-hidden
-          className="w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
+          className="w-[400px] opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
         />
         <img
-          src={pedalsLineWhite}
+          src={pedalsConnectLight}
           alt=""
           aria-hidden
-          className="hidden w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:block"
+          className="hidden w-[450px] opacity-70 transition-opacity group-hover:opacity-100 dark:block"
         />
-        <p>Connect a Valeton GP5 or GP50 to get started...</p>
+        <p>Connect a Valeton GP5 or GP50<br />to get started...</p>
       </div>
     </button>
   );
