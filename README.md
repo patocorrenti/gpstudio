@@ -2,29 +2,36 @@
 
 ## What is GP Studio?
 
-GP Studio is an independent controller for Valeton GP-5 and GP-50 pedals.
+GP Studio is an independent controller for the Valeton GP-5 and GP-50 multi-effects processors.
 
-I built it because I wanted a real desktop workflow — every control on screen at once, with instant connection over USB or Bluetooth.
+I built it because I wanted a proper desktop workflow: every control on screen at once, with instant connection over USB or Bluetooth.
 
-The official app is at [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com).
+I put a lot of care and ❤️ into the small details.  
 
-I put a lot of care into the small details; this app was built with a lot of ❤️.
-Hopefully more people will join in and we can extend support to more models and platforms.
+It’s open source, and I hope other people will find it useful, contribute to it, and help extend support to more models and platforms.
+
+The app is available at [gpstudio.patocorrenti.com](https://gpstudio.patocorrenti.com).
 
 ## Supported devices
 
 - **Valeton GP-5** — USB and Bluetooth
 - **Valeton GP-50** — USB and Bluetooth
 
+
+
 ## Features
 
-- Quick connect (remembers your pedals and preferences) over USB or Bluetooth
+- Quick connection over USB or Bluetooth, with remembered pedals and preferences
 - Full control of patches and modules at once, in real time
-- Transparent GP-5 ↔ GP-50 compatibility — export presets from one model to the other
+- GP-5 ↔ GP-50 preset compatibility — export presets from one model to the other
 - Control the pedal footswitches from the app
-- Prepared to be compiled as a desktop application
+- Runs in the browser, with a desktop version in development
+
+
 
 ## Installation
+
+
 
 ### Web app
 
@@ -59,6 +66,8 @@ npm install
 npm run dev
 ```
 
+
+
 ### Desktop shell (optional)
 
 The [Tauri](https://tauri.app/) shell is not an official release. To run it locally you also need a Rust toolchain and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform:
@@ -67,17 +76,19 @@ The [Tauri](https://tauri.app/) shell is not an official release. To run it loca
 npm run tauri dev
 ```
 
+
+
 ## Contributing
 
-Bug reports and contribution notes are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and contribution guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-External code contributions are not open yet. Security issues: see [SECURITY.md](SECURITY.md).
+External code contributions are not open yet. For security vulnerabilities, see[SECURITY.md](SECURITY.md).
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
 
-Copyright (c) 2026 Patricio Correnti.
+Copyright (c) 2026 [Patricio Correnti](https://patocorrenti.com).
 
 ## Trademark notice
 
