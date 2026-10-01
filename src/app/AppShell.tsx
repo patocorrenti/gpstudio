@@ -20,7 +20,7 @@ export function AppShell() {
           <img
             src={logo}
             alt="GP Studio"
-            className="h-5 w-auto dark:invert"
+            className="h-3.5 w-auto dark:invert"
           />
         </Link>
         <div className="flex items-center gap-2 pr-2 md:pr-0">

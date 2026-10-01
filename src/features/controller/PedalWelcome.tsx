@@ -1,6 +1,6 @@
 import logo from "@/assets/img/gp-studio-logo.svg";
-import pedalsLineBlack from "@/assets/img/gp5-50-line-black.png";
-import pedalsLineWhite from "@/assets/img/gp5-50-line-white.png";
+import pedalsConnectBlack from "@/assets/img/pedal-connect-black.png";
+import pedalsConnectLight from "@/assets/img/pedal-connect-light.png";
 import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
 
 export function PedalWelcome() {
@@ -25,25 +25,25 @@ export function PedalWelcome() {
         />
         <span
           aria-hidden
-          className="mt-2.5 rounded-[3px] bg-emerald-400 px-1.5 py-px text-[10px] font-bold tracking-[0.18em] text-black/80"
+          className="mt-1 rounded-[10px] bg-emerald-400 px-2 py-0.5 text-[10px] font-bold tracking-[0.18em] text-black/80"
         >
           Closed Beta
         </span>
       </div>
       <div className="mt-2 flex flex-col items-center gap-2">
         <img
-          src={pedalsLineBlack}
+          src={pedalsConnectBlack}
           alt=""
           aria-hidden
-          className="w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
+          className="w-[400px] opacity-70 transition-opacity group-hover:opacity-100 dark:hidden"
         />
         <img
-          src={pedalsLineWhite}
+          src={pedalsConnectLight}
           alt=""
           aria-hidden
-          className="hidden w-[176px] opacity-70 transition-opacity group-hover:opacity-100 dark:block"
+          className="hidden w-[450px] opacity-70 transition-opacity group-hover:opacity-100 dark:block"
         />
-        <p>Connect a Valeton GP5 or GP50 to get started...</p>
+        <p>Connect a Valeton GP5 or GP50<br />to get started...</p>
       </div>
     </button>
   );
