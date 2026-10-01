@@ -1,5 +1,4 @@
-import logo from "@/assets/img/gpstudio-logo-black.svg";
-import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
+import logo from "@/assets/img/gp-studio-logo.svg";
 import pedalsLineBlack from "@/assets/img/gp5-50-line-black.png";
 import pedalsLineWhite from "@/assets/img/gp5-50-line-white.png";
 import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
@@ -15,20 +14,14 @@ export function PedalWelcome() {
       aria-label="Connect a pedal"
       onClick={openConnect}
     >
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-muted-foreground dark:text-muted-foreground/70">
           Welcome to
         </p>
         <img
           src={logo}
           alt="GP Studio"
-          className="h-[52px] w-auto dark:hidden"
-        />
-        <img
-          src={logoWhite}
-          alt=""
-          aria-hidden
-          className="hidden h-[52px] w-auto dark:block"
+          className="h-[45px] w-auto dark:invert"
         />
         <span
           aria-hidden

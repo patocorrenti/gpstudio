@@ -1,7 +1,6 @@
 import { Bug } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
-import logo from "@/assets/img/gpstudio-logo-black.svg";
-import logoWhite from "@/assets/img/gpstudio-logo-white.svg";
+import logo from "@/assets/img/gp-studio-logo.svg";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -21,13 +20,7 @@ export function AppShell() {
           <img
             src={logo}
             alt="GP Studio"
-            className="h-5 w-auto dark:hidden"
-          />
-          <img
-            src={logoWhite}
-            alt=""
-            aria-hidden
-            className="hidden h-5 w-auto dark:block"
+            className="h-5 w-auto dark:invert"
           />
         </Link>
         <div className="flex items-center gap-2 pr-2 md:pr-0">
