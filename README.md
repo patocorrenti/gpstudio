@@ -40,17 +40,15 @@ Official desktop builds are not distributed yet. A [Tauri](https://tauri.app/) s
 
 Controller — full desktop workflow:
 
-![Controller](docs/screenshots/controller.svg)
+![Controller](src/assets/img/screenshots/gp-studio-dashboard.jpg)
 
 Connect — USB / Bluetooth:
 
-![Connect](docs/screenshots/connect.svg)
+![Connect](src/assets/img/screenshots/gpstudio-connect.jpg)
 
 Mobile layout (responsive; the app is desktop-first):
 
-![Mobile](docs/screenshots/mobile.svg)
-
-Replace these placeholders with real PNGs when ready (same filenames, or update the links above).
+![Mobile](src/assets/img/screenshots/gp-studio-mobile.jpg)
 
 ## Development
 
