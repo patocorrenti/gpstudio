@@ -17,7 +17,7 @@ export type StompAssignment = EffectId[][];
 /**
  * Current-preset dump request (F0…F7). Same identity-family template as
  * name-list (size 0x0E, command 0x00) and current-patch (size 0x07, command 0x03).
- * Size 0x09 + command 0x01 is the current-preset class. A GP-50 Bluetooth Patone
+ * Size 0x09 + command 0x01 is the current-preset class. A GP-50 Bluetooth GP Studio
  * capture of size 0x0E + command 0x01 only returned a 16-byte ACK, not a dump.
  * Bluetooth wrap is applied by encodeLinkMidi.
  */
@@ -45,7 +45,7 @@ export const DUMP_MODULE_IDS = [
 ] as const satisfies readonly EffectId[];
 
 /**
- * Identity-family live chain-order notify (Patone Log, pedal chain edit).
+ * Identity-family live chain-order notify (GP Studio Log, pedal chain edit).
  * Size `0x0C` at byte 8, command `0x04`, path `01 02 04`. Not a SET.
  * App→pedal SET uses parameter-write path `01 01 04` (see encodeChainOrderSysex).
  */
@@ -392,7 +392,7 @@ function parseNibbleOrder(bytes: Uint8Array, start: number): EffectId[] | null {
 }
 
 /**
- * Live chain-order SysEx (Patone capture). Identity-family, size `0x0C`,
+ * Live chain-order SysEx (GP Studio capture). Identity-family, size `0x0C`,
  * command `0x04`, path `01 02 04`, 34 bytes. Notify has size at byte 8.
  * Ten nibble-expanded `DUMP_MODULE_IDS` indices from byte 13. Returns null
  * for name dumps, current-patch identity, live-module `09`, EXP `02`,
@@ -678,7 +678,7 @@ export type LiveOnOffChange = {
 };
 
 /**
- * GP-50 Bluetooth EXP on/off (Patone capture). Identity-family template
+ * GP-50 Bluetooth EXP on/off (GP Studio capture). Identity-family template
  * (01 02 04), size 0x07, command 0x02. Enable is the last data byte (0 off, 1 on).
  * Distinct from live patch-volume (same size, different body signature).
  */
@@ -754,7 +754,7 @@ export function decodeLivePatchVolume(bytes: Uint8Array): number | null {
 }
 
 /**
- * Bluetooth live module on/off (Patone capture). Same identity-family
+ * Bluetooth live module on/off (GP Studio capture). Same identity-family
  * template (01 02 04), size 0x0A, command 0x09. Module id uses DUMP_MODULE_IDS
  * (0=NR … 3=AMP … 9=NS). Enable is byte 22 (0 off, 1 on).
  */
@@ -783,7 +783,7 @@ export function decodeLiveModule(bytes: Uint8Array): LiveModuleChange | null {
 }
 
 /**
- * Bluetooth Stomp footswitch (Patone GP-50 capture). Identity-family
+ * Bluetooth Stomp footswitch (GP-50 capture in GP Studio Log). Identity-family
  * template (01 02 04), size 0x06, command 0x0E, 22 bytes. Two packed bytes
  * at offsets 13 and 15 are the current on/off mask for all ten effects:
  * low byte bit0=NR … bit7=DLY, high byte bit0=RVB bit1=NS. Extra high bits

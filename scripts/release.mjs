@@ -163,13 +163,13 @@ function assertVersionsInSync(version) {
     [
       "package-lock.json",
       read("package-lock.json").startsWith(`{
-  "name": "patone",
+  "name": "gpstudio",
   "version": "${version}",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
-      "name": "patone",
+      "name": "gpstudio",
       "version": "${version}",`),
     ],
     [
@@ -227,13 +227,13 @@ ${items}
 
 function applyRelease(current, next, notes) {
   const lockHeader = `{
-  "name": "patone",
+  "name": "gpstudio",
   "version": "${current}",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
-      "name": "patone",
+      "name": "gpstudio",
       "version": "${current}",`;
   const nextLockHeader = lockHeader.replaceAll(
     `"version": "${current}"`,

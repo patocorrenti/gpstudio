@@ -3,10 +3,10 @@ schema: spec-driven
 # Project context shown to AI when creating OpenSpec artifacts.
 # Source of truth for the agreed plan: docs/architecture.md
 context: |
-  Product: Patone GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
+  Product: GP Studio — editor/controller for Valeton GP-5 and GP-50 guitar pedals.
   USB patch recall uses official MIDI CC 0; Bluetooth patch recall uses SET family
   1143 (CC 0 over GATT does not move the pedal). Module on/off (CC 48–57) uses
-  official MIDI CC.   A Patone-owned SysEx subset
+  official MIDI CC.   A GP Studio-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
   factory model and control values for the ten effect slots, plus the twenty
   onboard user-IR CAB slots)
@@ -56,7 +56,7 @@ context: |
     USB is one-way and super fast (command out; requested identity/chain dumps and
     opportunistic patch-load dumps do not make USB duplex for knobs).
     Bluetooth is two-way and slower. Pedal Bluetooth uses the official BLE-MIDI
-    GATT service (Patone capture);     BluetoothLink.send writes encoder bytes
+    GATT service (GP Studio capture);     BluetoothLink.send writes encoder bytes
     (Bluetooth patch recall SET 1143, module CC 48–57, stomp press CC 69 / CC 70, tuner CC 58, identity, chain dump, chain-order SET, slot
     model/control SET, or current-patch store SET wrapped as BLE-MIDI). Still a separate backend — not another
     MidiTransport kind of the USB byte pipe.
@@ -258,12 +258,12 @@ context: |
 
   Hard constraints:
   - SysEx for the editor and for IR/NAM file upload is reverse-engineered in third-party projects. Do not copy that code.
-    IR-name read and the user-IR CAB catalog are Patone-owned and in scope.
+    IR-name read and the user-IR CAB catalog are GP Studio-owned and in scope.
   - Patch identity SysEx (current index + names), the IR-name dump, and current-patch chain SysEx
     (order + on/off + factory model/control decode, including user-IR CAB wires, Bluetooth live chain-order
     decode, Bluetooth live model/control decode, the order-only SET, model/control SETs,
     and current-patch store SET 114a)
-    are Patone-owned codecs. Read reference/; do not paste that source into src/.
+    are GP Studio-owned codecs. Read reference/; do not paste that source into src/.
     Current-patch download encodes a Valeton .prst for the connected model
     from that dump; current-patch upload is the inverse into the working patch
     (owned writes, not a dump SET and not store 114a) and may apply the other

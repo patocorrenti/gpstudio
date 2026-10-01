@@ -17,7 +17,7 @@ pub fn run() {
       ble::ble_close,
     ])
     .setup(|app| {
-      eprintln!("[patone] backend ready");
+      eprintln!("[gpstudio] backend ready");
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

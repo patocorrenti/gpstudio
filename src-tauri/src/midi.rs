@@ -41,7 +41,7 @@ fn lock_poisoned<'a, T>(
 
 #[tauri::command]
 pub fn midi_list_ports() -> Result<Vec<MidiEndpointDto>, String> {
-    let midi_out = MidiOutput::new("patone-list").map_err(|err| err.to_string())?;
+    let midi_out = MidiOutput::new("gpstudio-list").map_err(|err| err.to_string())?;
     let mut endpoints = Vec::new();
     for (index, port) in midi_out.ports().iter().enumerate() {
         let label = midi_out
@@ -101,21 +101,21 @@ pub fn midi_open(app: AppHandle, state: State<MidiState>, id: String) -> Result<
     drop_open_ports(&state);
     let (index, label) = split_port_id(&id)?;
 
-    let midi_out = MidiOutput::new("patone-out").map_err(|err| err.to_string())?;
+    let midi_out = MidiOutput::new("gpstudio-out").map_err(|err| err.to_string())?;
     let out_port = find_output_port(&midi_out, index, &label)?;
     let conn_out = midi_out
-        .connect(&out_port, "patone-out")
+        .connect(&out_port, "gpstudio-out")
         .map_err(|err| err.to_string())?;
     *lock_poisoned(state.output.lock()) = Some(conn_out);
 
-    let mut midi_in = MidiInput::new("patone-in").map_err(|err| err.to_string())?;
+    let mut midi_in = MidiInput::new("gpstudio-in").map_err(|err| err.to_string())?;
     midi_in.ignore(Ignore::None);
     if let Some(in_port) = find_input_port(&midi_in, &label) {
         let handle = app.clone();
         let conn_in = midi_in
             .connect(
                 &in_port,
-                "patone-in",
+                "gpstudio-in",
                 move |_stamp, message, _| {
                     let _ = handle.emit("midi-inbound", message.to_vec());
                 },

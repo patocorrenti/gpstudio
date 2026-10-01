@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "GP Studio",
   "version": "1.0.0-beta.1",
-  "identifier": "com.patone.app",
+  "identifier": "com.patocorrenti.gpstudio",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",

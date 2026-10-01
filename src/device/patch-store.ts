@@ -15,7 +15,7 @@ const PATCH_NAME_LENGTH = 10;
 const PRST_HEADER_LENGTH = 20;
 const PRST_SPACER = Uint8Array.from([0xff, 0xff, 0xff, 0xff]);
 /**
- * Packed `.prst` body starts at the GP-50 enable-bits offset in Patone's
+ * Packed `.prst` body starts at the GP-50 enable-bits offset in GP Studio's
  * concatenated current-preset dump. Locked against `_reference/gp50_60-TOB.prst`
  * (order + identities + float32 values decode). The HTML editor pairs from
  * dump index 120; that slice does not overlap the capture body.
@@ -283,7 +283,7 @@ function encodePatchGlobalSysex(kind: readonly number[], value: number): Uint8Ar
 
 /**
  * App→pedal patch volume SET (family `1142`). Packed body locked from the
- * reference black-box `sendPatchVol`, not a Patone accept capture.
+ * reference black-box `sendPatchVol`, not a GP Studio accept capture.
  */
 export function encodePatchVolumeSysex(volume: number): Uint8Array | null {
   if (!Number.isInteger(volume) || volume < 0 || volume > PATCH_VOL_MAX) {
@@ -325,7 +325,7 @@ function prstDescriptor(model: DeviceModel, dump: Uint8Array): Uint8Array {
 }
 
 /**
- * Valeton `.prst` for the connected model from a Patone-assembled current-preset
+ * Valeton `.prst` for the connected model from a GP Studio-assembled current-preset
  * dump. GP-50 session → GP-50 file; GP-5 session → GP-5 file. No conversion.
  * Returns null when the dump is too short to slice the capture-sized body.
  */

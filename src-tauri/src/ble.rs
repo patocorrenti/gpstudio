@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use tokio::time::{sleep, timeout};
 use uuid::Uuid;
 
-/// Keep in sync with src/bluetooth/uuids.ts (Patone Chrome GATT map, 2026-09-17).
+/// Keep in sync with src/bluetooth/uuids.ts (GP Studio Chrome GATT map, 2026-09-17).
 const CONTROL_SERVICE_UUID: &str = "03b80e5a-ede8-4b33-a751-6ce34ec4c700";
 const CONTROL_CHARACTERISTIC_UUID: &str = "7772e5db-3868-4112-a1a9-f2669d106bf3";
 
