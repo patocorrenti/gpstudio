@@ -21,7 +21,7 @@ export function PedalWelcome() {
         <img
           src={logo}
           alt="GP Studio"
-          className="h-[45px] w-auto dark:invert"
+          className="h-[30px] w-auto dark:invert"
         />
         <span
           aria-hidden
@@ -30,7 +30,7 @@ export function PedalWelcome() {
           Closed Beta
         </span>
       </div>
-      <div className="mt-2 flex flex-col items-center gap-2">
+      <div className="mt-[-30px] flex flex-col items-center gap-2">
         <img
           src={pedalsConnectBlack}
           alt=""
