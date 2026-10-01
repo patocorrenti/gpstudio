@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/img/gp-studio-logo.svg" alt="GP Studio" width="120" />
+</p>
+
 # GP Studio
 
 ## What is GP Studio?
