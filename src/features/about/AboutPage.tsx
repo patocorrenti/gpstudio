@@ -255,6 +255,10 @@ export function AboutPage() {
             </Button>
           </div>
         </div>
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground/60">
+          GP Studio is 100% free. Support is entirely voluntary and comes with
+          no products, services, features, priority, or other benefits.
+        </p>
       </div>
 
       <div className="space-y-3">
