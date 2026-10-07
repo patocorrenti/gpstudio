@@ -24,7 +24,6 @@ const versionFiles = [
   "src-tauri/tauri.conf.json",
   "src/app/AppShell.tsx",
   "index.html",
-  "README.md",
   "src/features/about/AboutPage.tsx",
 ];
 
@@ -163,13 +162,13 @@ function assertVersionsInSync(version) {
     [
       "package-lock.json",
       read("package-lock.json").startsWith(`{
-  "name": "patone",
+  "name": "gpstudio",
   "version": "${version}",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
-      "name": "patone",
+      "name": "gpstudio",
       "version": "${version}",`),
     ],
     [
@@ -198,10 +197,6 @@ version = "${version}"
       "index.html",
       read("index.html").includes(`"softwareVersion": "${version}"`),
     ],
-    [
-      "README.md",
-      read("README.md").includes(`Version ${version}. The official app`),
-    ],
   ];
 
   const stale = checks.filter(([, ok]) => !ok).map(([file]) => file);
@@ -227,13 +222,13 @@ ${items}
 
 function applyRelease(current, next, notes) {
   const lockHeader = `{
-  "name": "patone",
+  "name": "gpstudio",
   "version": "${current}",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
-      "name": "patone",
+      "name": "gpstudio",
       "version": "${current}",`;
   const nextLockHeader = lockHeader.replaceAll(
     `"version": "${current}"`,
@@ -305,15 +300,6 @@ version = "${next}"`,
       read("index.html"),
       `"softwareVersion": "${current}"`,
       `"softwareVersion": "${next}"`,
-    ),
-  );
-  write(
-    "README.md",
-    replaceExactlyOnce(
-      "README.md",
-      read("README.md"),
-      `Version ${current}. The official app`,
-      `Version ${next}. The official app`,
     ),
   );
 

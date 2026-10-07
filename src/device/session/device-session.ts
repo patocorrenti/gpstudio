@@ -25,6 +25,7 @@ import {
   type StompAssignment,
 } from "@/device/chain-codec";
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
+import { emptyUserNsNames, NamNameDecoder } from "@/device/nam-names";
 import {
   emptyGp50Globals,
   emptyGp5Globals,
@@ -108,6 +109,7 @@ import {
   encodeGlobals,
   encodeIdentity,
   encodeIrNames,
+  encodeNamNames,
   encodeModule,
   encodePatch,
   encodePatchStore,
@@ -146,6 +148,7 @@ export type SessionSnapshot =
       patch: number;
       patchNames: (string | null)[];
       userIrNames: (string | null)[];
+      userNsNames: (string | null)[];
       /** Device globals for the connected model. Null only while disconnected. */
       globals: DeviceGlobals | null;
       chain: AudioChain;
@@ -165,6 +168,8 @@ export type SessionSnapshot =
 const NAME_TIMEOUT_MS = { usb: 8_000, bluetooth: 15_000 } as const;
 const PATCH_TIMEOUT_MS = { usb: 4_000, bluetooth: 6_000 } as const;
 export const CHAIN_TIMEOUT_MS = { usb: 6_000, bluetooth: 10_000 } as const;
+/** Fail-open: ask Nam if the IR dump never finishes (reference waits for IR). */
+const NAM_ASK_AFTER_IR_MS = 4_000;
 
 const USB_NAME_LIST_MISSING =
   "Check that the pedal is powered on.";
@@ -186,6 +191,7 @@ export class DeviceSession {
   private readonly identity = new IdentityDecoder();
   private readonly chainDump = new ChainDecoder();
   private readonly irNames = new IrNameDecoder();
+  private readonly namNames = new NamNameDecoder();
   private readonly globalsDump = new GlobalsDumpDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
@@ -228,8 +234,13 @@ export class DeviceSession {
    * IR-name and device-globals asks after the first current-preset dump.
    * USB overlaps those dumps with the preset dump if asked in the same burst
    * (`_reference/GP50-USB.html` waits for preset info before globals).
+   * Nam / SnapTone names are asked after the IR dump completes (reference
+   * editors), with a fail-open timeout if IR never arrives.
    */
   private postChainDeviceAsks = false;
+  /** Arm Nam ask once per connect; cleared when the ask is sent. */
+  private namAskPending = false;
+  private namAskTimer: ReturnType<typeof setTimeout> | null = null;
   private dropping = false;
   /** True once a name-list identity event was applied for the current connect. */
   private nameListReceived = false;
@@ -325,10 +336,12 @@ export class DeviceSession {
     this.identity.reset();
     this.chainDump.reset();
     this.irNames.reset();
+    this.namNames.reset();
     this.globalsDump.reset();
     this.sysex.reset();
     this.writes.clear();
     this.postChainDeviceAsks = false;
+    this.clearNamAsk();
     this.nameListReceived = false;
     this.dropPatchDump();
     const generation = this.syncGeneration;
@@ -341,6 +354,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
+        userNsNames: emptyUserNsNames(),
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         stomps: emptyStomps(model),
@@ -362,6 +376,7 @@ export class DeviceSession {
         patch: 0,
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
+        userNsNames: emptyUserNsNames(),
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         stomps: emptyStomps(model),
@@ -395,9 +410,11 @@ export class DeviceSession {
       this.identity.reset();
       this.chainDump.reset();
       this.irNames.reset();
+      this.namNames.reset();
       this.globalsDump.reset();
       this.sysex.reset();
       this.postChainDeviceAsks = false;
+      this.clearNamAsk();
       this.nameListReceived = false;
       this.dropPatchDump();
       this.dropping = false;
@@ -1117,6 +1134,14 @@ export class DeviceSession {
     await this.sendBytes(encodeIrNames(this.snapshot.linkMode));
   }
 
+  /** Device-global SnapTone / Nam names. Once per connect with IR names / globals. */
+  private async sendNamNameRequest(generation: number): Promise<void> {
+    if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
+      return;
+    }
+    await this.sendBytes(encodeNamNames(this.snapshot.linkMode));
+  }
+
   /** Device globals. Once per connect after the current-preset ask, GP-50 and GP-5. */
   private async sendGlobalsRequest(generation: number): Promise<void> {
     if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
@@ -1189,6 +1214,7 @@ export class DeviceSession {
       }
       if (this.snapshot.status === "connected") {
         this.applyIrNames(this.irNames.push(message));
+        this.applyNsNames(this.namNames.push(message));
       }
       if (this.snapshot.status === "connected" && !globalsMessage) {
         this.applyChain(this.chainDump.push(message, this.snapshot.model));
@@ -1383,6 +1409,42 @@ export class DeviceSession {
     }
     this.snapshot = { ...this.snapshot, userIrNames: names };
     this.emitSnapshot();
+    // Reference editors ask Nam only after the IR dump finishes.
+    void this.sendNamNameRequestOnce(this.syncGeneration);
+  }
+
+  private applyNsNames(names: (string | null)[] | null): void {
+    if (!names || this.snapshot.status !== "connected") {
+      return;
+    }
+    this.snapshot = { ...this.snapshot, userNsNames: names };
+    this.emitSnapshot();
+  }
+
+  private clearNamAsk(): void {
+    this.namAskPending = false;
+    if (this.namAskTimer !== null) {
+      clearTimeout(this.namAskTimer);
+      this.namAskTimer = null;
+    }
+  }
+
+  private armNamAsk(generation: number): void {
+    this.clearNamAsk();
+    this.namAskPending = true;
+    this.namAskTimer = globalThis.setTimeout(() => {
+      this.namAskTimer = null;
+      void this.sendNamNameRequestOnce(generation);
+    }, NAM_ASK_AFTER_IR_MS);
+  }
+
+  /** Once per connect. Triggered by a finished IR dump or the fail-open timer. */
+  private async sendNamNameRequestOnce(generation: number): Promise<void> {
+    if (!this.namAskPending) {
+      return;
+    }
+    this.clearNamAsk();
+    await this.sendNamNameRequest(generation);
   }
 
   private applyChain(result: ChainDumpResult | null): void {
@@ -1450,8 +1512,10 @@ export class DeviceSession {
 
   /**
    * Once per connect: IR names and device globals after the first preset dump.
-   * Deferred off the inbound/notify stack and sent one at a time — overlapping
-   * GATT writes from characteristicvaluechanged drop the Bluetooth link.
+   * Nam / SnapTone names wait for the IR dump (or a short fail-open timeout) so
+   * the pedal is not asked for overlapping name tables. Deferred off the
+   * inbound/notify stack and sent one at a time — overlapping GATT writes from
+   * characteristicvaluechanged drop the Bluetooth link.
    */
   private queuePostChainDeviceAsks(generation: number): void {
     if (!this.postChainDeviceAsks) {
@@ -1459,6 +1523,7 @@ export class DeviceSession {
     }
     this.postChainDeviceAsks = false;
     this.globalsDump.reset();
+    this.armNamAsk(generation);
     globalThis.setTimeout(() => {
       void (async () => {
         if (!this.isCurrentGeneration(generation) || this.snapshot.status !== "connected") {
@@ -1684,6 +1749,7 @@ export class DeviceSession {
     this.pendingPatchSource = null;
     this.patchConfirm = "off";
     this.postChainDeviceAsks = false;
+    this.clearNamAsk();
     this.dropWorkingBaseline();
     this.clearChainRefreshTimer();
     this.clearRecallAckWait();

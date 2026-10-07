@@ -1,8 +1,9 @@
 import type { DeviceModel } from "@/device/models";
 import type { LinkEndpoint } from "@/device/endpoint";
 
-const PREFERENCES_KEY = "patone-preferences";
-const THEME_KEY = "patone-theme";
+const PREFERENCES_KEY = "gpstudio-preferences";
+const THEME_KEY = "gpstudio-theme";
+const LEGACY_PREFERENCES_KEY = "patone-preferences";
 const PANEL_KEY = "gpstudio.slot-controls.expanded";
 const VERSION = 1;
 
@@ -143,7 +144,15 @@ function parseDocument(raw: string | null): PreferencesDocument {
 }
 
 function read(store: KeyValueStore): PreferencesDocument {
-  return parseDocument(store.getItem(PREFERENCES_KEY));
+  let raw = store.getItem(PREFERENCES_KEY);
+  if (!raw) {
+    const legacy = store.getItem(LEGACY_PREFERENCES_KEY);
+    if (legacy) {
+      store.setItem(PREFERENCES_KEY, legacy);
+      raw = legacy;
+    }
+  }
+  return parseDocument(raw);
 }
 
 function write(store: KeyValueStore, document: PreferencesDocument): void {
@@ -397,7 +406,7 @@ function assertPreferencesDocument(): void {
   );
   setStartup({ link: "usb", id: "0::GP-50" }, themed);
   const kept = themed.snapshot();
-  assertPreferences(kept[THEME_KEY] === "dark", "Preferences must leave patone-theme untouched");
+  assertPreferences(kept[THEME_KEY] === "dark", "Preferences must leave gpstudio-theme untouched");
   assertPreferences(
     kept[PANEL_KEY] === '["nr"]',
     "Preferences must leave the Controller panel key untouched",
@@ -407,7 +416,7 @@ function assertPreferencesDocument(): void {
   const forgotten = readPreferences(themed);
   assertPreferences(forgotten.pedals.length === 0, "Forget removes the pedal");
   assertPreferences(forgotten.startup === null, "Forget clears startup when that pedal was startup");
-  assertPreferences(themed.snapshot()[THEME_KEY] === "dark", "Forget must leave patone-theme untouched");
+  assertPreferences(themed.snapshot()[THEME_KEY] === "dark", "Forget must leave gpstudio-theme untouched");
 
   const rewrite = memoryStore();
   rememberPedal(
@@ -433,6 +442,21 @@ function assertPreferencesDocument(): void {
   clearStartup(rewrite);
   assertPreferences(readPreferences(rewrite).startup === null, "Clear startup drops only startup");
   assertPreferences(readPreferences(rewrite).pedals.length === 1, "Clear startup keeps remembered pedals");
+
+  const legacy = memoryStore({
+    [LEGACY_PREFERENCES_KEY]: JSON.stringify({
+      version: 1,
+      pedals: [{ link: "usb", id: "0::GP-5", label: "GP-5", model: "gp5" }],
+      startup: { link: "usb", id: "0::GP-5" },
+      dismissed: [],
+    }),
+  });
+  const fromLegacy = readPreferences(legacy);
+  assertPreferences(fromLegacy.pedals.length === 1, "Legacy preferences key still reads");
+  assertPreferences(
+    legacy.snapshot()[PREFERENCES_KEY] !== undefined,
+    "Legacy preferences migrate to gpstudio-preferences",
+  );
 }
 
 function assertListedMerge(): void {

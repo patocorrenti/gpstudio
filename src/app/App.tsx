@@ -15,7 +15,7 @@ export function App() {
       attribute="class"
       defaultTheme="dark"
       enableSystem={false}
-      storageKey="patone-theme"
+      storageKey="gpstudio-theme"
       // FOUC is handled in index.html; React 19 warns on client-rendered <script>.
       scriptProps={{ type: "application/json" }}
     >

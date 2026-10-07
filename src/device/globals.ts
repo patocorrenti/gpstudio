@@ -18,7 +18,7 @@ import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 export type FootswitchMode = "patch" | "stomp";
 /** GP-5 footswitch list in the reference editors. Wire byte 0–4. */
 export type Gp5FootswitchMode = "0-99" | "0-9" | "A-Z" | "CTL" | "Tuner";
-/** Editor live UI: 0 → Dry, 1 → Wet. Polarity pending a Patone accept capture. */
+/** Editor live UI: 0 → Dry, 1 → Wet. Polarity pending a GP Studio accept capture. */
 export type RecMode = "dry" | "wet";
 
 export type Gp50Globals = {

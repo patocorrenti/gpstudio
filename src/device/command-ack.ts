@@ -1,7 +1,7 @@
 /**
  * Bluetooth “Command received” ACK after a parameter-write SET (e.g. patch
  * recall `1143`). Reference editors match a length-18 BLE-MIDI packet
- * (`80 80` + SysEx) at indices 5/6/10/11/12/14. Patone inbound is unwrapped,
+ * (`80 80` + SysEx) at indices 5/6/10/11/12/14. GP Studio inbound is unwrapped,
  * so the same fields sit at F0-aligned indices 3/4/8/9/10/12 on a 16-byte
  * SysEx. Do not paste reference JavaScript.
  */

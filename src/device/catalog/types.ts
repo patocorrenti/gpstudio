@@ -36,5 +36,7 @@ export type FxModel = {
   wire: WireIdentity;
   /** Onboard user-IR slot 1–20. Catalog label stays the English fallback. */
   userIrSlot?: number;
+  /** Onboard user SnapTone slot 1–24. Catalog label stays the English fallback. */
+  userNsSlot?: number;
   controls: readonly FxControl[];
 };

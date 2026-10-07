@@ -1,5 +1,69 @@
 import { BOTH_PEDALS } from "@/device/catalog/shared";
-import type { FxModel } from "@/device/catalog/types";
+import type { FxControl, FxModel, WireIdentity } from "@/device/catalog/types";
+
+const NS_USER_CONTROLS: readonly FxControl[] = [
+  {
+    index: 0,
+    label: "Gain",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+    display: "percent",
+  },
+  {
+    index: 1,
+    label: "VOL",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+    display: "percent",
+  },
+  {
+    index: 2,
+    label: "Bass",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+    display: "percent",
+  },
+  {
+    index: 3,
+    label: "Middle",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+    display: "percent",
+  },
+  {
+    index: 4,
+    label: "Treble",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+    display: "percent",
+  },
+];
+
+/** Twenty-four onboard SnapTone / NAM slots. Byte 0 is dump index 0x38–0x4f. */
+const USER_NS_MODELS: readonly FxModel[] = Array.from({ length: 24 }, (_, index) => {
+  const slot = index + 1;
+  const nn = String(slot).padStart(2, "0");
+  const wire: WireIdentity = [0x38 + index, 0x00, 0x00, 0x0f];
+  return {
+    id: `ns-user-${nn}`,
+    kind: "ns",
+    label: `SnapTone ${nn}`,
+    devices: BOTH_PEDALS,
+    wire,
+    userNsSlot: slot,
+    controls: NS_USER_CONTROLS,
+  };
+});
 
 export const NS_MODELS: readonly FxModel[] = [
   {
@@ -3026,4 +3090,5 @@ export const NS_MODELS: readonly FxModel[] = [
       },
     ],
   },
+  ...USER_NS_MODELS,
 ];

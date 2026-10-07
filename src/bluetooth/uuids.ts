@@ -1,5 +1,5 @@
 /**
- * Control GATT UUIDs from Patone's own Chrome map (2026-09-17, GP-50 Pato BLE).
+ * Control GATT UUIDs from GP Studio's own Chrome map (2026-09-17, GP-50 Pato BLE).
  * Official MMA BLE-MIDI service + I/O characteristic — not a third-party editor dump.
  * Keep in sync with src-tauri/src/ble.rs.
  */

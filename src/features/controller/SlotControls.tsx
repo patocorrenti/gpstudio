@@ -18,6 +18,7 @@ import {
   type FxControl,
 } from "@/device/catalog";
 import { userIrDisplayName } from "@/device/ir-names";
+import { userNsDisplayName } from "@/device/nam-names";
 import type { DeviceModel } from "@/device/models";
 import {
   EFFECT_IDS,
@@ -163,9 +164,13 @@ function SlotControlPanel({
     return null;
   }
   const userIrNames = snapshot.status === "connected" ? snapshot.userIrNames : undefined;
+  const userNsNames = snapshot.status === "connected" ? snapshot.userNsNames : undefined;
   const options = modelsForKind(slot.id, pedal).map((option) => ({
     ...option,
-    label: userIrDisplayName(option, userIrNames),
+    label:
+      option.userNsSlot !== undefined
+        ? userNsDisplayName(option, userNsNames)
+        : userIrDisplayName(option, userIrNames),
   }));
   const kindLabel = chainSlotLabel(slot.id);
   const shownLabel = options.find((option) => option.id === model.id)?.label ?? model.label;

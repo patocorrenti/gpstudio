@@ -54,7 +54,14 @@
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem("patone-theme");
+          var stored = localStorage.getItem("gpstudio-theme");
+          if (stored !== "light" && stored !== "dark") {
+            var legacy = localStorage.getItem("patone-theme");
+            if (legacy === "light" || legacy === "dark") {
+              stored = legacy;
+              localStorage.setItem("gpstudio-theme", legacy);
+            }
+          }
           var theme = stored === "light" || stored === "dark" ? stored : "dark";
           var root = document.documentElement;
           root.classList.remove("light", "dark");
