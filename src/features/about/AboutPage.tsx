@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -133,40 +134,112 @@ export function AboutPage() {
             About GP Studio
           </h1>
           <p className="text-sm text-muted-foreground/60">
-            GP Studio is an independent controller for Valeton GP-5 and GP-50.
+            GP Studio is an independent controller for the Valeton GP-5 and
+            GP-50 multi-effects processors.
           </p>
         </div>
         <p className="text-muted-foreground leading-relaxed">
-          It is the controller I always wanted to have — now that I found the
-          pedal I didn't know I always wanted.
+          I'm{" "}
+          <a
+            href="https://patocorrenti.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+          >
+            Pato
+          </a>
+          , a hobby guitarist, product designer, and developer.
         </p>
         <p className="text-muted-foreground leading-relaxed">
-          The project is headed toward open source. With luck, more people will
-          join in, and GP Studio will gain the features they need too.
+          <strong>GP Studio</strong> is the controller I always wanted to have —
+          now that I found the pedal I didn't know I always wanted.
         </p>
-        <div className="space-y-2 border-y border-border py-4 text-muted-foreground leading-relaxed">
-          <p>
-            <a
-              href="https://forms.gle/wbZYesraBR2QevhUA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+        <p className="text-muted-foreground leading-relaxed">
+          It's{" "}
+          <a
+            href="https://github.com/patocorrenti/gpstudio"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+          >
+            open source
+          </a>
+          , and I hope other people will find it useful, contribute to it, and
+          help extend support to more models and platforms.
+        </p>
+        <div className="rounded-xl bg-muted/60 p-4 sm:p-5">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              asChild
+              variant="default"
+              className="h-auto flex-col items-start gap-0.5 whitespace-normal border-emerald-600 bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-500 hover:text-white dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
             >
-              Subscribe
-            </a>{" "}
-            to stay informed about the project.
-          </p>
-          <p>
-            <a
-              href="https://forms.gle/PhvZEPBty96WWzDDA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+              <a
+                href="https://github.com/sponsors/patocorrenti"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-sm font-semibold">Support GP Studio</span>
+                <span className="text-xs font-normal opacity-70">
+                  if you like it
+                </span>
+              </a>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-4 py-3"
             >
-              Report a bug
-            </a>{" "}
-            if something is off.
-          </p>
+              <a
+                href="https://github.com/patocorrenti/gpstudio"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-sm font-semibold text-foreground">
+                  Get the code
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  is open source
+                </span>
+              </a>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-4 py-3"
+            >
+              <a
+                href="https://forms.gle/wbZYesraBR2QevhUA"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-sm font-semibold text-foreground">
+                  Subscribe
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  to stay informed
+                </span>
+              </a>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-4 py-3"
+            >
+              <a
+                href="https://forms.gle/PhvZEPBty96WWzDDA"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-sm font-semibold text-foreground">
+                  Report a Bug
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  if something is off
+                </span>
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
 
