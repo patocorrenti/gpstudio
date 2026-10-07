@@ -140,9 +140,8 @@ export function AboutPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             About GP Studio
           </h1>
-          <p className="text-sm text-muted-foreground/60">
-            GP Studio is an independent controller for the Valeton GP-5 and
-            GP-50 multi-effects processors.
+          <p className="text-sm text-muted-foreground/60 mt-5 mb-5">
+            It's an independent <a href="https://github.com/patocorrenti/gpstudio" target="_blank" rel="noopener noreferrer" className="text-foreground/60 underline underline-offset-4 hover:text-foreground">open source</a> controller for the Valeton GP-5/50 multi-effects.
           </p>
         </div>
         <p className="text-muted-foreground leading-relaxed">
@@ -161,19 +160,6 @@ export function AboutPage() {
           <strong>GP Studio</strong> is the controller I always wanted to have —
           now that I found the pedal I didn't know I always wanted.
         </p>
-        <p className="text-muted-foreground leading-relaxed">
-          It's{" "}
-          <a
-            href="https://github.com/patocorrenti/gpstudio"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
-          >
-            open source
-          </a>
-          , and I hope other people will find it useful, contribute to it, and
-          help extend support to more models and platforms.
-        </p>
         <div className="mt-6 rounded-lg bg-muted/80 p-3 dark:bg-muted/50">
           <div className="grid grid-cols-1 gap-3 min-[500px]:grid-cols-2 min-[42rem]:grid-cols-[1.2fr_1fr_1fr_1fr]">
             <Button
@@ -186,7 +172,10 @@ export function AboutPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Heart className="size-5 shrink-0 fill-current" aria-hidden />
+                <Heart
+                  className="size-5 shrink-0 fill-current motion-safe:animate-heartbeat"
+                  aria-hidden
+                />
                 <span className={actionLabelClassName}>
                   <span className="text-sm font-semibold">
                     Support GP Studio
@@ -217,7 +206,7 @@ export function AboutPage() {
                     Get the Code
                   </span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    it's open source
+                    it's open source!
                   </span>
                 </span>
               </a>
