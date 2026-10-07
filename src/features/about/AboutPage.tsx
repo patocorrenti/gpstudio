@@ -7,6 +7,13 @@ import {
 
 const CHANGELOG = [
   {
+    version: "1.0.0-beta.2",
+    notes: [
+      "User SnapTone slots on NS, with names from the pedal",
+      "Warn when downloading a patch that includes a custom SnapTone",
+    ],
+  },
+  {
     version: "1.0.0-beta.1",
     notes: [
       "Quick connect remembers your pedals and connection preferences and connects automatically when the app opens",
