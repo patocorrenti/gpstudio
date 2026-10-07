@@ -25,6 +25,7 @@ import type { WireIdentity } from "@/device/catalog";
 import type { IdentityRequestKind } from "@/device/identity";
 import { encodeIdentityRequest } from "@/device/identity";
 import { encodeIrNameRequest } from "@/device/ir-names";
+import { encodeNamNameRequest } from "@/device/nam-names";
 import {
   encodeGlobalsRequest,
   encodeGlobalSysex,
@@ -142,6 +143,11 @@ export function encodeChainRequest(linkMode: LinkMode): Uint8Array {
 /** IR-name dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
 export function encodeIrNames(linkMode: LinkMode): Uint8Array {
   return encodeLinkMidi(linkMode, encodeIrNameRequest());
+}
+
+/** Nam / SnapTone-name dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
+export function encodeNamNames(linkMode: LinkMode): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeNamNameRequest());
 }
 
 /** GP-50 globals dump request. USB vs Bluetooth differ only by the BLE-MIDI wrap. */
@@ -395,6 +401,8 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleTempoLsb = bleTempo && bleTempo.length === 2 ? unwrapBlePacket(bleTempo[1]) : null;
   const usbIr = encodeIrNames("usb");
   const bleIr = encodeIrNames("bluetooth");
+  const usbNam = encodeNamNames("usb");
+  const bleNam = encodeNamNames("bluetooth");
   const usbGlobals = encodeGlobals("usb");
   const bleGlobals = encodeGlobals("bluetooth");
   const usbMaster = encodeMasterVolumeCc("usb", 63);
@@ -412,6 +420,7 @@ function assertUsbBluetoothWrapOnly(): void {
   const bleStoreMidi = bleStore && bleStore.length === 1 ? unwrapBlePacket(bleStore[0]) : null;
   const bleVolMidi = bleVol && bleVol.length === 1 ? unwrapBlePacket(bleVol[0]) : null;
   const bleIrMidi = unwrapBlePacket(bleIr);
+  const bleNamMidi = unwrapBlePacket(bleNam);
   const bleGlobalsMidi = unwrapBlePacket(bleGlobals);
   const bleMasterMidi = bleMaster && bleMaster.length === 1 ? unwrapBlePacket(bleMaster[0]) : null;
   const bleFootMidi = bleFoot && bleFoot.length === 1 ? unwrapBlePacket(bleFoot[0]) : null;
@@ -480,6 +489,8 @@ function assertUsbBluetoothWrapOnly(): void {
   }
   const factoryCab = encodeSlotModel("usb", "cab", [0x01, 0x00, 0x00, 0x0a]);
   const userCab = encodeSlotModel("usb", "cab", [0x02, 0x00, 0x10, 0x0a]);
+  const factoryNs = encodeSlotModel("usb", "ns", [0x00, 0x00, 0x00, 0x0f]);
+  const userNs = encodeSlotModel("usb", "ns", [0x3a, 0x00, 0x00, 0x0f]);
   if (
     !bleIrMidi ||
     !factoryCab ||
@@ -492,6 +503,19 @@ function assertUsbBluetoothWrapOnly(): void {
     userCab[0].length > 80
   ) {
     throw new Error("IR-name request must differ from other asks only by the BLE-MIDI wrap, and user IR select stays a model SET");
+  }
+  if (
+    !bleNamMidi ||
+    !factoryNs ||
+    !userNs ||
+    !sameBytes(usbNam, bleNamMidi) ||
+    sameBytes(usbNam, usbIr) ||
+    sameBytes(usbNam, nameList) ||
+    sameBytes(usbNam, currentPreset) ||
+    factoryNs[0].length !== userNs[0].length ||
+    userNs[0].length > 80
+  ) {
+    throw new Error("Nam-name request must differ from other asks only by the BLE-MIDI wrap, and user SnapTone select stays a model SET");
   }
   if (
     !bleGlobalsMidi ||

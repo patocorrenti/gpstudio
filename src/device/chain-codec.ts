@@ -8,6 +8,7 @@ import {
 import { EFFECT_IDS, type AudioChain, type AudioChainSlot, type ChainSlotId, type EffectId } from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 import { encodeIrNameDump, isIrNameDump } from "@/device/ir-names";
+import { encodeNamNameDump, isNamNameDump } from "@/device/nam-names";
 import { isGlobalsDump } from "@/device/globals";
 import { crc8Atm, nibbleExpand } from "@/device/sysex-nibble";
 
@@ -1199,6 +1200,14 @@ function assertPresetDumpFixtures(): void {
     throw new Error("GP-50 user IR dump fixture did not fill CAB User IR 03 VOL 50");
   }
 
+  writeNibbleBytes(tweedy, GP50_IDENTITY_AT.ns, Uint8Array.from([0x3a, 0x00, 0x00, 0x0f]));
+  writeNibbleBytes(tweedy, GP50_VALUES_AT.ns, float32Le(40));
+  const withUserNs = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
+  const userNs = withUserNs?.find((slot) => slot.id === "ns");
+  if (userNs?.modelId !== "ns-user-03" || userNs.values?.[0] !== 40) {
+    throw new Error("GP-50 user SnapTone dump fixture did not fill NS SnapTone 03 Gain 40");
+  }
+
   const unknown = new Uint8Array(tweedy);
   writeNibbleBytes(unknown, GP50_IDENTITY_AT.amp, Uint8Array.from([0x99, 0x00, 0x00, 0x07]));
   const skipped = parsePresetDump(unknown, GP50_LAYOUT, "gp50");
@@ -1260,6 +1269,15 @@ function assertPresetDumpFixtures(): void {
   const resolved = liveUserIr ? modelByWire("cab", liveUserIr.wire) : undefined;
   if (liveUserIr?.kind !== "cab" || resolved?.id !== "cab-user-ir-03") {
     throw new Error("Live CAB user IR notify must decode User IR 03");
+  }
+
+  const liveNs = new Uint8Array(liveModel);
+  liveNs[14] = DUMP_MODULE_IDS.indexOf("ns");
+  writeNibbleBytes(liveNs, 21, Uint8Array.from([0x3a, 0x00, 0x00, 0x0f]));
+  const liveUserNs = decodeLiveSlotModel(liveNs);
+  const resolvedNs = liveUserNs ? modelByWire("ns", liveUserNs.wire) : undefined;
+  if (liveUserNs?.kind !== "ns" || resolvedNs?.id !== "ns-user-03") {
+    throw new Error("Live NS user SnapTone notify must decode SnapTone 03");
   }
 
   const liveVol50 = Uint8Array.from(
@@ -1333,7 +1351,13 @@ export class ChainDecoder {
     if (midi.length < 8 || midi[0] !== 0xf0) {
       return null;
     }
-    if (isNameDump(midi) || isCurrentPatchIdentity(midi) || isIrNameDump(midi) || isGlobalsDump(midi)) {
+    if (
+      isNameDump(midi) ||
+      isCurrentPatchIdentity(midi) ||
+      isIrNameDump(midi) ||
+      isNamNameDump(midi) ||
+      isGlobalsDump(midi)
+    ) {
       return null;
     }
 
@@ -1359,6 +1383,11 @@ function assertIrFragmentsSkipChainDecoder(): void {
   for (const packet of encodeIrNameDump(["", "", "Greenback 412"])) {
     if (chain.push(packet, "gp50")) {
       throw new Error("IR-name fragments must not feed ChainDecoder");
+    }
+  }
+  for (const packet of encodeNamNameDump(["", "", "My Amp"])) {
+    if (chain.push(packet, "gp50")) {
+      throw new Error("Nam-name fragments must not feed ChainDecoder");
     }
   }
 }

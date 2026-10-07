@@ -1,6 +1,14 @@
 import type { BluetoothLink } from "@/bluetooth/types";
 import { decodePresetDump } from "@/device/chain-codec";
 import { commandReceivedAckFixture, RECALL_ACK_TIMEOUT_MS } from "@/device/command-ack";
+import { emptyUserIrNames, encodeIrNameDump, USER_IR_COUNT } from "@/device/ir-names";
+import { emptyUserNsNames, encodeNamNameDump, USER_NS_COUNT } from "@/device/nam-names";
+import { decodePrstFile, encodePrstFile } from "@/device/patch-store";
+import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
+import { planUploadedPatch } from "@/device/session/patch-io";
+import { CHAIN_TIMEOUT_MS, DeviceSession } from "./device-session";
+import type { MidiTransport } from "@/midi/types";
+import type { EffectId } from "@/device/chain";
 import {
   encodeChainOrder,
   encodeChainRequest,
@@ -9,19 +17,13 @@ import {
   encodeGp5GlobalSetting,
   encodeIdentity,
   encodeIrNames,
+  encodeNamNames,
   encodePatch,
   encodePatchBpm,
   encodePatchStore,
   encodePatchTempoCc,
   encodeSlotModel,
 } from "@/device/encode";
-import { emptyUserIrNames, encodeIrNameDump, USER_IR_COUNT } from "@/device/ir-names";
-import { decodePrstFile, encodePrstFile } from "@/device/patch-store";
-import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
-import { planUploadedPatch } from "@/device/session/patch-io";
-import { CHAIN_TIMEOUT_MS, DeviceSession } from "./device-session";
-import type { MidiTransport } from "@/midi/types";
-import type { EffectId } from "@/device/chain";
 
 function bytesFromHex(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -566,6 +568,31 @@ function gp50UsbChainWithCab(wire: Uint8Array, volume: number): Uint8Array[] {
   return packets;
 }
 
+function gp50UsbChainWithNs(wire: Uint8Array, gain: number): Uint8Array[] {
+  const merged = new Uint8Array(27 * 38);
+  for (let slot = 0; slot < 10; slot += 1) {
+    merged[243 + slot * 2] = slot;
+  }
+  merged[229] |= 1 << 1;
+  writeDumpNibbles(merged, 342, wire);
+  const packed = new Uint8Array(4);
+  new DataView(packed.buffer).setFloat32(0, gain, true);
+  writeDumpNibbles(merged, 934, packed);
+  const packets: Uint8Array[] = [];
+  for (let index = 0; index < 27; index += 1) {
+    const midi = new Uint8Array(48);
+    midi[0] = 0xf0;
+    midi[3] = 1;
+    midi[4] = 11;
+    midi[5] = (index >> 4) & 0x0f;
+    midi[6] = index & 0x0f;
+    midi.set(merged.subarray(index * 38, (index + 1) * 38), 9);
+    midi[47] = 0xf7;
+    packets.push(midi);
+  }
+  return packets;
+}
+
 function liveCabUserIr(): Uint8Array {
   const live = new Uint8Array(30);
   live[0] = 0xf0;
@@ -578,6 +605,22 @@ function liveCabUserIr(): Uint8Array {
   live[12] = 0x07;
   live[14] = 4;
   writeDumpNibbles(live, 21, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
+  live[29] = 0xf7;
+  return live;
+}
+
+function liveNsUserSnapTone(): Uint8Array {
+  const live = new Uint8Array(30);
+  live[0] = 0xf0;
+  live[3] = 0;
+  live[4] = 1;
+  live[8] = 0x0a;
+  live[9] = 1;
+  live[10] = 2;
+  live[11] = 4;
+  live[12] = 0x07;
+  live[14] = 9;
+  writeDumpNibbles(live, 21, Uint8Array.from([0x3a, 0x00, 0x00, 0x0f]));
   live[29] = 0xf7;
   return live;
 }
@@ -652,9 +695,13 @@ async function assertUserIrSession(): Promise<void> {
     const named = emptyUserIrNames();
     named[2] = "Greenback 412";
     const sentBeforeDump = bluetooth.sent.length;
+    const namRequest = encodeNamNames("bluetooth");
     for (const packet of encodeIrNameDump(named)) {
       bluetooth.push(packet);
     }
+    await untilReady("IR dump did not chain the Nam-name ask", () =>
+      bluetooth.sent.some((packet) => packetsEqual(packet, namRequest)),
+    );
     const namedSnapshot = session.getSnapshot();
     if (
       namedSnapshot.status !== "connected" ||
@@ -662,9 +709,10 @@ async function assertUserIrSession(): Promise<void> {
       namedSnapshot.userIrNames[6] !== null ||
       namedSnapshot.userIrNames.length !== USER_IR_COUNT ||
       namedSnapshot.sync !== "ready" ||
-      bluetooth.sent.length !== sentBeforeDump
+      bluetooth.sent.filter((packet) => packetsEqual(packet, namRequest)).length !== 1 ||
+      bluetooth.sent.length !== sentBeforeDump + 1
     ) {
-      throw new Error("IR-name dump must fill slot 03 without another request or patch recall");
+      throw new Error("IR-name dump must fill slot 03 and ask Nam once without patch recall");
     }
     for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
       bluetooth.push(packet);
@@ -721,6 +769,129 @@ async function assertUserIrSession(): Promise<void> {
 }
 
 void assertUserIrSession();
+
+async function assertUserNsSession(): Promise<void> {
+  const usb = recordingUsb();
+  const bluetooth = scriptedBluetooth();
+  const session = new DeviceSession(usb.transport, bluetooth.link);
+  const namRequest = encodeNamNames("bluetooth");
+  const namCount = () => bluetooth.sent.filter((packet) => packetsEqual(packet, namRequest)).length;
+  try {
+    const connecting = session.connect(
+      { id: "ble-1", label: "GP-50", kind: "bluetooth" },
+      "gp50",
+    );
+    await untilReady("Identity sync did not request the name list", () => bluetooth.sent.length > 0);
+    await tick();
+    bluetooth.push(bluetoothNameList());
+    await connecting;
+    await untilReady("Identity sync did not request the current patch", () => bluetooth.sent.length > 1);
+    await tick();
+    bluetooth.push(currentPatchZero());
+    await untilReady("Identity sync did not become ready", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    if (namCount() !== 0) {
+      throw new Error("Ready state must not wait for the Nam-name request");
+    }
+    const beforeNames = session.getSnapshot();
+    if (beforeNames.status !== "connected" || beforeNames.userNsNames.some((name) => name !== null)) {
+      throw new Error("SnapTone names must stay empty until the dump arrives");
+    }
+    for (const packet of gp50UsbChainWithNs(Uint8Array.from([0x00, 0x00, 0x00, 0x0f]), 50)) {
+      bluetooth.push(packet);
+    }
+    await untilReady("First preset dump did not request the IR-name dump", () => {
+      const irRequest = encodeIrNames("bluetooth");
+      return bluetooth.sent.some((packet) => packetsEqual(packet, irRequest));
+    });
+    if (namCount() !== 0) {
+      throw new Error("Nam ask must wait until the IR dump finishes");
+    }
+    const afterChain = session.getSnapshot();
+    const ns =
+      afterChain.status === "connected" ? afterChain.chain.find((slot) => slot.id === "ns") : undefined;
+    if (
+      afterChain.status !== "connected" ||
+      afterChain.userNsNames.some((name) => name !== null) ||
+      afterChain.chainSync !== "idle" ||
+      ns?.modelId !== "ns-14-dst" ||
+      bluetooth.sent.some(isPatchRecall)
+    ) {
+      throw new Error("The first preset dump must leave SnapTone names empty until Nam arrives");
+    }
+    for (const packet of encodeIrNameDump(emptyUserIrNames())) {
+      bluetooth.push(packet);
+    }
+    await untilReady("IR dump did not request the Nam dump", () => namCount() === 1);
+    const named = emptyUserNsNames();
+    named[2] = "My Amp";
+    const sentBeforeDump = bluetooth.sent.length;
+    for (const packet of encodeNamNameDump(named)) {
+      bluetooth.push(packet);
+    }
+    const namedSnapshot = session.getSnapshot();
+    if (
+      namedSnapshot.status !== "connected" ||
+      namedSnapshot.userNsNames[2] !== "My Amp" ||
+      namedSnapshot.userNsNames[6] !== null ||
+      namedSnapshot.userNsNames.length !== USER_NS_COUNT ||
+      namedSnapshot.sync !== "ready" ||
+      bluetooth.sent.length !== sentBeforeDump
+    ) {
+      throw new Error("Nam dump must fill SnapTone 03 without another request or patch recall");
+    }
+    for (const packet of gp50UsbChainWithNs(Uint8Array.from([0x00, 0x00, 0x00, 0x0f]), 50)) {
+      bluetooth.push(packet);
+    }
+    const afterLater = session.getSnapshot();
+    if (
+      afterLater.status !== "connected" ||
+      afterLater.userNsNames[2] !== "My Amp" ||
+      namCount() !== 1
+    ) {
+      throw new Error("A later current-preset dump must not clear SnapTone names");
+    }
+    bluetooth.push(liveNsUserSnapTone());
+    const afterLive = session.getSnapshot();
+    const liveNs = afterLive.status === "connected" ? afterLive.chain.find((slot) => slot.id === "ns") : undefined;
+    if (liveNs?.modelId !== "ns-user-03") {
+      throw new Error("Bluetooth live user SnapTone notify must update NS like a factory SnapTone");
+    }
+    await session.setSlotModel("ns", "ns-14-dst");
+    await session.setSlotModel("ns", "ns-user-03");
+    const factorySet = encodeSlotModel("bluetooth", "ns", [0x00, 0x00, 0x00, 0x0f]);
+    const userSet = encodeSlotModel("bluetooth", "ns", [0x3a, 0x00, 0x00, 0x0f]);
+    const last = bluetooth.sent[bluetooth.sent.length - 1];
+    const selected = session.getSnapshot();
+    const selectedNs = selected.status === "connected" ? selected.chain.find((slot) => slot.id === "ns") : undefined;
+    if (
+      !factorySet ||
+      !userSet ||
+      !last ||
+      factorySet[0].length !== userSet[0].length ||
+      userSet[0].length > 80 ||
+      !packetsEqual(last, userSet[0]) ||
+      selectedNs?.modelId !== "ns-user-03" ||
+      namCount() !== 1
+    ) {
+      throw new Error("Selecting SnapTone 03 must send the existing model SET and no SnapTone file");
+    }
+    await session.setPatch(1);
+    const afterPatch = session.getSnapshot();
+    if (namCount() !== 1 || afterPatch.status !== "connected" || afterPatch.userNsNames[2] !== "My Amp") {
+      throw new Error("A patch change must not re-request or clear SnapTone names");
+    }
+  } finally {
+    await session.disconnect();
+  }
+  if (session.getSnapshot().status !== "disconnected") {
+    throw new Error("Disconnect must drop SnapTone names");
+  }
+}
+
+void assertUserNsSession();
 
 function writeIdentityNibble(bytes: Uint8Array, index: number, value: number): void {
   bytes[index] = (value >> 4) & 0x0f;

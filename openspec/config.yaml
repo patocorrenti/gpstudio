@@ -9,11 +9,11 @@ context: |
   official MIDI CC.   A GP Studio-owned SysEx subset
   (current patch index + onboard names, plus current-patch chain order + on/off +
   factory model and control values for the ten effect slots, plus the twenty
-  onboard user-IR CAB slots)
+  onboard user-IR CAB slots and twenty-four user SnapTone NS slots)
   is requested after connect and when the patch changes.
-  The IR-name dump is requested once per connect after the current-preset ask
-  and does not block identity or chain loading. Reload and patch change do not
-  re-request it.   The globals dump is requested once per connect for GP-50 and GP-5
+  The IR-name dump and the Nam / SnapTone-name dump are requested once per
+  connect after the current-preset ask and do not block identity or chain
+  loading. Reload and patch change do not re-request them.   The globals dump is requested once per connect for GP-50 and GP-5
   after the first current-preset dump (no waiter; not in the same burst as the
   preset ask—USB overlaps those dumps otherwise). The ask is the same on both
   models. GP-50 Bluetooth returns one SysEx (command 00 02); GP-50 USB returns
@@ -24,7 +24,7 @@ context: |
   returns fragments (command 00 05, lengths 48 / 12). GP-5 offsets follow
   `_reference/GP5bluetooth.html` and `_reference/gp5usb.html` (editor index
   minus 2; USB payload minus 9). A GP-50 payload must not decode as GP-5.
-  Selecting a user IR slot is the existing model SET (1147).
+  Selecting a user IR or user SnapTone slot is the existing model SET (1147).
   Bluetooth inbound live chain-order is in scope. Current-patch chain-order
   writes (parameter-write SET, path 01 01 04, CRC-8 + nibble-expand; not the
   live notify 01 02 04), model/control SETs of that same family (1147 / 1148),
@@ -45,7 +45,8 @@ context: |
   ignored; no pitch UI; patch change turns it off when it was on)
   are in scope on USB and Bluetooth. USB must not apply unsolicited live
   assignment reports or live stomp reports. Library SysEx (browse / import / reorder),
-  IR/NAM file upload, and the Editor route come in later phases.
+  IR/NAM file upload (name reads for IR and SnapTone are in scope), and the
+  Editor route come in later phases.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -216,7 +217,7 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot from either
     model are in scope; not the Library route)
-  - IR / SnapTone / NAM file upload (IR-name read and user-IR CAB select are in scope)
+  - IR / SnapTone / NAM file upload (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope)
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
     live-module SysEx, Stomp
@@ -258,9 +259,9 @@ context: |
 
   Hard constraints:
   - SysEx for the editor and for IR/NAM file upload is reverse-engineered in third-party projects. Do not copy that code.
-    IR-name read and the user-IR CAB catalog are GP Studio-owned and in scope.
-  - Patch identity SysEx (current index + names), the IR-name dump, and current-patch chain SysEx
-    (order + on/off + factory model/control decode, including user-IR CAB wires, Bluetooth live chain-order
+    IR-name read, the user-IR CAB catalog, Nam-name read, and the user-NS SnapTone catalog are GP Studio-owned and in scope.
+  - Patch identity SysEx (current index + names), the IR-name dump, the Nam dump, and current-patch chain SysEx
+    (order + on/off + factory model/control decode, including user-IR CAB and user-NS wires, Bluetooth live chain-order
     decode, Bluetooth live model/control decode, the order-only SET, model/control SETs,
     and current-patch store SET 114a)
     are GP Studio-owned codecs. Read reference/; do not paste that source into src/.
@@ -303,7 +304,8 @@ rules:
     - Cite docs/architecture.md when restating stack, phases, or MIDI constraints
     - Do not propose copied SysEx, Library browse/import/reorder, Library .prst
       import, IR/NAM file upload, or mobile packaging in phase 1 changes.
-      IR-name read and user-IR CAB catalog/select are in scope.
+      IR-name read, user-IR CAB catalog/select, Nam-name read, and user-NS
+      SnapTone catalog/select are in scope.
     - Current-patch store SET of the existing parameter-write family and
       current-patch .prst export (native) plus import from either model are
       allowed; they are not the Library route
@@ -326,8 +328,8 @@ rules:
     - Do not leak BluetoothDevice/Web Bluetooth types into DeviceSession or React
     - BluetoothLink is GATT discover/open/send/subscribe/close; do not add a throwing send() stub or copy third-party SysEx
     - Bluetooth inbound Log is in scope; applying inbound patch identity and
-      current-patch chain (order + on/off + factory model and control values, including user-IR CAB slots)
-      and the IR-name dump are in scope; GP-50 and GP-5 globals asks are in
+      current-patch chain (order + on/off + factory model and control values, including user-IR CAB and user-NS SnapTone slots)
+      and the IR-name dump and Nam dump are in scope; GP-50 and GP-5 globals asks are in
       scope; Bluetooth inbound
       live-module SysEx, Stomp-originated chain on/off, live chain-order,
       live model/control (commands 07 / 08), and live global reports
