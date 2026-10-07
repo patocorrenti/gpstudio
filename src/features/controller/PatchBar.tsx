@@ -27,7 +27,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { modelById } from "@/device/catalog";
+import { userIrDisplayName } from "@/device/ir-names";
 import { type DeviceModel } from "@/device/models";
+import { userNsDisplayName } from "@/device/nam-names";
 import {
   chainSlotLabel,
   type DeviceSession,
@@ -41,6 +44,40 @@ import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
 import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
 import { toast } from "sonner";
+
+/** Custom IR / SnapTone slots referenced by the working chain (slot only; no file bytes). */
+type CustomAssetWarning = {
+  irName: string | null;
+  nsName: string | null;
+};
+
+function customAssetsForDownload(session: DeviceSession): CustomAssetWarning | null {
+  const snapshot = session.getSnapshot();
+  if (snapshot.status !== "connected") {
+    return null;
+  }
+  let irName: string | null = null;
+  let nsName: string | null = null;
+  for (const slot of snapshot.chain) {
+    if (slot.modelId === undefined) {
+      continue;
+    }
+    const model = modelById(slot.modelId);
+    if (!model) {
+      continue;
+    }
+    if (model.userIrSlot !== undefined) {
+      irName = userIrDisplayName(model, snapshot.userIrNames);
+    }
+    if (model.userNsSlot !== undefined) {
+      nsName = userNsDisplayName(model, snapshot.userNsNames);
+    }
+  }
+  if (irName === null && nsName === null) {
+    return null;
+  }
+  return { irName, nsName };
+}
 
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
@@ -173,6 +210,7 @@ export function PatchBar({
     omissions: OmittedFactoryModel[];
   } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const destIndex = Number.parseInt(duplicateDest, 10);
   const destName =
@@ -222,6 +260,20 @@ export function PatchBar({
         error: toastError("Could not duplicate patch."),
       },
     );
+  }
+
+  function requestDownload() {
+    const warning = customAssetsForDownload(session);
+    if (warning) {
+      setDownloadWarn(warning);
+      return;
+    }
+    void downloadPatch();
+  }
+
+  function confirmDownload() {
+    setDownloadWarn(null);
+    void downloadPatch();
   }
 
   async function downloadPatch() {
@@ -420,7 +472,7 @@ export function PatchBar({
               className="h-8 w-full justify-start gap-2 px-2 font-normal"
               onClick={() => {
                 setOptionsOpen(false);
-                void downloadPatch();
+                requestDownload();
               }}
             >
               <Download className={patchActionIconClass} />
@@ -562,6 +614,51 @@ export function PatchBar({
             </Button>
             <Button type="button" onClick={confirmDuplicate}>
               {overwriteOpen ? "Overwrite" : "Duplicate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={downloadWarn !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDownloadWarn(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download this patch?</DialogTitle>
+            <DialogDescription>
+              {downloadWarn?.irName ? (
+                <span className="block">
+                  This patch uses the custom IR {downloadWarn.irName}. The file will
+                  reference that IR slot but will not include the IR file. Loading it
+                  on another pedal will use whatever IR is in that slot there.
+                </span>
+              ) : null}
+              {downloadWarn?.nsName ? (
+                <span className={downloadWarn.irName ? "mt-2 block" : "block"}>
+                  This patch uses the custom SnapTone {downloadWarn.nsName}. The file
+                  will reference that SnapTone slot but will not include the SnapTone
+                  file. Loading it on another pedal will use whatever SnapTone is in
+                  that slot there.
+                </span>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDownloadWarn(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmDownload}>
+              Download
             </Button>
           </DialogFooter>
         </DialogContent>

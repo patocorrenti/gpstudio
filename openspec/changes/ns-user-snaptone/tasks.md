@@ -27,3 +27,7 @@
 - [x] 6.1 Update `docs/architecture.md` and `docs/protocol-references.md` so Nam-name read and user-NS catalog/select are in-scope SysEx, IR/NAM **upload** stays out, and verify the files still forbid copying `reference/` JavaScript
 - [x] 6.2 Mirror that in `openspec/config.yaml` context and rules, and verify the file still parses as YAML
 - [x] 6.3 Run `npx tsc -b --pretty false` and fix type errors from this change
+
+## 7. Download warning
+
+- [x] 7.1 When Download is activated and the working patch uses a user IR and/or user SnapTone, show an English confirmation that the `.prst` references the slot but does not include the IR / SnapTone file; Cancel must not download; factory-only patches must not show the dialog

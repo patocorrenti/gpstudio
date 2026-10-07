@@ -513,7 +513,7 @@ Selecting a user IR slot MUST go through the device session the same way as sele
 
 After the patch bar is shown, Controller SHALL let the user Save the current working patch onto the current slot, rename that patch, duplicate it onto another 00–99 slot, download it to the PC, and upload a Valeton `.prst` into the current working patch, all through the device session. Labels MUST be in English. The same controls MUST be used on USB and Bluetooth.
 
-Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a Valeton `.prst` of the current patch for the connected pedal (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the patch to the other model. If the current-preset dump is missing, download MUST NOT invent a file.
+Save MUST store the current working patch on the pedal in the current slot. Rename MUST change the onboard name of the current patch (at most 10 characters) through the session and MUST update the selector when that name is known. Duplicate MUST ask for a destination slot other than the current one; confirming MUST copy the current working patch onto that slot without changing the selected patch; overwriting a destination that already has a patch MUST require confirmation. Download MUST produce a Valeton `.prst` of the current patch for the connected pedal (GP-50 session → GP-50 `.prst`; GP-5 session → GP-5 `.prst`). Download MUST NOT convert the patch to the other model. If the current-preset dump is missing, download MUST NOT invent a file. When the working patch's CAB model is an onboard user IR slot, or its NS model is an onboard user SnapTone slot, Download MUST ask for English confirmation before producing the file; that confirmation MUST say the file references the slot but does not include the IR or SnapTone file. Cancel MUST NOT produce a file. When the working patch uses neither a user IR nor a user SnapTone, Download MUST NOT show that confirmation.
 
 Upload MUST let the user pick a `.prst` from the PC. After a file is chosen, Controller MUST ask the user to confirm that this will load into the current working patch. When the file contains factory models the connected pedal's catalog does not include, that confirmation MUST name those models in English and MUST still offer confirm. When the file has no such models, the confirmation MUST NOT add an omission warning. Cancel MUST NOT apply the file and MUST NOT send MIDI. Confirm MUST apply that file onto the currently selected patch through the device session and MUST NOT store it on the pedal. Save remains the control that stores the working patch. Upload MUST NOT change which patch is selected. A valid `.prst` from either model MUST be eligible to confirm. A file that is not a valid Valeton `.prst` MUST produce an English error and MUST NOT be applied. The slot number in the filename MUST be ignored. Controller MUST NOT send raw MIDI.
 
@@ -542,15 +542,31 @@ While the current patch is syncing, Reload, Save, rename, duplicate, download, u
 - **AND** no store write is sent until the user confirms
 
 #### Scenario: User downloads a GP-50 preset file
-- **WHEN** a GP-50 session is ready, the current patch is `60` named `TOB` and synced with a current-preset dump, and the user activates download
+- **WHEN** a GP-50 session is ready, the current patch is `60` named `TOB` and synced with a current-preset dump that does not use a user IR or user SnapTone, and the user activates download
 - **THEN** a Valeton `.prst` for GP-50 is produced through the device session
 - **AND** the filename identifies GP-50, slot `60`, and `TOB`
 - **AND** no extra patch recall is sent solely because download ran
+- **AND** Controller does not ask for custom-asset confirmation
 
 #### Scenario: User downloads a GP-5 preset file
-- **WHEN** a GP-5 session is ready, the current patch is synced with a current-preset dump, and the user activates download
+- **WHEN** a GP-5 session is ready, the current patch is synced with a current-preset dump that does not use a user IR or user SnapTone, and the user activates download
 - **THEN** a Valeton `.prst` for GP-5 is produced through the device session
 - **AND** the filename identifies GP-5 and that slot and name
+- **AND** Controller does not ask for custom-asset confirmation
+
+#### Scenario: Download warns for a custom IR
+- **WHEN** the session is ready, the current patch's CAB model is a user IR slot, and the user activates download
+- **THEN** Controller asks the user to confirm in English that the file references the IR slot but does not include the IR file
+- **AND** no local patch file is produced until the user confirms
+
+#### Scenario: Download warns for a custom SnapTone
+- **WHEN** the session is ready, the current patch's NS model is a user SnapTone slot, and the user activates download
+- **THEN** Controller asks the user to confirm in English that the file references the SnapTone slot but does not include the SnapTone file
+- **AND** no local patch file is produced until the user confirms
+
+#### Scenario: Download custom-asset warning cancel
+- **WHEN** Controller is showing the custom-asset download confirmation and the user cancels
+- **THEN** no local patch file is produced
 
 #### Scenario: Download is unavailable without a dump
 - **WHEN** the session is ready without a current-preset dump
