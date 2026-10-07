@@ -141,7 +141,7 @@ export function AboutPage() {
             About GP Studio
           </h1>
           <p className="text-sm text-muted-foreground/60 mt-5 mb-5">
-            It's an independent <a href="https://github.com/patocorrenti/gpstudio" target="_blank" rel="noopener noreferrer" className="text-foreground/60 underline underline-offset-4 hover:text-foreground">open source</a> controller for the Valeton GP-5/50 multi-effects.
+            GP Studio is a free <a href="https://github.com/patocorrenti/gpstudio" target="_blank" rel="noopener noreferrer" className="text-foreground/60 underline underline-offset-4 hover:text-foreground">open source</a> controller for the Valeton GP-5/50 multi-effects.
           </p>
         </div>
         <p className="text-muted-foreground leading-relaxed">
@@ -168,7 +168,7 @@ export function AboutPage() {
               className={`${actionButtonClassName} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500 hover:text-white dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600`}
             >
               <a
-                href="https://github.com/sponsors/patocorrenti"
+                href="https://ko-fi.com/patocorrenti"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -182,31 +182,6 @@ export function AboutPage() {
                   </span>
                   <span className="text-xs font-normal opacity-70">
                     if you like it
-                  </span>
-                </span>
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={actionButtonClassName}
-            >
-              <a
-                href="https://github.com/patocorrenti/gpstudio"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <img
-                  src={githubMark}
-                  alt=""
-                  className="size-5 shrink-0 dark:invert"
-                />
-                <span className={actionLabelClassName}>
-                  <span className="text-sm font-semibold text-foreground">
-                    Get the Code
-                  </span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    it's open source!
                   </span>
                 </span>
               </a>
@@ -253,6 +228,31 @@ export function AboutPage() {
                 </span>
               </a>
             </Button>
+            <Button
+              asChild
+              variant="outline"
+              className={actionButtonClassName}
+            >
+              <a
+                href="https://github.com/patocorrenti/gpstudio"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={githubMark}
+                  alt=""
+                  className="size-5 shrink-0 dark:invert"
+                />
+                <span className={actionLabelClassName}>
+                  <span className="text-sm font-semibold text-foreground">
+                    Get the Code
+                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    it's open source!
+                  </span>
+                </span>
+              </a>
+            </Button>
           </div>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-muted-foreground/60">
@@ -262,13 +262,10 @@ export function AboutPage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight">What's next</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Upcoming Features</h2>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
-          <li>Desktop builds for Windows, Mac, and Linux</li>
-          <li>Publish the project as open source</li>
-          <li>
-            Share it with the community and gather feedback and ideas
-          </li>
+          <li>Desktop builds for Windows and Linux</li>
+          <li>AB Test to compare presets</li>
         </ul>
       </div>
 

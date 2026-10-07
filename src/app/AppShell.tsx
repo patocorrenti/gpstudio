@@ -1,8 +1,6 @@
-import { Bug } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
 import logo from "@/assets/img/gp-studio-logo.svg";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
@@ -38,8 +36,8 @@ export function AppShell() {
       <main className="flex min-h-0 flex-1 flex-col p-6">
         <Outlet />
       </main>
-      <footer className="flex items-center gap-4 border-t py-2 pr-6 pl-6 text-[11px] leading-none text-muted-foreground/60">
-        <p className="min-w-0 flex-1 text-center">
+      <footer className="border-t py-2 pr-6 pl-6 text-center text-[11px] leading-none text-muted-foreground/60">
+        <p>
           <span className="font-bold">GP Studio</span>
           {' '}v1.0.0-beta.2
           {" · Compatible with Valeton GP5/50 · "}
@@ -47,21 +45,6 @@ export function AppShell() {
             © 2026 Pato Correnti
           </Link>
         </p>
-        <Button
-          variant="outline"
-          size="xs"
-          className="shrink-0 border-amber-500/50 bg-amber-400/15 text-[11px] text-amber-950 hover:bg-amber-400/30 dark:text-amber-100"
-          asChild
-        >
-          <a
-            href="https://forms.gle/PhvZEPBty96WWzDDA"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Bug />
-            Report a Bug
-          </a>
-        </Button>
       </footer>
     </div>
     </ConnectDialogProvider>
