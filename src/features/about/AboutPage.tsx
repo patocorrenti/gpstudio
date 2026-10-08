@@ -160,6 +160,9 @@ export function AboutPage() {
           <strong>GP Studio</strong> is the controller I always wanted to have —
           now that I found the pedal I didn't know I always wanted.
         </p>
+        <p className="text-muted-foreground leading-relaxed">
+          I hope you enjoy using it as much as I enjoyed building it.
+        </p>
         <div className="mt-6 rounded-lg bg-muted/80 p-3 dark:bg-muted/50">
           <div className="grid grid-cols-1 gap-3 min-[500px]:grid-cols-2 min-[42rem]:grid-cols-[1.2fr_1fr_1fr_1fr]">
             <Button
@@ -261,7 +264,7 @@ export function AboutPage() {
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 border-t border-border pt-10">
         <h2 className="text-lg font-semibold tracking-tight">Upcoming Features</h2>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
           <li>Desktop builds for Windows and Linux</li>
