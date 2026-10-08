@@ -15,6 +15,13 @@ const actionLabelClassName =
 
 const CHANGELOG = [
   {
+    version: "1.0.0-beta.3",
+    notes: [
+      "Quick connection feature improvements",
+      "Officially in open beta",
+    ],
+  },
+  {
     version: "1.0.0-beta.2",
     notes: [
       "User SnapTone slots on NS, with names from the pedal",
