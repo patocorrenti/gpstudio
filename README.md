@@ -4,6 +4,9 @@
 <a href="https://gpstudio.patocorrenti.com">
   <img src="src/assets/img/try-gp-studio.svg" alt="Try GP Studio, it's free!" />
 </a>
+<a href="https://github.com/sponsors/patocorrenti">
+  <img src="src/assets/img/support-gp-studio.svg" alt="Like it? Support GP Studio" />
+</a>
 
 
 ## What is GP Studio?
@@ -79,6 +82,12 @@ npm run tauri dev
 Bug reports and contribution guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 External code contributions are not open yet. For security vulnerabilities, see[SECURITY.md](SECURITY.md).
+
+## Support GP Studio
+
+If you find GP Studio useful, you can support its development with a [voluntary contribution](https://github.com/sponsors/patocorrenti).
+
+Financial support is completely voluntary and does not purchase any product, service, feature, priority, or other benefit. Feature requests and financial support are completely independent.
 
 ## License
 
