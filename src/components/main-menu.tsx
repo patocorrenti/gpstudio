@@ -142,7 +142,6 @@ export default function MainMenu() {
             <MenuLink to="/" end>
               Pedal
             </MenuLink>
-            <MenuLink to="/log">Log</MenuLink>
             <MenuLink to="/about">About</MenuLink>
           </NavigationMenuList>
         </NavigationMenu>
