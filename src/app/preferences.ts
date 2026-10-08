@@ -17,7 +17,7 @@ export type RememberedPedal = {
 };
 
 export type StartupPedal = {
-  link: PreferenceLink;
+  link: "usb";
   id: string;
 };
 
@@ -93,10 +93,10 @@ function parseStartup(value: unknown): StartupPedal | null {
     return null;
   }
   const record = value as { link?: unknown; id?: unknown };
-  if (!isLink(record.link) || typeof record.id !== "string" || record.id.length === 0) {
+  if (record.link !== "usb" || typeof record.id !== "string" || record.id.length === 0) {
     return null;
   }
-  return { link: record.link, id: record.id };
+  return { link: "usb", id: record.id };
 }
 
 function parseDismissed(value: unknown): string[] {
@@ -182,10 +182,10 @@ function rewriteStartup(
   previousId: string,
   nextId: string,
 ): StartupPedal | null {
-  if (!startup || startup.link !== link || startup.id !== previousId) {
+  if (!startup || link !== "usb" || startup.id !== previousId) {
     return startup;
   }
-  return { link, id: nextId };
+  return { link: "usb", id: nextId };
 }
 
 export function rememberPedal(
@@ -253,11 +253,14 @@ export function forgetPedal(id: string, store: KeyValueStore = browserStore()): 
 }
 
 export function setStartup(
-  startup: StartupPedal,
+  startup: { link: PreferenceLink; id: string },
   store: KeyValueStore = browserStore(),
 ): void {
+  if (startup.link !== "usb") {
+    return;
+  }
   const document = read(store);
-  document.startup = { link: startup.link, id: startup.id };
+  document.startup = { link: "usb", id: startup.id };
   write(store, document);
 }
 
@@ -442,6 +445,24 @@ function assertPreferencesDocument(): void {
   clearStartup(rewrite);
   assertPreferences(readPreferences(rewrite).startup === null, "Clear startup drops only startup");
   assertPreferences(readPreferences(rewrite).pedals.length === 1, "Clear startup keeps remembered pedals");
+
+  const bluetoothStartup = memoryStore({
+    [PREFERENCES_KEY]: JSON.stringify({
+      version: 1,
+      pedals: [{ link: "bluetooth", id: "aa:bb", label: "GP-50", model: "gp50" }],
+      startup: { link: "bluetooth", id: "aa:bb" },
+      dismissed: [],
+    }),
+  });
+  assertPreferences(
+    readPreferences(bluetoothStartup).startup === null,
+    "Bluetooth startup reads as no startup",
+  );
+  setStartup({ link: "bluetooth", id: "aa:bb" }, bluetoothStartup);
+  assertPreferences(
+    readPreferences(bluetoothStartup).startup === null,
+    "setStartup ignores a non-USB link",
+  );
 
   const legacy = memoryStore({
     [LEGACY_PREFERENCES_KEY]: JSON.stringify({

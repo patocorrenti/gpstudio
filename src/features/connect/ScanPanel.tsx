@@ -10,7 +10,6 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DialogFooter,
   DialogHeader,
@@ -48,26 +47,20 @@ export function ScanPanel({
   bleEndpoints,
   error,
   busy,
-  startupChecked,
-  startupDisabled,
-  onStartupChecked,
   onPickDevice,
   onForget,
-  onClearFavorite,
+  onToggleStartup,
   onRefresh,
 }: {
   linkTab: LinkMode;
   onLinkTabChange: (value: LinkMode) => void;
-  usbEndpoints: Array<ListedPedal & { favorite: boolean }>;
-  bleEndpoints: Array<ListedPedal & { favorite: boolean }>;
+  usbEndpoints: Array<ListedPedal & { startup: boolean }>;
+  bleEndpoints: ListedPedal[];
   error: string | null;
   busy: boolean;
-  startupChecked: boolean;
-  startupDisabled: boolean;
-  onStartupChecked: (checked: boolean) => void;
   onPickDevice: (endpoint: ListedPedal) => void;
   onForget: (endpoint: ListedPedal) => void;
-  onClearFavorite: () => void;
+  onToggleStartup: (endpoint: ListedPedal, enabled: boolean) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -103,7 +96,7 @@ export function ScanPanel({
                 text: (
                   <span className="text-foreground">
                     <span className="font-bold">Super responsive</span>
-                    {" "}—{" "}Fast, stable connection.
+                    {" "}—{" "}Instant, stable connection.
                   </span>
                 ),
               },
@@ -137,9 +130,10 @@ export function ScanPanel({
           <EndpointList
             endpoints={usbEndpoints}
             busy={busy}
+            showStartup
             onPick={onPickDevice}
             onForget={onForget}
-            onClearFavorite={onClearFavorite}
+            onToggleStartup={onToggleStartup}
           />
         </TabsContent>
         <TabsContent value="bluetooth" className="flex flex-col gap-4">
@@ -182,32 +176,18 @@ export function ScanPanel({
             </div>
           ) : null}
           <EndpointList
-            endpoints={bleEndpoints}
+            endpoints={bleEndpoints.map((endpoint) => ({
+              ...endpoint,
+              startup: false,
+            }))}
             busy={busy}
+            showStartup={false}
             onPick={onPickDevice}
             onForget={onForget}
-            onClearFavorite={onClearFavorite}
+            onToggleStartup={onToggleStartup}
           />
         </TabsContent>
       </Tabs>
-      <div className="flex items-center justify-center gap-2">
-        <Checkbox
-          id="always-use-pedal"
-          checked={startupChecked}
-          disabled={startupDisabled}
-          onCheckedChange={(value) => onStartupChecked(value === true)}
-        />
-        <label
-          htmlFor="always-use-pedal"
-          className={
-            startupDisabled
-              ? "text-sm text-muted-foreground"
-              : "text-sm leading-snug"
-          }
-        >
-          Always connect this way, don't ask again
-        </label>
-      </div>
       {linkTab === "usb" || linkTab === "bluetooth" ? (
         <DialogFooter>
           <Button
