@@ -38,7 +38,7 @@ While the Bluetooth tab is selected, the modal MUST keep the two-way / slower tr
 
 On the desktop app, selecting the Bluetooth tab MUST scan for nearby pedals and MUST list those pedals together with any remembered Bluetooth pedals.
 
-On the web app, selecting the Bluetooth tab MUST open the browser Bluetooth picker. An interactive scan (including Scan again) MUST open that picker. When the user chooses a pedal there and the label suggests GP-5 or GP-50, the system MUST connect using that model without requiring a second pick from the modal list. When the chosen pedal has no suggested model, the modal MUST ask GP-5 vs GP-50 before connecting. When the user cancels the picker, the modal MUST keep listing remembered Bluetooth pedals and any already-authorized Bluetooth pedals that are still available, and the session MUST stay disconnected until the user picks a device from that list or scans again. The Bluetooth tab MUST NOT offer Connect on startup.
+On the web app, selecting the Bluetooth tab MUST open the browser Bluetooth picker. An interactive scan (including Scan again) MUST open that picker. When the user chooses a pedal there and the label suggests GP-5 or GP-50, the system MUST connect using that model without requiring a second pick from the modal list. When the chosen pedal has no suggested model, the modal MUST ask GP-5 vs GP-50 before connecting. When the user cancels the picker, the modal MUST keep listing remembered Bluetooth pedals and any already-authorized Bluetooth pedals that are still available, and the session MUST stay disconnected until the user picks a device from that list or scans again. The Bluetooth tab MUST NOT offer Quick connect.
 
 #### Scenario: Desktop Bluetooth scan then pick
 - **WHEN** the user selects the Bluetooth tab while disconnected in the desktop app
@@ -121,7 +121,7 @@ Remembered pedals and the USB startup pedal MUST survive restarting the app on t
 
 The startup pedal MUST be a USB pedal only. The disconnected Connect scan body MUST NOT show “Always connect this way, don't ask again”. The Bluetooth tab MUST NOT offer a control that sets or clears the startup pedal.
 
-On the USB tab, each listed pedal row MUST show English “Connect on startup” beside a circular Zap toggle. The toggle MUST read as on when that pedal is the startup pedal and off otherwise. Activating an off toggle MUST set that USB pedal as the only startup pedal (with its known model when available) and MUST clear any previous startup pedal. Activating an on toggle MUST clear the startup pedal and MUST leave the remembered list unchanged. The toggle MUST NOT by itself connect. A tooltip on that control MUST explain that the app will try to connect to that pedal when the application opens. The connected panel MUST NOT show Connect on startup.
+On the USB tab, each listed pedal row MUST offer a circular Zap Quick connect toggle. At most one USB pedal MUST be the startup pedal (radio by endpoint id). When the toggle is on for that pedal, the row MUST show English “Quick connect” and a filled Zap icon. When the toggle is off, the row MUST NOT show that label, MUST show an empty circle with a muted Zap icon, and MUST keep a transparent button background. Activating an off toggle MUST set that USB pedal as the only startup pedal (with its known model when available) and MUST clear any previous startup pedal. Activating an on toggle MUST clear the startup pedal and MUST leave the remembered list unchanged. The toggle MUST NOT by itself connect. A tooltip on that control MUST explain Quick connect auto-connects on startup. The connected panel MUST NOT show Quick connect.
 
 When a USB startup pedal with a known model is saved, opening the app while disconnected MUST try once to connect to that pedal over USB without opening Connect first. A successful attempt MUST use the same connect success toast as a manual connect. A failed attempt MUST show one English toast that the startup pedal failed or is not connected, MUST open Connect on the USB tab, and MUST NOT also show the manual connect error toast or the pedal-disconnected toast for that same attempt. If the startup pedal has no known model, the app MUST NOT connect automatically and MUST NOT show that failure toast. A stored startup choice for Bluetooth MUST be ignored and MUST NOT trigger a launch connect.
 
@@ -130,21 +130,21 @@ When a USB startup pedal with a known model is saved, opening the app while disc
 - **THEN** the scan body does not show “Always connect this way, don't ask again”
 
 #### Scenario: Checking does not connect
-- **WHEN** the user turns on Connect on startup for a listed USB pedal and does not pick a pedal to connect
+- **WHEN** the user turns on Quick connect for a listed USB pedal and does not pick a pedal to connect
 - **THEN** the session stays disconnected
 
 #### Scenario: Next pick becomes the startup pedal
-- **WHEN** the user turns on Connect on startup for a listed USB pedal whose label suggests GP-50
+- **WHEN** the user turns on Quick connect for a listed USB pedal whose label suggests GP-50
 - **THEN** that pedal on USB is the startup pedal
 - **AND** the session stays disconnected until the user picks a pedal to connect
 
 #### Scenario: Unchecking clears startup only
-- **WHEN** a USB startup pedal is saved and the user turns off Connect on startup for that pedal
+- **WHEN** a USB startup pedal is saved and the user turns off Quick connect for that pedal
 - **THEN** the next launch does not try to connect automatically
 - **AND** that pedal remains in the remembered list
 
 #### Scenario: Favorite star clears startup only
-- **WHEN** a USB startup pedal is saved and the user turns off Connect on startup for that pedal via the circular Zap toggle
+- **WHEN** a USB startup pedal is saved and the user turns off Quick connect for that pedal via the circular Zap toggle
 - **THEN** the next launch does not try to connect automatically
 - **AND** that pedal remains in the remembered list
 
@@ -162,7 +162,7 @@ When a USB startup pedal with a known model is saved, opening the app while disc
 
 #### Scenario: Bluetooth has no Connect on startup
 - **WHEN** the Bluetooth tab lists a pedal
-- **THEN** that row does not offer Connect on startup
+- **THEN** that row does not offer Quick connect
 
 #### Scenario: Stored Bluetooth startup is ignored
 - **WHEN** preferences still contain a Bluetooth startup pedal and the user opens the app while disconnected

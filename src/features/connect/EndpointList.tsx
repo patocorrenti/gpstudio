@@ -100,10 +100,10 @@ export function EndpointList({
                                 variant="outline"
                                 size="icon-xs"
                                 className={cn(
-                                  "size-6 shrink-0 rounded-full",
+                                  "size-6 shrink-0 rounded-full bg-transparent hover:bg-transparent",
                                   endpoint.startup
-                                    ? "border-foreground/50 bg-foreground/50 text-background hover:bg-foreground/50 hover:text-background dark:bg-foreground/50 dark:text-background dark:hover:bg-foreground/50 dark:hover:text-background"
-                                    : "border-muted-foreground/40 bg-transparent text-muted-foreground/50 hover:bg-transparent hover:text-muted-foreground/70",
+                                    ? "border-foreground/50 text-foreground hover:text-foreground"
+                                    : "border-muted-foreground/40 text-muted-foreground/50 hover:text-muted-foreground/70",
                                 )}
                                 aria-label={
                                   endpoint.startup
@@ -119,13 +119,15 @@ export function EndpointList({
                                 <Zap
                                   className={cn(
                                     "size-3",
-                                    endpoint.startup && "fill-current",
+                                    endpoint.startup
+                                      ? "fill-current"
+                                      : "fill-none",
                                   )}
                                 />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent side="left">
-                              <b>Quick connect:</b> Automatically connect on startup
+                              <b>Quick connect:</b>Automatically connect on startup
                             </TooltipContent>
                           </Tooltip>
                         </div>
