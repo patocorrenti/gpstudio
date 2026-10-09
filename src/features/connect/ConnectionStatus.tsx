@@ -8,6 +8,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { LinkEndpoint } from "@/device/endpoint";
 import type { LinkMode } from "@/device/link";
 import { displayModelName, type DeviceModel } from "@/device/models";
+import { isTauriRuntime } from "@/midi/detect";
 import type { MidiEndpoint } from "@/midi/types";
 import {
   clearStartup,
@@ -32,7 +33,7 @@ import { useConnectDialog } from "@/features/connect/ConnectDialogProvider";
 import { ScanPanel } from "@/features/connect/ScanPanel";
 import { SelectModelPanel } from "@/features/connect/SelectModelPanel";
 
-const FAVORITE_CONNECT_ERROR = "Your favorite pedal failed or is not connected.";
+const STARTUP_CONNECT_ERROR = "Your startup pedal failed or is not connected.";
 
 /**
  * One launch attempt shared across StrictMode's extra mount. UI updates subscribe
@@ -40,9 +41,7 @@ const FAVORITE_CONNECT_ERROR = "Your favorite pedal failed or is not connected."
  */
 let startupAttempt: Promise<{
   ok: boolean;
-  link: PreferenceLink;
   usb?: MidiEndpoint[];
-  ble?: BluetoothEndpoint[];
 }> | null = null;
 
 /** Covers the launch attempt's connect-then-fail path, including after a remount. */
@@ -70,22 +69,12 @@ function omittedIdsFor(
   return ids;
 }
 
-function isFavorite(
-  link: PreferenceLink,
+function isStartup(
   row: ListedPedal,
   preferences: PreferencesDocument,
 ): boolean {
-  const startup = preferences.startup;
-  if (!startup || startup.link !== link) {
-    return false;
-  }
-  if (row.id === startup.id) {
-    return true;
-  }
-  const saved = preferences.pedals.find(
-    (pedal) => pedal.link === link && pedal.id === startup.id,
-  );
-  return saved?.label === row.label;
+  // Radio by endpoint id only — label match would light every pedal with the same name.
+  return preferences.startup?.id === row.id;
 }
 
 export function ConnectionStatus() {
@@ -98,7 +87,6 @@ export function ConnectionStatus() {
   const [bleEndpoints, setBleEndpoints] = useState<BluetoothEndpoint[]>([]);
   const [preferences, setPreferences] = useState(readPreferences);
   const [omittedKeys, setOmittedKeys] = useState<string[]>([]);
-  const [armStartup, setArmStartup] = useState(false);
   const [pending, setPending] = useState<LinkEndpoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -110,7 +98,6 @@ export function ConnectionStatus() {
   const previousStatus = useRef(snapshot.status);
   /** Suppress disconnect toast/modal-close when connect opens then fails (e.g. silent name-list). */
   const suppressDisconnectFeedback = useRef(false);
-  const startupChecked = armStartup || preferences.startup !== null;
 
   function refreshPreferences() {
     setPreferences(readPreferences());
@@ -161,7 +148,7 @@ export function ConnectionStatus() {
       return;
     }
     const pedal = prefs.pedals.find(
-      (item) => item.link === startup.link && item.id === startup.id,
+      (item) => item.link === "usb" && item.id === startup.id,
     );
     if (!pedal?.model) {
       return;
@@ -169,7 +156,7 @@ export function ConnectionStatus() {
     const model = pedal.model;
     if (!startupAttempt) {
       const result = { label: pedal.label };
-      const found: { usb?: MidiEndpoint[]; ble?: BluetoothEndpoint[] } = {};
+      const found: { usb?: MidiEndpoint[] } = {};
       startupAttempt = (async () => {
         try {
           await toast
@@ -177,17 +164,17 @@ export function ConnectionStatus() {
               (async () => {
                 const endpoint = await resolveStartupEndpoint(startup, pedal, found);
                 if (!endpoint) {
-                  throw new Error(FAVORITE_CONNECT_ERROR);
+                  throw new Error(STARTUP_CONNECT_ERROR);
                 }
                 result.label = endpoint.label;
                 if (endpoint.id !== pedal.id) {
                   rememberPedal({
-                    link: pedal.link,
+                    link: "usb",
                     id: endpoint.id,
                     label: endpoint.label,
                     model,
                   });
-                  setStartup({ link: pedal.link, id: endpoint.id });
+                  setStartup({ link: "usb", id: endpoint.id });
                 }
                 suppressStartupDisconnect = true;
                 await session.connect(endpoint, model);
@@ -195,13 +182,13 @@ export function ConnectionStatus() {
               {
                 loading: "Connecting…",
                 success: () => `Connected to ${result.label}`,
-                error: FAVORITE_CONNECT_ERROR,
+                error: STARTUP_CONNECT_ERROR,
               },
             )
             .unwrap();
-          return { ok: true, link: startup.link, ...found };
+          return { ok: true, ...found };
         } catch {
-          return { ok: false, link: startup.link, ...found };
+          return { ok: false, ...found };
         }
       })();
     }
@@ -216,20 +203,17 @@ export function ConnectionStatus() {
         if (outcome.usb) {
           setUsbEndpoints(outcome.usb);
         }
-        if (outcome.ble) {
-          setBleEndpoints(outcome.ble);
-        }
         refreshPreferences();
         if (outcome.ok) {
           suppressStartupDisconnect = false;
           suppressDisconnectFeedback.current = false;
           return;
         }
-        setLinkTab(outcome.link);
+        setLinkTab("usb");
         if (dialogOpen.current) {
           openOnTab.current = "usb";
         } else {
-          openOnTab.current = outcome.link;
+          openOnTab.current = "usb";
           setOpen(true);
         }
         window.setTimeout(() => {
@@ -253,24 +237,17 @@ export function ConnectionStatus() {
     async function resolveStartupEndpoint(
       choice: StartupPedal,
       saved: RememberedPedal,
-      found: { usb?: MidiEndpoint[]; ble?: BluetoothEndpoint[] },
+      found: { usb?: MidiEndpoint[] },
     ): Promise<LinkEndpoint | null> {
-      if (choice.link === "usb") {
-        const list = await session.discover();
-        for (const endpoint of list) {
-          syncRememberedId("usb", endpoint.id, endpoint.label);
-        }
-        found.usb = list;
-        return matchSaved(list, saved);
+      if (choice.link !== "usb") {
+        return null;
       }
-      const { endpoints } = await session.discoverBluetooth({
-        interactive: false,
-      });
-      for (const endpoint of endpoints) {
-        syncRememberedId("bluetooth", endpoint.id, endpoint.label);
+      const list = await session.discover();
+      for (const endpoint of list) {
+        syncRememberedId("usb", endpoint.id, endpoint.label);
       }
-      found.ble = endpoints;
-      return matchSaved(endpoints, saved);
+      found.usb = list;
+      return matchSaved(list, saved);
     }
   }, [session, setOpen]);
 
@@ -305,27 +282,23 @@ export function ConnectionStatus() {
   async function scanBluetooth(interactive: boolean) {
     setBusy(true);
     setError(null);
+    let selected: BluetoothEndpoint | undefined;
     try {
       const { endpoints, selectedId } = await session.discoverBluetooth({
         interactive,
       });
       absorbLive("bluetooth", endpoints);
-      const selected = selectedId
+      setBleEndpoints(endpoints);
+      selected = selectedId
         ? endpoints.find((endpoint) => endpoint.id === selectedId)
         : undefined;
       if (selected) {
-        rememberPedal({
-          link: "bluetooth",
-          id: selected.id,
-          label: selected.label,
-          ...(selected.suggestedModel ? { model: selected.suggestedModel } : {}),
-        });
+        const selectedId = selected.id;
         setOmittedKeys((current) =>
-          current.filter((key) => key !== omitKey("bluetooth", selected.id)),
+          current.filter((key) => key !== omitKey("bluetooth", selectedId)),
         );
         refreshPreferences();
       }
-      setBleEndpoints(endpoints);
     } catch (cause) {
       setBleEndpoints([]);
       setError(
@@ -335,6 +308,9 @@ export function ConnectionStatus() {
       );
     } finally {
       setBusy(false);
+    }
+    if (selected) {
+      pickDevice(selected);
     }
   }
 
@@ -373,20 +349,21 @@ export function ConnectionStatus() {
     };
   }, [open, connected, linkTab, session]);
 
-  function listed(link: PreferenceLink, live: readonly LinkEndpoint[]) {
-    return mergeListedPedals(
-      link,
-      live,
-      preferences.pedals,
-      omittedIdsFor(link, omittedKeys),
-    ).map((row) => ({
-      ...row,
-      favorite: isFavorite(link, row, preferences),
-    }));
-  }
-
-  const usbListed = listed("usb", usbEndpoints);
-  const bleListed = listed("bluetooth", bleEndpoints);
+  const usbListed = mergeListedPedals(
+    "usb",
+    usbEndpoints,
+    preferences.pedals,
+    omittedIdsFor("usb", omittedKeys),
+  ).map((row) => ({
+    ...row,
+    startup: isStartup(row, preferences),
+  }));
+  const bleListed = mergeListedPedals(
+    "bluetooth",
+    bleEndpoints,
+    preferences.pedals,
+    omittedIdsFor("bluetooth", omittedKeys),
+  );
 
   async function connectWith(endpoint: LinkEndpoint, model: DeviceModel) {
     const link = linkOf(endpoint);
@@ -396,10 +373,6 @@ export function ConnectionStatus() {
       label: endpoint.label,
       model,
     });
-    if (armStartup || readPreferences().startup) {
-      setStartup({ link, id: endpoint.id });
-    }
-    setArmStartup(false);
     refreshPreferences();
     setBusy(true);
     setError(null);
@@ -443,14 +416,8 @@ export function ConnectionStatus() {
     if (match) {
       ids.add(match.id);
     }
-    const wasStartup =
-      prefs.startup?.link === link &&
-      (prefs.startup.id === endpoint.id || prefs.startup.id === match?.id);
     for (const id of ids) {
       forgetPedal(id);
-    }
-    if (wasStartup) {
-      setArmStartup(false);
     }
     setOmittedKeys((current) => {
       const next = new Set(current);
@@ -465,19 +432,23 @@ export function ConnectionStatus() {
     }
   }
 
-  function onStartupChecked(checked: boolean) {
-    if (checked) {
-      setArmStartup(true);
+  function toggleStartup(endpoint: ListedPedal, enabled: boolean) {
+    if (!enabled) {
+      clearStartup();
+      refreshPreferences();
       return;
     }
-    setArmStartup(false);
-    clearStartup();
-    refreshPreferences();
-  }
-
-  function clearFavorite() {
-    setArmStartup(false);
-    clearStartup();
+    const model = endpoint.suggestedModel;
+    rememberPedal({
+      link: "usb",
+      id: endpoint.id,
+      label: endpoint.label,
+      ...(model ? { model } : {}),
+    });
+    setStartup({ link: "usb", id: endpoint.id });
+    setOmittedKeys((current) =>
+      current.filter((key) => key !== omitKey("usb", endpoint.id)),
+    );
     refreshPreferences();
   }
 
@@ -572,32 +543,22 @@ export function ConnectionStatus() {
                 if (value !== "bluetooth") {
                   return;
                 }
-                const hasListed =
-                  mergeListedPedals(
-                    "bluetooth",
-                    bleEndpoints,
-                    preferences.pedals,
-                    omittedIdsFor("bluetooth", omittedKeys),
-                  ).length > 0;
-                void scanBluetooth(!hasListed);
+                void scanBluetooth(!isTauriRuntime());
               }}
               usbEndpoints={usbListed}
               bleEndpoints={bleListed}
               error={error}
               busy={busy}
-              startupChecked={startupChecked}
-              startupDisabled={
-                (linkTab === "usb" ? usbListed : bleListed).length === 0
-              }
-              onStartupChecked={onStartupChecked}
               onPickDevice={pickDevice}
               onForget={forgetListed}
-              onClearFavorite={clearFavorite}
+              onToggleStartup={toggleStartup}
               onRefresh={() => {
                 setOmittedKeys((current) =>
                   current.filter((key) => !key.startsWith(`${linkTab}:`)),
                 );
-                void (linkTab === "usb" ? scanUsb() : scanBluetooth(true));
+                void (linkTab === "usb"
+                  ? scanUsb()
+                  : scanBluetooth(!isTauriRuntime()));
               }}
             />
           )}

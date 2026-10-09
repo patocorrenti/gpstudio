@@ -25,9 +25,9 @@ export function PedalWelcome() {
         />
         <span
           aria-hidden
-          className="mt-1 rounded-[10px] bg-emerald-400 px-2 py-0.5 text-[10px] font-bold tracking-[0.18em] text-black/80"
+          className="rounded-[10px] bg-lime-400 px-2 py-0.5 text-[10px] font-bold tracking-[0.1em] text-black/80"
         >
-          Closed Beta
+          OPEN BETA
         </span>
       </div>
       <div className="mt-[-30px] flex flex-col items-center gap-2">

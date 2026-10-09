@@ -154,9 +154,10 @@ context: |
     and Bluetooth tabs (default USB). The modal remembers chosen pedals and
     lists them with the current scan on the matching tab. USB: MIDI permission,
     endpoints, connect from the list, suggested/confirm model, copy as one-way
-    and super fast. Bluetooth: two-way and slower; scan GATT. The web picker
-    lists the chosen pedal without connecting; the user connects by picking it
-    in the list. An optional startup pedal connects on launch. Patch
+    and super responsive / instant. Bluetooth: two-way and slower; scan GATT.
+    On the web, selecting Bluetooth opens the browser picker and accepting a
+    pedal connects when the model is known. An optional USB Connect-on-startup
+    pedal connects on launch. Patch
     previous/select/next over the encoder.
     Connected label and link
     mode are defined in device-connection.
