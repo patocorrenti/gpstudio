@@ -1,0 +1,52 @@
+# Deploy: merging main into live publishes https://gpstudio.patocorrenti.com
+# If the build fails nothing is uploaded and the site stays as it was.
+name: Deploy
+
+on:
+  push:
+    branches: [live]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-live
+  cancel-in-progress: false
+
+env:
+  SSH_HOST: 44.195.232.222
+  SSH_USER: deploy
+  # Server's public host key (not a secret): the runner only connects if the server presents this one.
+  SSH_HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJhWtC2Tdp1ZHJIO/LXw10QdtB8G2MnCdsgL6t+mJlyU
+
+jobs:
+  deploy:
+    if: github.ref_name == 'live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Upload
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "$SSH_HOST $SSH_HOST_KEY" > ~/.ssh/known_hosts
+          # The key is restricted on the server to rsync, write-only, inside the site folder (paths are relative to it).
+          rsync -rltz --delete --chmod=D755,F644 \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            dist/ "$SSH_USER@$SSH_HOST:./"
+          rm -f ~/.ssh/deploy_key
