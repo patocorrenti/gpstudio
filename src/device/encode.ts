@@ -88,7 +88,11 @@ export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
   return encodeLinkMidi(linkMode, midiCc(gp5Cc.patch, patch));
 }
 
-/** One stomp press: GP-5 and GP-50 A are CC 69; GP-50 B is CC 70. Value 127. */
+/**
+ * Stomp press: GP-5 and GP-50 A are CC 69; GP-50 B is CC 70. Value 127.
+ * Same CC on USB and Bluetooth (BLE-MIDI wrap only). GP-5 Bluetooth press
+ * remains unlocked — closed spike-bt-stomp-tuner.md.
+ */
 const STOMP_PRESS_VALUE = 127;
 
 export function encodeStompPress(
@@ -113,7 +117,10 @@ function stompPressController(model: DeviceModel, stompIndex: number): number | 
   return null;
 }
 
-/** Official tuner on/off CC 58. Writes use 0 / 127 like module switches. */
+/**
+ * Tuner on/off: official CC 58 (127 / 0) on USB and Bluetooth (BLE-MIDI wrap).
+ * GP-5 Bluetooth open-tuner remains unlocked — closed spike-bt-stomp-tuner.md.
+ */
 export function encodeTuner(linkMode: LinkMode, on: boolean): Uint8Array {
   return encodeLinkMidi(
     linkMode,
@@ -121,6 +128,10 @@ export function encodeTuner(linkMode: LinkMode, on: boolean): Uint8Array {
   );
 }
 
+/**
+ * Module on/off: official CC 48–57 (EXP CC 13) on USB and Bluetooth.
+ * GP-5 Bluetooth module CC / guessed `1149` failed — closed spike-bt-stomp-tuner.md.
+ */
 export function encodeModule(
   linkMode: LinkMode,
   id: ChainSlotId,

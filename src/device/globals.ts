@@ -685,6 +685,27 @@ export function encodeGp5Footswitch(mode: Gp5FootswitchMode): Uint8Array | null 
   return framePackedSet(Uint8Array.from([0x01, 0x00, 0x04, 0x11, 0x15, 0x00, wire]));
 }
 
+/**
+ * Tuner on/off SET (family `1111`). Locked from a GP-5 Bluetooth Log of hold-to-tune:
+ * live path `01 02 01 01` with effect 2 / flag 2 / marker `04 00` (global volume uses
+ * `00 00` in that slot). Same packed framing as other `1111` SETs. On value is the
+ * capture byte `0x64` (the `0x7F` module-band guess failed in lab). Not CC 58.
+ */
+export function encodeTunerSysex(on: boolean): Uint8Array {
+  const packed = Uint8Array.from([
+    ...GLOBAL_SET_PREFIX,
+    0x02,
+    0x02,
+    0x04,
+    0x00,
+    on ? 0x64 : 0x00,
+    0x00,
+    0x00,
+    0x00,
+  ]);
+  return framePackedSet(packed);
+}
+
 function liveLevel(valueByte: number): number | null {
   const level = fromSignedByte(valueByte);
   if (level < LEVEL_MIN || level > LEVEL_MAX) {
@@ -1192,6 +1213,31 @@ function assertGlobalsCodec(): void {
     encodeGp5GlobalSysex("screenBrightness", 0) !== null
   ) {
     throw new Error("GP-5 SETs must use GP-5 pairs, omit global volume, and must not be CC 1, CC 28, or a live notify");
+  }
+
+  // Operator Log: hold-to-tune live uses 02 02 04 00 + value 0x64; volume uses 02 02 00 00.
+  const tunerOn = encodeTunerSysex(true);
+  const tunerOff = encodeTunerSysex(false);
+  const tunerOnPacked = Uint8Array.from([
+    0x01, 0x00, 0x0a, 0x11, 0x11, 0x02, 0x02, 0x04, 0x00, 0x64, 0x00, 0x00, 0x00,
+  ]);
+  const tunerOffPacked = Uint8Array.from([
+    0x01, 0x00, 0x0a, 0x11, 0x11, 0x02, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+  ]);
+  const volumePacked = Uint8Array.from([
+    0x01, 0x00, 0x0a, 0x11, 0x11, 0x02, 0x02, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00,
+  ]);
+  const tunerOnSet = framePackedSet(tunerOnPacked);
+  if (
+    !sameBytes(tunerOn, tunerOnSet) ||
+    !sameBytes(tunerOff, framePackedSet(tunerOffPacked)) ||
+    sameBytes(tunerOnSet, framePackedSet(volumePacked)) ||
+    tunerOnSet[10] !== 0x01 ||
+    tunerOnSet[18] !== 0x04 ||
+    tunerOnSet[21] !== 0x06 ||
+    tunerOnSet[22] !== 0x04
+  ) {
+    throw new Error("Tuner SET must use 1111 marker 04 00 value 0x64, not global-volume 00 00");
   }
 
   const crossed = liveNotify(2, 4, -6);

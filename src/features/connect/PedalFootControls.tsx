@@ -34,6 +34,8 @@ function switchButtons(pedal: DeviceModel) {
 
 /**
  * Pedal footswitch press and tuner — shell chrome next to Global, not the patch body.
+ * GP-5 Bluetooth press/tuner remain unlocked; see
+ * openspec/changes/archive/2026-10-14-bluetooth-stomp-tuner-lab/spike-bt-stomp-tuner.md
  */
 export function PedalFootControls() {
   const navigate = useNavigate();

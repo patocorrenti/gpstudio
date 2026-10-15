@@ -1,0 +1,5 @@
+schema: spec-driven
+closed: true
+summary: >
+  GP-5 Bluetooth footswitch press / open-tuner / module on-off lab.
+  Closed without an accepted write. See spike-bt-stomp-tuner.md.

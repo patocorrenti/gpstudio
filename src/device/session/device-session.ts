@@ -647,12 +647,7 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       throw new Error("Stomp press is not available on this link.");
     }
-    const packet = encodeStompPress(
-      this.snapshot.linkMode,
-      this.snapshot.model,
-      stompIndex,
-    );
-    if (!packet) {
+    if (encodeStompPress("usb", this.snapshot.model, stompIndex) === null) {
       return;
     }
     const assigned = this.snapshot.stomps[stompIndex] ?? [];
@@ -662,7 +657,16 @@ export class DeviceSession {
         : slot,
     );
     this.setChain(chain);
-    await this.sendBytes(packet);
+    // Official stomp CC on both links (BLE-MIDI wrap on BT). GP-5 Bluetooth
+    // press is unlocked — closed spike-bt-stomp-tuner.md.
+    const packet = encodeStompPress(
+      this.snapshot.linkMode,
+      this.snapshot.model,
+      stompIndex,
+    );
+    if (packet) {
+      await this.sendBytes(packet);
+    }
   }
 
   async setTuner(on: boolean): Promise<void> {

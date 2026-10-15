@@ -376,7 +376,7 @@ When a chain refresh times out without applying a finished dump (including while
 
 ### Requirement: Connected session toggles audio-chain modules
 
-After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link. On GP-50, toggling EXP MUST send official CC 13 on USB and on Bluetooth. The session MUST NOT send extra patch recall or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle.
+After a USB or Bluetooth session is ready, toggling an effect module (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, or RVB) MUST update the snapshot chain on-change and MUST send that module's official MIDI CC through the open link (Bluetooth adds only the BLE-MIDI wrap). On GP-50, toggling EXP MUST send official CC 13 on USB and on Bluetooth. The session MUST NOT send extra patch recall or an audio-chain dump solely because a module was toggled. Toggling MUST NOT change module order. GP-5 MUST NOT expose an EXP toggle. (GP-5 Bluetooth may ignore module CC in lab; do not substitute guessed SysEx without an accepted capture.)
 
 When the link can apply live pedal module state (`liveFromPedal`, Bluetooth), inbound live-module SysEx (identity-family command `09`) MUST update the matching slot's on/off without changing order. On GP-50 Bluetooth, inbound EXP SysEx (identity-family command `02`) MUST update the EXP slot. Stomp-mode footswitch reports that change module on/off are the same class of live module reports, including a captured equivalent if the frame is not command `09` or `02`. Those reports MUST NOT be treated as a pedal-initiated patch change: the session MUST NOT send patch recall or request a chain dump solely because a footswitch was pressed. USB MUST NOT apply those inbound reports to the snapshot. Inbound volume, tuner, and other non-module CCs MUST NOT update the chain. Disconnect MUST drop chain state.
 
@@ -1269,21 +1269,26 @@ When the user changes a stomp's assigned modules, the session MUST update the sn
 
 ### Requirement: Connected session presses a stomp
 
-After a USB or Bluetooth session is ready and the current chain is shown, a stomp press MUST send one official MIDI CC on the open link and MUST update that chain on-change. GP-5 MUST send CC 69 with value 127. GP-50 stomp A MUST send CC 69 with value 127. GP-50 stomp B MUST send CC 70 with value 127. The session MUST NOT send module on/off CC 48–57, a stomp-assignment write, patch recall, or a chain-dump request solely because of that press.
+After a USB or Bluetooth session is ready and the current chain is shown, a stomp press MUST update that chain on-change and MUST tell the pedal with one official MIDI CC on the open link (Bluetooth adds only the BLE-MIDI wrap). GP-5 MUST send CC 69 with value 127, GP-50 stomp A MUST send CC 69 with value 127, and GP-50 stomp B MUST send CC 70 with value 127. The session MUST NOT send a stomp-assignment write, patch recall, or a chain-dump request solely because of that press. (GP-5 Bluetooth may ignore CC 69 in lab; do not imitate with guessed SysEx without an accepted capture.)
 
 Each effect assigned to that stomp MUST toggle on/off. Effects not assigned to it MUST keep their on/off. EXP MUST NOT change. Module order, models, controls, stomp assignment, patch index, patch volume, and patch BPM MUST NOT change solely because of the press. The working patch MUST be marked modified when the resulting on/off differs from the baseline, and MUST NOT stay marked modified when the press restores the baseline. An empty assignment MUST still send the CC and MUST leave on/off unchanged. A press for a stomp the connected model does not expose MUST NOT send. While the chain is syncing, or while no session is connected, a press MUST NOT send.
 
 USB MUST NOT apply an unsolicited live stomp report to the snapshot. On Bluetooth, when live pedal state is applied, an inbound stomp mask MAY replace the on-change on/off with the reported mask and MUST NOT be treated as a patch change. The press MUST NOT change GP-50 Patch or Stomp mode and MUST NOT change the GP-5 footswitch mode.
 
-#### Scenario: GP-5 press sends CC 69 and toggles the assigned effect
-- **WHEN** a ready GP-5 session has AMP on and assigned to the only stomp, and the user presses that stomp
+#### Scenario: GP-5 USB press sends CC 69 and toggles the assigned effect
+- **WHEN** a ready GP-5 USB session has AMP on and assigned to the only stomp, and the user presses that stomp
 - **THEN** the session sends CC 69 with value 127
 - **AND** the snapshot shows AMP off
 - **AND** no patch recall is sent solely because of that press
 - **AND** no chain dump is requested solely because of that press
 
-#### Scenario: GP-50 stomp A and stomp B use CC 69 and CC 70
-- **WHEN** a ready GP-50 session presses stomp A and then stomp B
+#### Scenario: GP-5 Bluetooth press sends CC 69 and toggles the assigned effect
+- **WHEN** a ready GP-5 Bluetooth session has AMP on and assigned to the only stomp, and the user presses that stomp
+- **THEN** the session sends CC 69 with value 127
+- **AND** the snapshot shows AMP off
+
+#### Scenario: GP-50 stomp A and stomp B use CC 69 and CC 70 on USB
+- **WHEN** a ready GP-50 USB session presses stomp A and then stomp B
 - **THEN** the first press sends CC 69 with value 127
 - **AND** the second press sends CC 70 with value 127
 
@@ -1326,15 +1331,15 @@ USB MUST NOT apply an unsolicited live stomp report to the snapshot. On Bluetoot
 
 #### Scenario: Syncing or disconnected does not send
 - **WHEN** the chain is syncing, or no session is connected, and a stomp press is requested
-- **THEN** the session does not send a stomp CC
+- **THEN** the session does not send a stomp write
 
 ### Requirement: Connected session toggles the tuner
 
-After a USB or Bluetooth session is ready and the current chain is shown, toggling the tuner MUST send official MIDI CC 58 on the open link. Turning the tuner on MUST send value 127. Turning it off MUST send value 0. The session MUST keep an on/off state for the last app-written tuner value so the UI can show it. That state MUST start off when the session becomes connected and MUST drop on disconnect.
+After a USB or Bluetooth session is ready and the current chain is shown, toggling the tuner MUST send official MIDI CC 58 on the open link (Bluetooth adds only the BLE-MIDI wrap) and MUST keep an on/off state for the last app-written tuner value so the UI can show it. Turning the tuner on MUST send value 127. Turning it off MUST send value 0. That state MUST start off when the session becomes connected and MUST drop on disconnect. (GP-5 Bluetooth may ignore CC 58 in lab; do not substitute guessed SysEx without an accepted capture.)
 
 The session MUST NOT apply inbound CC 58 to the snapshot. The session MUST NOT mark the working patch modified solely because of a tuner write. The session MUST NOT send patch recall or a chain-dump request solely because of a tuner write. Module on/off, order, models, controls, stomp assignment, patch index, patch volume, and patch BPM MUST NOT change solely because of a tuner write. While the chain is syncing, or while no session is connected, a tuner toggle MUST NOT send.
 
-When the selected patch changes — whether the user recalled a patch or the pedal reported a different current patch — and the session had the tuner on, the session MUST turn the tuner off (CC 58 value 0) and MUST show the tuner off. That turn-off MUST happen before an app-initiated patch recall is sent.
+When the selected patch changes — whether the user recalled a patch or the pedal reported a different current patch — and the session had the tuner on, the session MUST turn the tuner off and MUST show the tuner off. That turn-off MUST happen before an app-initiated patch recall is sent.
 
 #### Scenario: Turning the tuner on sends CC 58 value 127
 

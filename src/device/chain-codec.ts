@@ -5,7 +5,14 @@ import {
   snapModelValues,
   type WireIdentity,
 } from "@/device/catalog";
-import { EFFECT_IDS, type AudioChain, type AudioChainSlot, type ChainSlotId, type EffectId } from "@/device/chain";
+import {
+  defaultChain,
+  EFFECT_IDS,
+  type AudioChain,
+  type AudioChainSlot,
+  type ChainSlotId,
+  type EffectId,
+} from "@/device/chain";
 import type { DeviceModel } from "@/device/models";
 import { encodeIrNameDump, isIrNameDump } from "@/device/ir-names";
 import { encodeNamNameDump, isNamNameDump } from "@/device/nam-names";
@@ -68,6 +75,17 @@ const STOMP_ASSIGN_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x4d] as const;
  * `114d`, then footswitch `0`, effect index, 0|1.
  */
 const STOMP_ASSIGN_EFFECT_SET_PREFIX = [0x01, 0x00, 0x05, 0x11, 0x4d] as const;
+/**
+ * Block on/off SET (reference `sendBlockStatus`, published effect list).
+ * Size `0x0A`, family `1149`, then effect index, three zero bytes, 0|1, three zero bytes.
+ */
+const BLOCK_STATUS_SET_PREFIX = [0x01, 0x00, 0x0a, 0x11, 0x49] as const;
+/**
+ * Stomp press / mask SET (operator Log: live command `0E` with path `01 02 04`).
+ * Size `0x06`, family `114e`, then live mask low/high + two zero bytes.
+ * Same payload as the notify; SET path is `01 01 04`. Not CC 69 / CC 70.
+ */
+const STOMP_MASK_SET_PREFIX = [0x01, 0x00, 0x06, 0x11, 0x4e] as const;
 
 /** GP-50 stomp A / B mask bases; GP-5 single stomp (same 86-byte front shift). */
 const GP50_STOMP_BASES = [1006, 1014] as const;
@@ -255,6 +273,63 @@ export function encodeStompAssignmentEffectSysex(
     effectIndex,
     assigned ? 1 : 0,
   ]);
+  return framePackedSet(packed);
+}
+
+/**
+ * App→pedal block on/off (family `1149`). Matches the reference editor
+ * `sendBlockStatus` and the published NR/PRE/… on/off list: effect index
+ * (`DUMP_MODULE_IDS`, NS = 9) and 0|1. Not CC 48–57 and not a stomp-assignment
+ * `114d`. Bluetooth wrap is `encodeLinkMidi`.
+ */
+export function encodeBlockStatusSysex(id: EffectId, enabled: boolean): Uint8Array | null {
+  const effect = DUMP_MODULE_IDS.indexOf(id);
+  if (effect < 0) {
+    return null;
+  }
+  const packed = Uint8Array.from([
+    ...BLOCK_STATUS_SET_PREFIX,
+    effect,
+    0x00,
+    0x00,
+    0x00,
+    enabled ? 0x01 : 0x00,
+    0x00,
+    0x00,
+    0x00,
+  ]);
+  return framePackedSet(packed);
+}
+
+/**
+ * Live command `0E` enable mask (same bit map as {@link decodeLiveStompMask}).
+ * low: NR…DLY, high: RVB/NS.
+ */
+export function packLiveStompMask(chain: AudioChain): { low: number; high: number } {
+  let low = 0;
+  let high = 0;
+  for (let bit = 0; bit < DUMP_MODULE_IDS.length; bit += 1) {
+    const slot = chain.find((entry) => entry.id === DUMP_MODULE_IDS[bit]);
+    if (!slot?.enabled) {
+      continue;
+    }
+    if (bit < 8) {
+      low |= 1 << bit;
+    } else {
+      high |= 1 << (bit - 8);
+    }
+  }
+  return { low, high };
+}
+
+/**
+ * App→pedal stomp mask SET (family `114e`). Locked from a GP-5 Bluetooth Log:
+ * live notify command `0E` carries the absolute on/off mask; the SET is the same
+ * body with path `01 01 04` (CRC-8 + nibble-expand). Not CC 69 / CC 70.
+ */
+export function encodeStompMaskSysex(chain: AudioChain): Uint8Array {
+  const { low, high } = packLiveStompMask(chain);
+  const packed = Uint8Array.from([...STOMP_MASK_SET_PREFIX, low, high, 0x00, 0x00]);
   return framePackedSet(packed);
 }
 
@@ -1190,6 +1265,64 @@ function assertPresetDumpFixtures(): void {
   }
   if (encodeStompAssignmentEffectSysex(0, "exp" as EffectId, true)) {
     throw new Error("GP-5 per-effect SET must reject EXP");
+  }
+
+  const nrOn = encodeBlockStatusSysex("nr", true);
+  const nrOff = encodeBlockStatusSysex("nr", false);
+  const preOn = encodeBlockStatusSysex("pre", true);
+  const nrOnPacked = [0x01, 0x00, 0x0a, 0x11, 0x49, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
+  const nrOffPacked = [0x01, 0x00, 0x0a, 0x11, 0x49, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+  const preOnPacked = [0x01, 0x00, 0x0a, 0x11, 0x49, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00];
+  const expectNrOn = nibbleExpand(
+    Uint8Array.from([crc8Atm(Uint8Array.from(nrOnPacked)), ...nrOnPacked]),
+  );
+  const expectNrOff = nibbleExpand(
+    Uint8Array.from([crc8Atm(Uint8Array.from(nrOffPacked)), ...nrOffPacked]),
+  );
+  const expectPreOn = nibbleExpand(
+    Uint8Array.from([crc8Atm(Uint8Array.from(preOnPacked)), ...preOnPacked]),
+  );
+  const blockMatches = (midi: Uint8Array | null, body: Uint8Array) =>
+    midi !== null &&
+    midi[0] === 0xf0 &&
+    midi[midi.length - 1] === 0xf7 &&
+    body.every((byte, index) => midi[index + 1] === byte);
+  if (
+    crc8Atm(Uint8Array.from(nrOnPacked)) !== 0x1c ||
+    crc8Atm(Uint8Array.from(nrOffPacked)) !== 0x0a ||
+    crc8Atm(Uint8Array.from(preOnPacked)) !== 0x0f ||
+    !blockMatches(nrOn, expectNrOn) ||
+    !blockMatches(nrOff, expectNrOff) ||
+    !blockMatches(preOn, expectPreOn) ||
+    encodeBlockStatusSysex("exp" as EffectId, true) !== null
+  ) {
+    throw new Error("Block status SET must match published 1149 NR/PRE on/off");
+  }
+
+  // Operator Log: live 0E mask 0x2D/0x02 → SET 114e, path 01 01 04.
+  const maskChain: AudioChain = defaultChain("gp5").map((slot) => {
+    if (slot.id === "nr" || slot.id === "dst" || slot.id === "amp" || slot.id === "eq" || slot.id === "ns") {
+      return { ...slot, enabled: true };
+    }
+    return { ...slot, enabled: false };
+  });
+  const { low: maskLow, high: maskHigh } = packLiveStompMask(maskChain);
+  const maskSet = encodeStompMaskSysex(maskChain);
+  const maskPacked = [0x01, 0x00, 0x06, 0x11, 0x4e, 0x2d, 0x02, 0x00, 0x00];
+  const expectMask = nibbleExpand(
+    Uint8Array.from([crc8Atm(Uint8Array.from(maskPacked)), ...maskPacked]),
+  );
+  if (
+    maskLow !== 0x2d ||
+    maskHigh !== 0x02 ||
+    maskSet[0] !== 0xf0 ||
+    maskSet[9] !== 0x01 ||
+    maskSet[10] !== 0x01 ||
+    maskSet[11] !== 0x04 ||
+    maskSet[12] !== 0x0e ||
+    !expectMask.every((byte, index) => maskSet[index + 1] === byte)
+  ) {
+    throw new Error("Stomp mask SET must match live 0E body with path 01 01 04");
   }
 
   writeNibbleBytes(tweedy, GP50_IDENTITY_AT.cab, Uint8Array.from([0x02, 0x00, 0x10, 0x0a]));
