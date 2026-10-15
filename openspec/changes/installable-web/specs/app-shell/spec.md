@@ -58,7 +58,7 @@ The native desktop window MUST NOT register a service worker. The web developmen
 
 ### Requirement: Installed app reaches the pedal only on affirmed platforms
 
-The installed app SHALL use the same pedal links as the browser tab on that platform. Pedal connection MUST be affirmed only for Chrome or Edge on Windows (USB and Bluetooth), including a Microsoft Store package that hosts Edge; Chrome or Edge on Mac (USB and Bluetooth); Chrome on Android (Bluetooth); and Chrome or Edge on Linux (USB). The app MUST NOT affirm Bluetooth on Linux or USB on Android. iPhone and iPad MUST NOT be presented as a way to connect to the pedal.
+The installed app SHALL use the same pedal links as the browser tab on that platform. Pedal connection MUST be affirmed only for Chrome or Edge on Windows (USB and Bluetooth), including a Microsoft Store package that hosts Edge; Chrome or Edge on Mac (USB and Bluetooth); Chrome on Android (Bluetooth); and Chrome or Edge on Linux (USB and Bluetooth). The app MUST NOT affirm USB on Android. iPhone and iPad MUST NOT be presented as a way to connect to the pedal.
 
 #### Scenario: Windows keeps USB and Bluetooth
 
@@ -76,11 +76,10 @@ The installed app SHALL use the same pedal links as the browser tab on that plat
 - **WHEN** the user installs the app from Chrome or Edge on Mac
 - **THEN** Connect still offers USB and Bluetooth as in the browser tab
 
-#### Scenario: Linux affirms USB
+#### Scenario: Linux keeps USB and Bluetooth
 
 - **WHEN** the user installs the app from Chrome or Edge on Linux
-- **THEN** USB is the affirmed pedal link
-- **AND** Bluetooth is not affirmed
+- **THEN** Connect still offers USB and Bluetooth as in the browser tab
 
 #### Scenario: iPhone and iPad are excluded
 

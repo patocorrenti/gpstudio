@@ -61,7 +61,7 @@ PWABuilder's Windows package is an Edge-hosted app pointed at the hosted HTTPS U
 - [Tauri registers the worker because registration is injected into `index.html`] → `injectRegister` stays off, and the call site checks `isTauriRuntime()` before `register`.
 - [Rollback deletes `sw.js` and the previous worker keeps controlling the origin] → A deploy that removes the PWA must publish a worker at the same URL that unregisters and clears its caches. `rsync --delete` alone is not that deploy.
 - [Placeholder icons fail a maskable or screenshot recommendation in PWABuilder] → Required inputs are the 192/512 `any` icons and the fetch handler. Recommendations wait for the brand pass.
-- [Linux Bluetooth or Android USB happens to work on one machine] → The app does not affirm them. About copy follows the same limits.
+- [Android USB happens to work on one machine] → The app does not affirm it. About copy follows the same limits.
 
 ## Migration Plan
 

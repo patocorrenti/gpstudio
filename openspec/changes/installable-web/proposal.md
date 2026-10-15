@@ -17,7 +17,7 @@ GP Studio on the web is already the app people open at `gpstudio.patocorrenti.co
 - Partner Center reservation, Store listing copy, pricing, or submitting the package. This change only leaves the production bundle ready to package.
 - Final brand icons. Placeholders may be used while implementing; the brand files replace them when the art is ready.
 - iPhone and iPad. The installed web app is not a pedal controller there.
-- Promising Bluetooth on Linux, or USB on Android. Those links are not affirmed for the installed app.
+- Promising USB on Android. That link is not affirmed for the installed app.
 - A custom install button, or install instructions for Safari.
 - Push notifications, background Bluetooth, the Play Store, the Mac App Store, and Flathub.
 - Replacing the Tauri desktop app, or packaging a mobile Tauri app (`docs/architecture.md`).
