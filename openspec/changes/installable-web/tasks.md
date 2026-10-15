@@ -12,7 +12,7 @@
 
 ## 3. About notes and architecture
 
-- [ ] 3.1 Add the installed-app section to `src/features/about/AboutPage.tsx` only after the English sentences are supplied. Do not invent them. Verify the shown copy matches those sentences, states that iPhone and iPad cannot connect to the pedal, does not affirm Linux Bluetooth or Android USB, does not say the Microsoft Store listing already exists, and does not send MIDI.
+- [ ] 3.1 Add the installed-app section to `src/features/about/AboutPage.tsx` only after the English sentences are supplied. Do not invent them. Verify the shown copy matches those sentences, states that iPhone and iPad cannot connect to the pedal, does not affirm Android USB, does not say the Microsoft Store listing already exists, and does not send MIDI.
 - [x] 3.2 Update the web line in `docs/architecture.md` so the hosted app is an installable PWA and the Tauri window does not register the service worker. Verify that sentence is the only plan change in that file.
 
 ## 4. Store-ready build
