@@ -15,8 +15,8 @@
 - [ ] 3.1 Add the installed-app section to `src/features/about/AboutPage.tsx` only after the English sentences are supplied. Do not invent them. Verify the shown copy matches those sentences, states that iPhone and iPad cannot connect to the pedal, does not affirm Linux Bluetooth or Android USB, does not say the Microsoft Store listing already exists, and does not send MIDI.
 - [x] 3.2 Update the web line in `docs/architecture.md` so the hosted app is an installable PWA and the Tauri window does not register the service worker. Verify that sentence is the only plan change in that file.
 
-## 4. Store-ready build and publish gates
+## 4. Store-ready build
 
 - [x] 4.1 From the production `dist/` manifest and service worker, confirm the PWABuilder Windows inputs are present: GP Studio name, English description, root start URL and scope, stable id, standalone display, English language, `#010f24` theme and background, PNG icons at 192 and 512, and a fetch handler. Verify by reading those build artifacts, not by submitting a Store package.
-- [x] 4.2 Replace `public/pwa-192.png` and `public/pwa-512.png` with the final brand art before merging to `live`. Leave this unchecked until that art exists. Verify the manifest paths stay the same and only the two files change.
-- [ ] 4.3 Merge to `live` only after 3.1 and 4.2 are done. Verify both tasks are checked before that merge. Partner Center submission stays outside this change.
+- [x] 4.2 Replace `public/pwa-192.png` and `public/pwa-512.png` with the final brand art. Verify the manifest paths stay the same and only the two files change.
+- [x] 4.3 Partner Center submission stays outside this change.

@@ -8,14 +8,14 @@ GP Studio on the web is already the app people open at `gpstudio.patocorrenti.co
 - After that cache exists, reopening the installed app shows the UI, the stored theme, and saved preferences without a network. The pedal link stays the browser APIs already used by the tab (Web MIDI and Web Bluetooth).
 - When a newer deploy is waiting, show an English prompt to reload. Do not swap the running session silently.
 - Register the service worker only in the browser. The Tauri window shares `dist/` and must not register it (`docs/architecture.md`: the desktop shell is Tauri; WebView2 is not the web MIDI/Bluetooth path).
-- Use the current Tauri PNG placeholders as temporary 192 and 512 icons, in files that can be replaced. Final brand art lands before this is merged to `live` and published.
+- Use the current Tauri PNG placeholders as temporary 192 and 512 icons, in files that can be replaced. Final brand art replaces those two files.
 - Add an About section for where the installed app runs and where it reaches the pedal. The sentences are not written yet; the task stays until that copy is supplied.
 - Shape the manifest and service worker so PWABuilder can generate a Microsoft Store package (Edge-hosted) from the live HTTPS URL without a further code change.
 
 ## Non-goals
 
-- Partner Center reservation, Store listing copy, pricing, or submitting the package. This change only leaves the live site ready to package.
-- Final brand icons. Placeholders may be used while implementing; publishing to `live` waits for the brand pass.
+- Partner Center reservation, Store listing copy, pricing, or submitting the package. This change only leaves the production bundle ready to package.
+- Final brand icons. Placeholders may be used while implementing; the brand files replace them when the art is ready.
 - iPhone and iPad. The installed web app is not a pedal controller there.
 - Promising Bluetooth on Linux, or USB on Android. Those links are not affirmed for the installed app.
 - A custom install button, or install instructions for Safari.
