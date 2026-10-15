@@ -12,7 +12,7 @@ export function PedalWelcome() {
     <div
       role="button"
       tabIndex={0}
-      className="group -m-6 flex flex-1 cursor-pointer flex-col items-center justify-center gap-4 bg-linear-to-t from-muted/80 to-transparent pb-16 text-muted-foreground transition-colors hover:text-foreground dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent"
+      className="group flex flex-1 cursor-pointer flex-col items-center justify-center gap-4 pb-16 text-muted-foreground transition-colors hover:text-foreground"
       aria-haspopup="dialog"
       aria-label="Connect a pedal"
       onClick={openConnect}
