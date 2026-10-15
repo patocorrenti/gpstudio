@@ -49,13 +49,17 @@ export function PedalWelcome() {
           <Button
             type="button"
             size="lg"
-            className="h-10 border-lime-400 bg-lime-400 px-4 text-sm whitespace-normal text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
+            className="relative h-10 overflow-hidden border-lime-400 bg-lime-400 px-4 text-sm whitespace-normal text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
             onClick={(event) => {
               event.stopPropagation();
               openConnect();
             }}
           >
-            Connect a Multi-Effects
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine group-hover/button:invisible dark:via-lime-200/22"
+            />
+            <span className="relative">Connect a Multi-Effects</span>
           </Button>
           <p className="text-sm text-muted-foreground">Valeton GP5 or GP50</p>
         </div>
