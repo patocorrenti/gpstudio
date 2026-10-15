@@ -41,7 +41,11 @@ export function PedalFootControls() {
   const snapshot = useSessionSnapshot();
   const [open, setOpen] = useState(false);
 
-  if (snapshot.status !== "connected") {
+  // GP-5 Bluetooth ignores both the stomp-press and tuner CCs.
+  if (
+    snapshot.status !== "connected" ||
+    (snapshot.model === "gp5" && snapshot.linkMode === "bluetooth")
+  ) {
     return null;
   }
 
