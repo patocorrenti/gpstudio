@@ -23,6 +23,7 @@ const versionFiles = [
   "src-tauri/Cargo.lock",
   "src-tauri/tauri.conf.json",
   "src/app/AppShell.tsx",
+  "src/features/controller/PedalWelcome.tsx",
   "index.html",
   "src/features/about/AboutPage.tsx",
 ];
@@ -194,6 +195,10 @@ version = "${version}"
       read("src/app/AppShell.tsx").includes(`{' '}v${version}`),
     ],
     [
+      "src/features/controller/PedalWelcome.tsx",
+      read("src/features/controller/PedalWelcome.tsx").includes(`v${version}`),
+    ],
+    [
       "index.html",
       read("index.html").includes(`"softwareVersion": "${version}"`),
     ],
@@ -291,6 +296,15 @@ version = "${next}"`,
       read("src/app/AppShell.tsx"),
       `{' '}v${current}`,
       `{' '}v${next}`,
+    ),
+  );
+  write(
+    "src/features/controller/PedalWelcome.tsx",
+    replaceExactlyOnce(
+      "src/features/controller/PedalWelcome.tsx",
+      read("src/features/controller/PedalWelcome.tsx"),
+      `v${current}`,
+      `v${next}`,
     ),
   );
   write(

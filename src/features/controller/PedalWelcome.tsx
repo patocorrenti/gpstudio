@@ -23,10 +23,7 @@ export function PedalWelcome() {
         }
       }}
     >
-      <div className="flex flex-col items-center gap-2">
-        <p className="text-sm text-muted-foreground dark:text-muted-foreground/70">
-          Welcome to
-        </p>
+      <div className="flex w-fit flex-col items-end gap-1.5">
         <img
           src={logoLight}
           alt="GP Studio"
@@ -37,8 +34,11 @@ export function PedalWelcome() {
           alt="GP Studio"
           className="hidden h-[30px] w-auto dark:block"
         />
+        <span className="text-[10px] leading-none tracking-wide text-muted-foreground/70">
+          v1.0.0-beta.3
+        </span>
       </div>
-      <div className="mt-[-12px] flex flex-col items-center gap-3">
+      <div className="mt-[-24px] flex flex-col items-center gap-3">
         <img
           src={pedalsConnectBlack}
           alt=""
