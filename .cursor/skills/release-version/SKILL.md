@@ -2,9 +2,10 @@
 name: release-version
 description: >-
   Bump GP Studio to a new version: English changelog entry, version numbers in
-  package, lockfiles, Tauri, footer, and index.html, then commit, create an
-  annotated git tag, and push the tag. Use when the user asks to release, bump
-  or change the version, add a changelog version, or create and push a version tag.
+  package, lockfiles, Tauri, footer, home welcome logo, and index.html, then
+  commit, create an annotated git tag, and push the tag. Use when the user asks
+  to release, bump or change the version, add a changelog version, or create and
+  push a version tag.
 ---
 
 # Release version
@@ -29,7 +30,7 @@ npm run release -- <version> --note "English bullet" --note "Another bullet"
 That command:
 
 - prepends an entry to the `CHANGELOG` array on the About page and keeps older versions
-- sets the same version in `package.json`, `package-lock.json` (root package only), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (package `app`), `src-tauri/tauri.conf.json`, the footer version marker `{' '}vX.Y.Z` in `src/app/AppShell.tsx`, and `softwareVersion` in `index.html`
+- sets the same version in `package.json`, `package-lock.json` (root package only), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (package `app`), `src-tauri/tauri.conf.json`, the footer version marker `{' '}vX.Y.Z` in `src/app/AppShell.tsx`, the home logo version `vX.Y.Z` in `src/features/controller/PedalWelcome.tsx`, and `softwareVersion` in `index.html`
 - commits `feat: release <version>`
 - creates annotated tag `v<version>` with message `Versión <version> - <first note>`
 - pushes the current branch and the tag to `origin`
