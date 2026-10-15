@@ -1,4 +1,5 @@
-import logo from "@/assets/img/gp-studio-logo.svg";
+import logoDark from "@/assets/img/gp-studio-logo-dark.png";
+import logoLight from "@/assets/img/gp-studio-logo-light.png";
 import pedalsConnectBlack from "@/assets/img/pedal-connect-black.png";
 import pedalsConnectLight from "@/assets/img/pedal-connect-light.png";
 import { Button } from "@/components/ui/button";
@@ -27,9 +28,14 @@ export function PedalWelcome() {
           Welcome to
         </p>
         <img
-          src={logo}
+          src={logoLight}
           alt="GP Studio"
-          className="h-[30px] w-auto dark:invert"
+          className="h-[30px] w-auto dark:hidden"
+        />
+        <img
+          src={logoDark}
+          alt="GP Studio"
+          className="hidden h-[30px] w-auto dark:block"
         />
       </div>
       <div className="mt-[-12px] flex flex-col items-center gap-3">

@@ -1,6 +1,7 @@
 import { Heart } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
-import logo from "@/assets/img/gp-studio-logo.svg";
+import logoDark from "@/assets/img/gp-studio-logo-dark.png";
+import logoLight from "@/assets/img/gp-studio-logo-light.png";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -18,9 +19,14 @@ export function AppShell() {
       <header className="flex items-center gap-2 border-b px-6 py-3 md:grid md:grid-cols-[1fr_auto_1fr] md:gap-4">
         <Link to="/" className="mr-auto w-fit md:mr-0" aria-label="GP Studio">
           <img
-            src={logo}
+            src={logoLight}
             alt="GP Studio"
-            className="h-3.5 w-auto dark:invert"
+            className="h-3.5 w-auto dark:hidden"
+          />
+          <img
+            src={logoDark}
+            alt="GP Studio"
+            className="hidden h-3.5 w-auto dark:block"
           />
         </Link>
         <div className="flex items-center gap-2 pr-2 md:pr-0">
