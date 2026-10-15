@@ -53,7 +53,7 @@ Generate `public/pwa-192.png` and `public/pwa-512.png` from the current largest 
 
 ### Store packaging is a check on the built manifest
 
-PWABuilder's Windows package is an Edge-hosted app pointed at the live HTTPS URL. The code change is done when the production manifest and fetch handler meet that tool's required inputs (the fields above, plus the service worker). Generating the `.msix` and submitting it to Partner Center stay after the site is on `live` with final icons.
+PWABuilder's Windows package is an Edge-hosted app pointed at the hosted HTTPS URL. The code change is done when the production manifest and fetch handler meet that tool's required inputs (the fields above, plus the service worker). Generating the `.msix` and submitting it to Partner Center stay outside this change.
 
 ## Risks / Trade-offs
 
@@ -67,6 +67,5 @@ PWABuilder's Windows package is an Edge-hosted app pointed at the live HTTPS URL
 
 1. Land the production manifest, worker, browser-only registration, placeholder icons, and the reload prompt.
 2. Add the About section when its copy is supplied, and swap the two public PNGs when the brand art is ready.
-3. Merge to `live` only after those two inputs exist. The current deploy workflow publishes `dist/` unchanged.
-4. After that URL is live, package it with PWABuilder and submit it in Partner Center. That step is outside this change.
-5. Rollback of a bad web deploy is a new `dist/` that still contains an unregistering worker if the PWA is being removed; otherwise it is the previous good build, which users pick up when they accept the reload prompt.
+3. Packaging the hosted URL with PWABuilder and submitting it in Partner Center stays outside this change.
+4. Rollback of a bad web deploy is a new `dist/` that still contains an unregistering worker if the PWA is being removed; otherwise it is the previous good build, which users pick up when they accept the reload prompt.
