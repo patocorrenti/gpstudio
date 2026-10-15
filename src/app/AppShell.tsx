@@ -44,7 +44,7 @@ export function AppShell() {
       <main className="flex min-h-0 flex-1 flex-col bg-linear-to-t from-muted/80 to-transparent p-6 dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent">
         <Outlet />
       </main>
-      <footer className="flex items-center gap-4 border-t bg-background py-2 pr-6 pl-6 text-[12px] leading-none text-muted-foreground/70">
+      <footer className="flex items-center gap-4 border-t bg-background pt-2 pr-6 pb-2.5 pl-6 text-[12px] leading-none text-muted-foreground/70">
         <p className="min-w-0 flex-1 text-left">
           <span className="font-bold">GP Studio</span>
           {' '}v1.0.0-beta.3{' · '}
