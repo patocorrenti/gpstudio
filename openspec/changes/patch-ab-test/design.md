@@ -39,7 +39,7 @@ Alternative considered: `setInterval` every N seconds from Play. Rejected. An in
 
 ### Comparison slot reuses `PatchSelect` and does not recall
 
-The second selector is the existing `PatchSelect` with an `onSelect` that only stores the index. Opening setup sets that index to `(patch + 1) % PATCH_COUNT` once; later changes to the current patch do not move it. The seconds control is a numeric input, accessible name `Seconds`, clamped to integers 1–60, default 5 when setup opens. Empty or out-of-range typing keeps the last valid integer so Play always has a dwell in range.
+The second selector is the existing `PatchSelect` with an `onSelect` that only stores the index. Opening setup sets that index to `(patch + 1) % PATCH_COUNT` once; later changes to the current patch do not move it. The seconds control is a text input with numeric keypad (`Seconds`), integers 2–200, default 5 when setup opens. Empty text is allowed while editing. Blur and Play clamp into range (empty → 5, below 2 → 2, above 200 → 200).
 
 The A/B button label is `A/B` with tooltip `A/B Test - Patches`. While setup is open the same button shows an X, tooltip `Close A/B test`. Play and Stop are English labels on that button. Order while setup is open: X, previous, current selector, next, seconds, comparison selector, Play or Stop.
 
