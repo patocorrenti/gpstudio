@@ -20,7 +20,7 @@ The product talks USB-MIDI and Bluetooth to GP-5 and GP-50: USB patch recall use
     - `BluetoothLink` contract: `discover` / `open` / `send` / `subscribe` / `close` / `forget`
     - A Bluetooth endpoint has `id`, `label`, `kind: bluetooth`, and optional `suggestedModel`
 - **Device state:** shared TypeScript layer, independent of transport
-- **No HTTP backend.** The app talks to the pedal directly
+- **No HTTP backend.** The app talks to the pedal directly. The production web app may send one best-effort same-origin GET `/usage` per cold start; failure is ignored. That request is not an application backend.
 
 Electron is rejected: heavier, worse mobile path. Tauri’s cost is the dual USB-MIDI backend, isolated behind the interface.
 
