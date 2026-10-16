@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const versionFiles = [
+  "CHANGELOG.md",
   "package.json",
   "package-lock.json",
   "src-tauri/Cargo.toml",
@@ -202,6 +203,14 @@ version = "${version}"
       "index.html",
       read("index.html").includes(`"softwareVersion": "${version}"`),
     ],
+    [
+      "src/features/about/AboutPage.tsx",
+      read("src/features/about/AboutPage.tsx").includes(`Version ${version}`),
+    ],
+    [
+      "CHANGELOG.md",
+      read("CHANGELOG.md").includes(`## [${version}]`),
+    ],
   ];
 
   const stale = checks.filter(([, ok]) => !ok).map(([file]) => file);
@@ -212,17 +221,9 @@ version = "${version}"
   }
 }
 
-function changelogBlock(version, notes) {
-  const items = notes
-    .map((note) => `      ${JSON.stringify(note)},`)
-    .join("\n");
-  return `  {
-    version: "${version}",
-    notes: [
-${items}
-    ],
-  },
-`;
+function changelogMarkdownBlock(version, notes) {
+  const items = notes.map((note) => `- ${note}`).join("\n");
+  return `## [${version}]\n\n${items}\n\n`;
 }
 
 function applyRelease(current, next, notes) {
@@ -316,17 +317,32 @@ version = "${next}"`,
       `"softwareVersion": "${next}"`,
     ),
   );
+  write(
+    "src/features/about/AboutPage.tsx",
+    replaceExactlyOnce(
+      "AboutPage.tsx",
+      read("src/features/about/AboutPage.tsx"),
+      `Version ${current}`,
+      `Version ${next}`,
+    ),
+  );
 
-  const aboutPath = "src/features/about/AboutPage.tsx";
-  const marker = `const CHANGELOG = [\n`;
-  const about = read(aboutPath);
-  if (count(about, marker) !== 1) {
-    fail("AboutPage.tsx: CHANGELOG array not found");
+  const changelogPath = "CHANGELOG.md";
+  const changelog = read(changelogPath);
+  const currentHeading = `## [${current}]`;
+  if (count(changelog, currentHeading) !== 1) {
+    fail(`CHANGELOG.md: expected 1 heading ${currentHeading}`);
   }
-  if (about.includes(`version: "${next}"`)) {
-    fail(`AboutPage.tsx already has Version ${next}`);
+  if (changelog.includes(`## [${next}]`)) {
+    fail(`CHANGELOG.md already has ## [${next}]`);
   }
-  write(aboutPath, about.replace(marker, marker + changelogBlock(next, notes)));
+  write(
+    changelogPath,
+    changelog.replace(
+      currentHeading,
+      changelogMarkdownBlock(next, notes) + currentHeading,
+    ),
+  );
 }
 
 function assertCleanWorktree() {
