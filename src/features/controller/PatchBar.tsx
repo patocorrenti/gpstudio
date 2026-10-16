@@ -101,8 +101,8 @@ const patchActionIconClass = "size-3 text-muted-foreground";
 const unsavedPatchHint = "Unsaved changes will be lost";
 
 const AB_SECONDS_DEFAULT = 5;
-const AB_SECONDS_MIN = 1;
-const AB_SECONDS_MAX = 60;
+const AB_SECONDS_MIN = 2;
+const AB_SECONDS_MAX = 200;
 
 type AbCycle = {
   a: number;
@@ -292,7 +292,7 @@ export function PatchBar({
   const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [abOpen, setAbOpen] = useState(false);
-  const [abSeconds, setAbSeconds] = useState(AB_SECONDS_DEFAULT);
+  const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
   const [abCompare, setAbCompare] = useState(0);
   const [abPlaying, setAbPlaying] = useState(false);
   const [abActive, setAbActive] = useState<"a" | "b" | null>(null);
@@ -404,9 +404,17 @@ export function PatchBar({
     uploadPatchBytes(bytes);
   }
 
+  function resolvedAbSeconds(): number {
+    const parsed = Number.parseInt(abSecondsText, 10);
+    if (!Number.isInteger(parsed)) {
+      return AB_SECONDS_DEFAULT;
+    }
+    return clampAbSeconds(parsed);
+  }
+
   function openAbSetup() {
     setOptionsOpen(false);
-    setAbSeconds(AB_SECONDS_DEFAULT);
+    setAbSecondsText(String(AB_SECONDS_DEFAULT));
     setAbCompare(nextComparisonPatch(patch));
     playingRef.current = false;
     cycleRef.current = null;
@@ -437,24 +445,34 @@ export function PatchBar({
     if (abCompare === patch) {
       return;
     }
+    const seconds = resolvedAbSeconds();
+    setAbSecondsText(String(seconds));
     cycleRef.current = {
       a: patch,
       b: abCompare,
-      dwellMs: abSeconds * 1000,
+      dwellMs: seconds * 1000,
       next: "b",
     };
     playingRef.current = true;
     setAbActive("a");
-    setAbCountdown(abSeconds);
+    setAbCountdown(seconds);
     setAbPlaying(true);
   }
 
   function onAbSecondsChange(event: ChangeEvent<HTMLInputElement>) {
-    const parsed = Number.parseInt(event.target.value, 10);
-    if (!Number.isInteger(parsed)) {
+    const raw = event.target.value;
+    if (raw === "") {
+      setAbSecondsText("");
       return;
     }
-    setAbSeconds(clampAbSeconds(parsed));
+    if (!/^\d{1,3}$/.test(raw)) {
+      return;
+    }
+    setAbSecondsText(raw);
+  }
+
+  function onAbSecondsBlur() {
+    setAbSecondsText(String(resolvedAbSeconds()));
   }
 
   useEffect(() => {
@@ -689,7 +707,7 @@ export function PatchBar({
                         abActive === "b" ? "origin-right" : "origin-left"
                       }`}
                       style={{
-                        animationDuration: `${cycleRef.current?.dwellMs ?? abSeconds * 1000}ms`,
+                        animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
                       }}
                     />
                   )}
@@ -709,19 +727,19 @@ export function PatchBar({
                 aria-label="Seconds remaining"
                 className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
               >
-                {abCountdown ?? abSeconds}
+                {abCountdown ?? resolvedAbSeconds()}
               </div>
             ) : (
               <Input
-                type="number"
+                type="text"
                 inputMode="numeric"
                 min={AB_SECONDS_MIN}
                 max={AB_SECONDS_MAX}
-                step={1}
                 aria-label="Seconds"
-                value={abSeconds}
+                value={abSecondsText}
                 className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
                 onChange={onAbSecondsChange}
+                onBlur={onAbSecondsBlur}
               />
             )}
           </div>

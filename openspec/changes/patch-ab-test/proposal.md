@@ -10,7 +10,7 @@ Comparing two onboard patches means switching by hand and losing the timing. Con
   - Save, Options (rename, duplicate, download, upload), Reload, P-Vol, and BPM leave the bar.
   - Previous, the current-patch selector, and next stay. Choosing or stepping still recalls that patch through the device session, with the existing unsaved-changes tooltip and no extra confirm.
   - To the right of that selector: a seconds input, default **5**, then a second patch selector, default **one slot ahead** of the current patch (wrap `99` → `00`), then **Play**.
-- The seconds input is the dwell between switches (integer seconds, 1–60). The second selector only chooses the comparison slot. It does not recall a patch.
+- The seconds input is the dwell between switches (integer seconds, 2–200, default 5; empty while editing is allowed and resolves on blur or Play). The second selector only chooses the comparison slot. It does not recall a patch.
 - **Play** becomes **Stop** and alternates the loaded patch (A) and the comparison slot (B): dwell, recall B, dwell, recall A, and so on. Each recall uses the existing session patch change (USB CC 0, Bluetooth SET family 1143, per `docs/architecture.md`). No recall is sent while a chain dump is in flight; the dwell waits until the chain is idle, then counts.
 - **Stop** ends the cycle, leaves the pedal on the patch that is loaded, and returns to A/B setup (Play), not to the normal bar.
 - Closing with **X**, or disconnecting, ends the cycle. Close restores Save, Options, levels, and Reload. Disconnect hides the bar as it does today.
