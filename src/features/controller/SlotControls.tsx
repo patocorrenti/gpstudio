@@ -27,6 +27,7 @@ import {
   isEffectSlot,
   type AudioChain,
   type AudioChainSlot,
+  type ChainSlotId,
   type EffectId,
 } from "@/device/session";
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
@@ -150,10 +151,14 @@ function SlotControlPanel({
   slot,
   pedal,
   disabled,
+  highlighted,
+  onHoverSlot,
 }: {
   slot: AudioChainSlot & { id: EffectId; modelId: string; values: number[] };
   pedal: DeviceModel;
   disabled: boolean;
+  highlighted: boolean;
+  onHoverSlot?: (id: ChainSlotId | null) => void;
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
@@ -177,8 +182,14 @@ function SlotControlPanel({
 
   return (
     <section
-      className="flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 dark:bg-muted/30"
+      className={cn(
+        "flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 transition-[background-color,box-shadow] duration-150 dark:bg-muted/30",
+        highlighted &&
+          "bg-muted/80 shadow-[inset_0_0_0_1px] shadow-foreground/12 dark:bg-muted/45 dark:shadow-foreground/18",
+      )}
       aria-label={`${kindLabel} controls`}
+      onPointerEnter={() => onHoverSlot?.(slot.id)}
+      onPointerLeave={() => onHoverSlot?.(null)}
     >
       <div
         className={cn(
@@ -281,10 +292,14 @@ export function SlotControlPanels({
   chain,
   pedal,
   disabled,
+  hoveredSlot = null,
+  onHoverSlot,
 }: {
   chain: AudioChain;
   pedal: DeviceModel;
   disabled: boolean;
+  hoveredSlot?: ChainSlotId | null;
+  onHoverSlot?: (id: ChainSlotId | null) => void;
 }) {
   const panels = chain.flatMap((slot) => {
     if (!isEffectSlot(slot.id) || !slot.enabled) {
@@ -317,6 +332,8 @@ export function SlotControlPanels({
           slot={slot}
           pedal={pedal}
           disabled={disabled}
+          highlighted={hoveredSlot === slot.id}
+          onHoverSlot={onHoverSlot}
         />
       ))}
     </div>
