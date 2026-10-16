@@ -476,6 +476,40 @@ export function PatchBar({
   }
 
   useEffect(() => {
+    if (!abOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.code !== "Space" && event.key !== " ") {
+        return;
+      }
+      if (event.repeat) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            "input, textarea, button, [role='combobox'], [role='dialog']",
+          ))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (playingRef.current) {
+        stopAbCycle();
+        return;
+      }
+      startAbCycle();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [abOpen, abCompare, patch, abSecondsText]);
+
+  useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
