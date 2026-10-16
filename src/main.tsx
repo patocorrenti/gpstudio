@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { toast } from "sonner";
 import { App } from "@/app/App";
+import { initPwaInstallPrompt } from "@/app/pwa-install";
 import { isTauriRuntime } from "@/midi/detect";
 import "./index.css";
 
@@ -13,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
 );
 
 if (!isTauriRuntime()) {
+  initPwaInstallPrompt();
   void registerProductionServiceWorker();
 }
 
