@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Settings2, TriangleAlert, Upload, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Save, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,7 +42,14 @@ import {
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
-import { useEffect, useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 /** Custom IR / SnapTone slots referenced by the working chain (slot only; no file bytes). */
@@ -84,6 +91,11 @@ const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 const patchChipClass =
   "rounded-[4px] bg-background hover:bg-background/90 dark:bg-muted/40 dark:hover:bg-muted/50";
 const patchActionClass = `${patchChipClass} px-3`;
+const abToggleClass = `${patchActionClass} w-14`;
+const abPlayReadyClass =
+  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
+const patchClusterEnterClass =
+  "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-4 motion-safe:duration-300";
 const patchActionIconClass = "size-3 text-muted-foreground";
 
 const unsavedPatchHint = "Unsaved changes will be lost";
@@ -182,6 +194,45 @@ function PatchNavTooltip({
         {unsavedPatchHint}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function AbPatchLabel({
+  label,
+  show,
+  ruled = true,
+  children,
+}: {
+  label: string;
+  show: boolean;
+  ruled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative">
+      {show ? (
+        ruled ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-5 flex items-center gap-1.5"
+          >
+            <span className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-xs font-normal tracking-wide text-muted-foreground">
+              {label}
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        ) : (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+          >
+            {label}
+          </span>
+        )
+      ) : null}
+      {children}
+    </div>
   );
 }
 
@@ -512,9 +563,8 @@ export function PatchBar({
             <Button
               type="button"
               variant="ghost"
-              size={abOpen ? "icon" : "default"}
               aria-label={abOpen ? "Close A/B test" : "A/B Test - Patches"}
-              className={abOpen ? patchChipClass : patchActionClass}
+              className={abToggleClass}
               onClick={abOpen ? closeAbSetup : openAbSetup}
             >
               {abOpen ? <X /> : "A/B"}
@@ -539,21 +589,23 @@ export function PatchBar({
             </Button>
           </span>
         </PatchNavTooltip>
-        <PatchSelect
-          patch={patch}
-          patchNames={patchNames}
-          disabled={busy || abPlaying}
-          triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-          wrapTrigger={(trigger) => (
-            <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
-          )}
-          onSelect={(next) => {
-            if (busy || abPlaying) {
-              return;
-            }
-            void session.setPatch(next);
-          }}
-        />
+        <AbPatchLabel label="A" show={abOpen}>
+          <PatchSelect
+            patch={patch}
+            patchNames={patchNames}
+            disabled={busy || abPlaying}
+            triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+            wrapTrigger={(trigger) => (
+              <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
+            )}
+            onSelect={(next) => {
+              if (busy || abPlaying) {
+                return;
+              }
+              void session.setPatch(next);
+            }}
+          />
+        </AbPatchLabel>
         <PatchNavTooltip enabled={modified && !abPlaying}>
           <span className="inline-flex">
             <Button
@@ -571,55 +623,62 @@ export function PatchBar({
         </PatchNavTooltip>
       </TooltipProvider>
       {abOpen ? (
-        <div className="ml-2 flex items-center gap-1">
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={AB_SECONDS_MIN}
-            max={AB_SECONDS_MAX}
-            step={1}
-            aria-label="Seconds"
-            disabled={abPlaying}
-            value={abSeconds}
-            className={`${patchChipClass} h-8 w-14 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
-            onChange={onAbSecondsChange}
-          />
-          <span className="text-sm text-muted-foreground">s</span>
-          <PatchSelect
-            patch={abCompare}
-            patchNames={patchNames}
-            disabled={abPlaying}
-            triggerClassName={`${patchChipClass} h-8 w-44 min-w-44 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-            onSelect={(next) => {
-              setAbCompare(next);
-            }}
-          />
+        <div className={`ml-2 flex items-center gap-1 ${patchClusterEnterClass}`}>
+          <AbPatchLabel label="Seconds" show ruled={false}>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={AB_SECONDS_MIN}
+              max={AB_SECONDS_MAX}
+              step={1}
+              aria-label="Seconds"
+              disabled={abPlaying}
+              value={abSeconds}
+              className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+              onChange={onAbSecondsChange}
+            />
+          </AbPatchLabel>
+          <AbPatchLabel label="B" show>
+            <PatchSelect
+              patch={abCompare}
+              patchNames={patchNames}
+              disabled={abPlaying}
+              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+              onSelect={(next) => {
+                setAbCompare(next);
+              }}
+            />
+          </AbPatchLabel>
           {abPlaying ? (
             <Button
               type="button"
               variant="ghost"
-              className={patchActionClass}
+              size="icon"
+              className={patchChipClass}
               aria-label="Stop"
               onClick={stopAbCycle}
             >
-              Stop
+              <Square className="size-3 fill-current" />
             </Button>
           ) : (
             <Button
               type="button"
               variant="ghost"
-              className={patchActionClass}
+              size="icon"
+              className={
+                abCompare === patch ? patchChipClass : abPlayReadyClass
+              }
               aria-label="Play"
               disabled={abCompare === patch}
               onClick={startAbCycle}
             >
-              Play
+              <Play className="size-3 fill-current" />
             </Button>
           )}
         </div>
       ) : null}
       {abOpen ? null : (
-      <>
+      <div className={`flex flex-wrap items-center gap-1 ${patchClusterEnterClass}`}>
       <div className="ml-2 flex items-center gap-1">
         <Button
           type="button"
@@ -728,7 +787,7 @@ export function PatchBar({
         />
       </div>
       <PatchLevels model={model} volume={patchVolume} bpm={patchBpm} disabled={busy} />
-      </>
+      </div>
       )}
       </div>
       <Dialog
