@@ -47,9 +47,9 @@ Alternative: `autoUpdate` / `skipWaiting` immediately. Rejected because a protoc
 
 Generate `public/pwa-192.png` and `public/pwa-512.png` from the current largest Tauri placeholder (`src-tauri/icons/128x128@2x.png`). The manifest points at those public files. Replacing the brand later is a file swap, not a manifest rewrite. Purpose stays `any` until the real artwork has a safe maskable zone. Tauri's own icon list is unchanged.
 
-### About copy is an input, not a draft
+### About Install section and deferred install prompt
 
-`src/features/about/AboutPage.tsx` gains a section only when the English sentences are supplied. The section states the install targets and pedal-link limits from the `app-shell` delta and does not say the Microsoft Store listing already exists. No placeholder sentences ship in the meantime.
+About includes an Install GP Studio section with English benefits, platform limits, and Install now. Browser code captures `beforeinstallprompt` (not in Tauri). Install now calls that deferred prompt when present; otherwise it shows an English toast that points at the Chrome or Edge install menu. The Microsoft Store badge stays behind a flag until a listing exists so About does not claim the Store package is already available.
 
 ### Store packaging is a check on the built manifest
 
