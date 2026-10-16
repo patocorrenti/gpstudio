@@ -58,9 +58,9 @@ export function AppShell() {
         <div className="flex shrink-0 items-center gap-1 text-[12px]">
           <span>Like it?</span>
           <Button
-            variant="default"
+            variant="ghost"
             size="xs"
-            className="h-5 gap-0.5 border-emerald-600 bg-emerald-600 px-1.5 text-[10px] text-white hover:bg-emerald-500 hover:text-white dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 [&_svg:not([class*='size-'])]:size-2.5"
+            className="h-5 gap-1 border-transparent bg-muted px-1.5 text-[11px] text-foreground hover:bg-muted/80 hover:text-foreground dark:bg-muted/40 dark:text-white dark:hover:bg-muted/50 dark:hover:text-white [&_svg:not([class*='size-'])]:size-3"
             asChild
           >
             <a
@@ -69,7 +69,10 @@ export function AppShell() {
               rel="noopener noreferrer"
             >
               Support
-              <Heart className="size-2.5 fill-current" aria-hidden />
+              <Heart
+                className="size-3 fill-lime-400 text-lime-400"
+                aria-hidden
+              />
             </a>
           </Button>
         </div>

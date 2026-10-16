@@ -492,7 +492,7 @@ export function ConnectionStatus() {
           aria-hidden
           className={
             connected
-              ? "size-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_2px] shadow-emerald-400"
+              ? "size-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_2px] shadow-emerald-400 dark:bg-lime-400 dark:shadow-lime-400"
               : "size-2 shrink-0 rounded-full bg-muted-foreground/50"
           }
         />
