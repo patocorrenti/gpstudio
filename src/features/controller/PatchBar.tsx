@@ -612,7 +612,7 @@ export function PatchBar({
             <Button
               type="button"
               variant="ghost"
-              aria-label={abOpen ? "Close A/B test" : "A/B Test - Patches"}
+              aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
               className={abToggleClass}
               onClick={abOpen ? closeAbSetup : openAbSetup}
             >
@@ -620,7 +620,7 @@ export function PatchBar({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {abOpen ? "Close A/B test" : "A/B Test - Patches"}
+            {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
           </TooltipContent>
         </Tooltip>
         <AbPatchLabel label="A" show={abOpen} lit={abActive === "a"}>
