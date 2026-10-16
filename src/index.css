@@ -78,6 +78,24 @@
             transform: translateX(420%) skewX(-16deg);
         }
     }
+    --animate-ab-dwell: ab-dwell-progress linear forwards;
+    @keyframes ab-dwell-progress {
+        from {
+            transform: scaleX(0);
+        }
+        to {
+            transform: scaleX(1);
+        }
+    }
+    --animate-ab-rule-settle: ab-rule-settle 0.55s ease-out forwards;
+    @keyframes ab-rule-settle {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0.5;
+        }
+    }
 }
 
 :root {
