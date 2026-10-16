@@ -1,4 +1,6 @@
 import { Bug, Download, Heart, Mail } from "lucide-react";
+import { toast } from "sonner";
+import { promptPwaInstall } from "@/app/pwa-install";
 import githubMark from "@/assets/img/github-mark.svg";
 import microsoftStoreBadgeDark from "@/assets/img/get-it-from-microsoft-dark.svg";
 import microsoftStoreBadgeLight from "@/assets/img/get-it-from-microsoft-light.svg";
@@ -155,6 +157,19 @@ export function AboutPage() {
           <Button
             type="button"
             className="relative h-auto gap-2 overflow-hidden border-lime-400 bg-lime-400 px-8 py-3 text-base text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
+            onClick={() => {
+              void promptPwaInstall().then((result) => {
+                if (result === "installed") {
+                  toast("GP Studio is already installed.");
+                  return;
+                }
+                if (result === "unavailable") {
+                  toast(
+                    "Use Install app in your Chrome or Edge menu to install GP Studio.",
+                  );
+                }
+              });
+            }}
           >
             <span
               aria-hidden
