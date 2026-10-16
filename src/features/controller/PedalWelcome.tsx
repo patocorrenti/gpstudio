@@ -38,7 +38,7 @@ function usePrefersReducedMotion() {
 export function PedalWelcome() {
   const { openConnect } = useConnectDialog();
   const reducedMotion = usePrefersReducedMotion();
-  const tiltTargetRef = useRef<HTMLDivElement>(null);
+  const tiltTargetRef = useRef<HTMLButtonElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
   const [pointerY, setPointerY] = useState(0);
   const [plugIn, setPlugIn] = useState(0);
@@ -85,18 +85,7 @@ export function PedalWelcome() {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      className="group flex flex-1 cursor-pointer flex-col items-center justify-center gap-4 pb-16 text-muted-foreground transition-colors hover:text-foreground"
-      aria-haspopup="dialog"
-      aria-label="Connect a pedal"
-      onClick={openConnect}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openConnect();
-        }
-      }}
+      className="group flex flex-1 flex-col items-center justify-center gap-4 pb-16 text-muted-foreground"
       onPointerMove={updatePointer}
       onPointerLeave={resetPointer}
     >
@@ -116,7 +105,14 @@ export function PedalWelcome() {
         </span>
       </div>
       <div className="mt-[-24px] flex flex-col items-center gap-3">
-        <div ref={tiltTargetRef} className="[perspective:900px]">
+        <button
+          type="button"
+          ref={tiltTargetRef}
+          className="inline-flex cursor-pointer appearance-none border-0 bg-transparent p-0 [perspective:900px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          aria-haspopup="dialog"
+          aria-label="Connect a Multi-Effects"
+          onClick={openConnect}
+        >
           <div className="relative w-[450px]">
             <img
               src={pedalsConnectPedalsDark}
@@ -147,16 +143,13 @@ export function PedalWelcome() {
               style={wireTiltStyle}
             />
           </div>
-        </div>
+        </button>
         <div ref={ctaRef} className="flex flex-col items-center gap-2.5">
           <Button
             type="button"
             size="lg"
             className="relative h-10 overflow-hidden border-lime-400 bg-lime-400 px-4 text-sm whitespace-normal text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
-            onClick={(event) => {
-              event.stopPropagation();
-              openConnect();
-            }}
+            onClick={openConnect}
           >
             <span
               aria-hidden
