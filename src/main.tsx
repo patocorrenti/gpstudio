@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { toast } from "sonner";
 import { App } from "@/app/App";
 import { initPwaInstallPrompt } from "@/app/pwa-install";
+import { reportUsageOpen } from "@/app/usage-ping";
 import { isTauriRuntime } from "@/midi/detect";
 import "./index.css";
 
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")!).render(
 if (!isTauriRuntime()) {
   initPwaInstallPrompt();
   void registerProductionServiceWorker();
+  reportUsageOpen();
 }
 
 function showPwaUpdateToast(onReload: () => void): void {

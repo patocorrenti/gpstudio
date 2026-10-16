@@ -77,7 +77,7 @@ context: |
       live state or command-out read capabilities (liveFromPedal, commandToPedal)
       instead of forking UI. Patch commandToPedal is true on USB and Bluetooth.
   - Device state: shared TypeScript layer, independent of transport
-  - No HTTP backend. The app talks directly to the pedal.
+  - No HTTP backend. The app talks directly to the pedal. The production web app may send one best-effort same-origin GET `/usage` per cold start; failure is ignored. That request is not an application backend.
   - Electron is rejected (heavier, worse mobile path).
 
   Architecture:

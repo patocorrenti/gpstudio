@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,6 +11,11 @@ const webDescription =
 
 const host = process.env.TAURI_DEV_HOST;
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const packageVersion = (
+  JSON.parse(readFileSync(path.join(projectRoot, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 export default defineConfig({
   plugins: [
@@ -54,6 +60,7 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,svg,png,woff,woff2}"],
         globIgnores: ["**/pwa-192.png", "**/pwa-512.png"],
+        navigateFallbackDenylist: [/^\/usage$/],
       },
     }),
   ],
@@ -61,6 +68,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(projectRoot, "./src"),
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(packageVersion),
   },
   clearScreen: false,
   server: {
