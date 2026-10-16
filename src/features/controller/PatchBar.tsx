@@ -197,17 +197,28 @@ function PatchNavTooltip({
   );
 }
 
+const abLabelIdleClass =
+  "text-xs font-normal tracking-wide text-muted-foreground";
+const abLabelLitClass =
+  "text-xs font-normal tracking-wide text-foreground";
+
 function AbPatchLabel({
   label,
   show,
   ruled = true,
+  lit = false,
   children,
 }: {
   label: string;
   show: boolean;
   ruled?: boolean;
+  lit?: boolean;
   children: ReactNode;
 }) {
+  const labelClass = lit ? abLabelLitClass : abLabelIdleClass;
+  const ruleClass = lit
+    ? "h-0.5 flex-1 bg-foreground/65 animate-ab-rule-settle"
+    : "h-px flex-1 bg-border";
   return (
     <div className="relative">
       {show ? (
@@ -216,16 +227,14 @@ function AbPatchLabel({
             aria-hidden
             className="pointer-events-none absolute inset-x-0 -top-5 flex items-center gap-1.5"
           >
-            <span className="h-px flex-1 bg-border" />
-            <span className="shrink-0 text-xs font-normal tracking-wide text-muted-foreground">
-              {label}
-            </span>
-            <span className="h-px flex-1 bg-border" />
+            <span key={lit ? "lit-l" : "idle-l"} className={ruleClass} />
+            <span className={`shrink-0 ${labelClass}`}>{label}</span>
+            <span key={lit ? "lit-r" : "idle-r"} className={ruleClass} />
           </div>
         ) : (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+            className={`pointer-events-none absolute inset-x-0 -top-5 text-center ${labelClass}`}
           >
             {label}
           </span>
@@ -286,6 +295,8 @@ export function PatchBar({
   const [abSeconds, setAbSeconds] = useState(AB_SECONDS_DEFAULT);
   const [abCompare, setAbCompare] = useState(0);
   const [abPlaying, setAbPlaying] = useState(false);
+  const [abActive, setAbActive] = useState<"a" | "b" | null>(null);
+  const [abCountdown, setAbCountdown] = useState<number | null>(null);
   const [dwellEpoch, setDwellEpoch] = useState(0);
   const cycleRef = useRef<AbCycle | null>(null);
   const playingRef = useRef(false);
@@ -400,6 +411,8 @@ export function PatchBar({
     playingRef.current = false;
     cycleRef.current = null;
     setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
     setAbOpen(true);
   }
 
@@ -407,6 +420,8 @@ export function PatchBar({
     playingRef.current = false;
     cycleRef.current = null;
     setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
     setAbOpen(false);
   }
 
@@ -414,6 +429,8 @@ export function PatchBar({
     playingRef.current = false;
     cycleRef.current = null;
     setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
   }
 
   function startAbCycle() {
@@ -427,6 +444,8 @@ export function PatchBar({
       next: "b",
     };
     playingRef.current = true;
+    setAbActive("a");
+    setAbCountdown(abSeconds);
     setAbPlaying(true);
   }
 
@@ -465,6 +484,8 @@ export function PatchBar({
           cycleRef.current = null;
           if (mountedRef.current) {
             setAbPlaying(false);
+            setAbActive(null);
+            setAbCountdown(null);
           }
           return;
         }
@@ -491,6 +512,8 @@ export function PatchBar({
             cycleRef.current = null;
             if (mountedRef.current) {
               setAbPlaying(false);
+              setAbActive(null);
+              setAbCountdown(null);
             }
           }
           return;
@@ -504,6 +527,8 @@ export function PatchBar({
           playingRef.current = false;
           cycleRef.current = null;
           setAbPlaying(false);
+          setAbActive(null);
+          setAbCountdown(null);
           return;
         }
         const tookEffect = enteredSyncing || after.patch === target;
@@ -511,6 +536,7 @@ export function PatchBar({
           current.next = previousNext;
           return;
         }
+        setAbActive(previousNext);
         if (!enteredSyncing) {
           setDwellEpoch((epoch) => epoch + 1);
         }
@@ -520,6 +546,29 @@ export function PatchBar({
       window.clearTimeout(timer);
     };
   }, [abPlaying, busy, dwellEpoch, session]);
+
+  useEffect(() => {
+    if (!abPlaying || busy) {
+      return;
+    }
+    const cycle = cycleRef.current;
+    if (!cycle) {
+      return;
+    }
+    const totalSec = Math.max(1, Math.round(cycle.dwellMs / 1000));
+    setAbCountdown(totalSec);
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const left = Math.max(
+        0,
+        totalSec - Math.floor((Date.now() - started) / 1000),
+      );
+      setAbCountdown(left);
+    }, 100);
+    return () => {
+      window.clearInterval(tick);
+    };
+  }, [abPlaying, busy, dwellEpoch]);
 
   function uploadPatchBytes(bytes: Uint8Array) {
     void toast.promise(
@@ -574,76 +623,114 @@ export function PatchBar({
             {abOpen ? "Close A/B test" : "A/B Test - Patches"}
           </TooltipContent>
         </Tooltip>
-        <PatchNavTooltip enabled={modified && !abPlaying}>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Previous patch"
+        <AbPatchLabel label="A" show={abOpen} lit={abActive === "a"}>
+          <div className="flex items-center gap-1">
+            <PatchNavTooltip enabled={modified && !abPlaying}>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Previous patch"
+                  disabled={busy || abPlaying}
+                  className={patchChipClass}
+                  onClick={() => void session.stepPatch(-1)}
+                >
+                  <ChevronLeft />
+                </Button>
+              </span>
+            </PatchNavTooltip>
+            <PatchSelect
+              patch={patch}
+              patchNames={patchNames}
               disabled={busy || abPlaying}
-              className={patchChipClass}
-              onClick={() => void session.stepPatch(-1)}
-            >
-              <ChevronLeft />
-            </Button>
-          </span>
-        </PatchNavTooltip>
-        <AbPatchLabel label="A" show={abOpen}>
-          <PatchSelect
-            patch={patch}
-            patchNames={patchNames}
-            disabled={busy || abPlaying}
-            triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-            wrapTrigger={(trigger) => (
-              <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
-            )}
-            onSelect={(next) => {
-              if (busy || abPlaying) {
-                return;
-              }
-              void session.setPatch(next);
-            }}
-          />
+              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+              wrapTrigger={(trigger) => (
+                <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
+              )}
+              onSelect={(next) => {
+                if (busy || abPlaying) {
+                  return;
+                }
+                void session.setPatch(next);
+              }}
+            />
+            <PatchNavTooltip enabled={modified && !abPlaying}>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Next patch"
+                  disabled={busy || abPlaying}
+                  className={patchChipClass}
+                  onClick={() => void session.stepPatch(1)}
+                >
+                  <ChevronRight />
+                </Button>
+              </span>
+            </PatchNavTooltip>
+          </div>
         </AbPatchLabel>
-        <PatchNavTooltip enabled={modified && !abPlaying}>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Next patch"
-              disabled={busy || abPlaying}
-              className={patchChipClass}
-              onClick={() => void session.stepPatch(1)}
-            >
-              <ChevronRight />
-            </Button>
-          </span>
-        </PatchNavTooltip>
       </TooltipProvider>
       {abOpen ? (
-        <div className={`ml-2 flex items-center gap-1 ${patchClusterEnterClass}`}>
-          <AbPatchLabel label="Seconds" show ruled={false}>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={AB_SECONDS_MIN}
-              max={AB_SECONDS_MAX}
-              step={1}
-              aria-label="Seconds"
-              disabled={abPlaying}
-              value={abSeconds}
-              className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
-              onChange={onAbSecondsChange}
-            />
-          </AbPatchLabel>
-          <AbPatchLabel label="B" show>
+        <div className={`flex items-center gap-1 ${patchClusterEnterClass}`}>
+          <div className="relative">
+            {abPlaying ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
+              >
+                <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
+                  {busy ? null : (
+                    <div
+                      key={`${dwellEpoch}-${abActive ?? "a"}`}
+                      className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                        abActive === "b" ? "origin-right" : "origin-left"
+                      }`}
+                      style={{
+                        animationDuration: `${cycleRef.current?.dwellMs ?? abSeconds * 1000}ms`,
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+              >
+                Seconds
+              </span>
+            )}
+            {abPlaying ? (
+              <div
+                aria-live="polite"
+                aria-label="Seconds remaining"
+                className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
+              >
+                {abCountdown ?? abSeconds}
+              </div>
+            ) : (
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={AB_SECONDS_MIN}
+                max={AB_SECONDS_MAX}
+                step={1}
+                aria-label="Seconds"
+                value={abSeconds}
+                className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                onChange={onAbSecondsChange}
+              />
+            )}
+          </div>
+          <AbPatchLabel label="B" show lit={abActive === "b"}>
             <PatchSelect
               patch={abCompare}
               patchNames={patchNames}
               disabled={abPlaying}
-              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
+              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
               onSelect={(next) => {
                 setAbCompare(next);
               }}
@@ -679,7 +766,7 @@ export function PatchBar({
       ) : null}
       {abOpen ? null : (
       <div className={`flex flex-wrap items-center gap-1 ${patchClusterEnterClass}`}>
-      <div className="ml-2 flex items-center gap-1">
+      <div className="flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
