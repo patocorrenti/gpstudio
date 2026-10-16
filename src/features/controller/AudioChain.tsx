@@ -21,6 +21,7 @@ import {
   isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
+  type ChainSlotId,
   type EffectId,
   type StompAssignment,
 } from "@/device/session";
@@ -32,10 +33,13 @@ import { cn } from "@/lib/utils";
 /** Cable through the icon: pt-1.5 + grip h-3 + gap-2 + half of size-14. */
 const CHAIN_CABLE_TOP = "calc(3.375rem + 1px)";
 
-function slotClassName(enabled: boolean): string {
+function slotClassName(enabled: boolean, highlighted: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-2 pt-1.5 pb-2 text-center",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-2 pt-1.5 pb-2 text-center transition-[background-color,box-shadow] duration-150",
     enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
+    enabled &&
+      highlighted &&
+      "bg-muted/90 shadow-[inset_0_0_0_1px] shadow-foreground/12 dark:bg-muted/55 dark:shadow-foreground/18",
   );
 }
 
@@ -47,6 +51,8 @@ function AudioChainSlotView({
   disabled,
   isFirst,
   isLast,
+  highlighted,
+  onHoverSlot,
 }: {
   slot: AudioChainSlot;
   chain: AudioChain;
@@ -55,6 +61,8 @@ function AudioChainSlotView({
   disabled: boolean;
   isFirst: boolean;
   isLast: boolean;
+  highlighted: boolean;
+  onHoverSlot?: (id: ChainSlotId | null) => void;
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
@@ -77,7 +85,14 @@ function AudioChainSlotView({
         transition,
         zIndex: isDragging ? 20 : undefined,
       }}
-      className={cn(slotClassName(slot.enabled), sortable && "cursor-grab")}
+      className={cn(slotClassName(slot.enabled, highlighted), sortable && "cursor-grab")}
+      onPointerEnter={() => {
+        if (!slot.enabled) {
+          return;
+        }
+        onHoverSlot?.(slot.id);
+      }}
+      onPointerLeave={() => onHoverSlot?.(null)}
       {...(sortable ? attributes : {})}
       {...(sortable ? listeners : {})}
     >
@@ -162,11 +177,15 @@ export function AudioChainRow({
   stomps,
   pedal,
   disabled,
+  hoveredSlot = null,
+  onHoverSlot,
 }: {
   chain: AudioChain;
   stomps: StompAssignment;
   pedal: DeviceModel;
   disabled: boolean;
+  hoveredSlot?: ChainSlotId | null;
+  onHoverSlot?: (id: ChainSlotId | null) => void;
 }) {
   const session = useDeviceSession();
   const sensors = useSensors(
@@ -209,6 +228,8 @@ export function AudioChainRow({
                   disabled={disabled}
                   isFirst={index === 0}
                   isLast={index === chain.length - 1}
+                  highlighted={slot.enabled && hoveredSlot === slot.id}
+                  onHoverSlot={onHoverSlot}
                 />
               </li>
             ))}
