@@ -9,8 +9,8 @@ GP Studio on the web is already the app people open at `gpstudio.patocorrenti.co
 - When a newer deploy is waiting, show an English prompt to reload. Do not swap the running session silently.
 - Register the service worker only in the browser. The Tauri window shares `dist/` and must not register it (`docs/architecture.md`: the desktop shell is Tauri; WebView2 is not the web MIDI/Bluetooth path).
 - Use the current Tauri PNG placeholders as temporary 192 and 512 icons, in files that can be replaced. Final brand art replaces those two files.
-- Add an About section for where the installed app runs and where it reaches the pedal. The sentences are not written yet; the task stays until that copy is supplied.
-- Shape the manifest and service worker so PWABuilder can generate a Microsoft Store package (Edge-hosted) from the live HTTPS URL without a further code change.
+- Add an About Install section with English platform limits and an Install now control that uses the browser install prompt when available.
+- Shape the manifest and service worker so PWABuilder can generate a Microsoft Store package (Edge-hosted) from the live HTTPS URL without a further code change. The Microsoft Store badge stays hidden until a listing exists.
 
 ## Non-goals
 
@@ -18,7 +18,7 @@ GP Studio on the web is already the app people open at `gpstudio.patocorrenti.co
 - Final brand icons. Placeholders may be used while implementing; the brand files replace them when the art is ready.
 - iPhone and iPad. The installed web app is not a pedal controller there.
 - Promising USB on Android. That link is not affirmed for the installed app.
-- A custom install button, or install instructions for Safari.
+- Install instructions for Safari.
 - Push notifications, background Bluetooth, the Play Store, the Mac App Store, and Flathub.
 - Replacing the Tauri desktop app, or packaging a mobile Tauri app (`docs/architecture.md`).
 - A new pedal transport. USB and Bluetooth stay the existing Web MIDI and Web Bluetooth backends in the browser, and midir / btleplug in Tauri.
@@ -36,7 +36,7 @@ GP Studio on the web is already the app people open at `gpstudio.patocorrenti.co
 ## Impact
 
 - Vite production build (`vite.config.ts`, `index.html`, `public/` icons) and browser-only service-worker registration next to the existing `isTauriRuntime()` split in `src/midi/detect.ts`.
-- `src/features/about/AboutPage.tsx` once the platform copy is supplied.
+- `src/features/about/AboutPage.tsx` and browser-only install-prompt capture next to service-worker registration.
 - A small build dependency for the manifest and precache. `npm run build` still emits the `dist/` Tauri consumes (`src-tauri/tauri.conf.json`).
 - `docs/architecture.md` web line, so the hosted app is described as installable.
 - No MIDI, Bluetooth, or DeviceSession behavior changes.
