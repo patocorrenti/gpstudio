@@ -2,7 +2,7 @@
 
 ### Requirement: Controller offers patch A/B setup
 
-After the patch bar is shown, Controller SHALL offer an A/B control at the left of that bar, before previous. Its tooltip MUST read `A/B Test - Patches`. Activating it MUST open A/B setup on the same bar and MUST NOT send patch recall. While A/B setup is open and the cycle is not running, the bar MUST show, from left to right: an X that closes the setup, previous, the current-patch selector, next, a seconds input, a comparison-patch selector, and Play. The tooltip on X MUST read `Close A/B test`.
+After the patch bar is shown, Controller SHALL offer an A/B control at the left of that bar, before previous. Its tooltip MUST read `A/B Test - Compare Patches`. Activating it MUST open A/B setup on the same bar and MUST NOT send patch recall. While A/B setup is open and the cycle is not running, the bar MUST show, from left to right: an X that closes the setup, previous, the current-patch selector, next, a seconds input, a comparison-patch selector, and Play. The tooltip on X MUST read `Close A/B test`.
 
 While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol, or BPM, and MUST NOT offer rename, duplicate, download, or upload. Previous, the current-patch selector, and next MUST keep their existing recall, wrap, unsaved-changes tooltip, and chain-sync lock. The seconds input MUST show an integer dwell from 2 through 200 and MUST show 5 when the setup opens. Clearing the field while editing MUST be allowed; blur or Play MUST resolve an empty value to 5 and clamp out-of-range values into that range. The comparison selector MUST list patches `00`–`99` with the same index and onboard-name labeling as the current-patch selector, and MUST show the next slot after the current patch when the setup opens, wrapping from `99` to `00`. Changing the comparison slot or the seconds input MUST NOT change the selected patch and MUST NOT send patch recall. Choosing the comparison slot equal to the current patch MUST leave Play unusable. Closing with X MUST restore the normal patch bar and MUST NOT send patch recall. Disconnecting MUST hide the bar and leave A/B setup closed. The same setup MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
@@ -10,7 +10,7 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 
 - **WHEN** the patch bar is shown and A/B setup is closed
 - **THEN** an A/B control is shown before previous
-- **AND** its tooltip reads `A/B Test - Patches`
+- **AND** its tooltip reads `A/B Test - Compare Patches`
 - **AND** Save, Options, Reload, P-Vol, and BPM stay on the bar
 
 #### Scenario: Opening setup replaces the action cluster
@@ -50,7 +50,7 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 
 - **WHEN** A/B setup is open and the user activates X
 - **THEN** the normal patch bar is shown, including Save, Options, and the level controls for the connected model
-- **AND** the A/B tooltip reads `A/B Test - Patches`
+- **AND** the A/B tooltip reads `A/B Test - Compare Patches`
 - **AND** no patch recall is sent solely because the setup closed
 
 #### Scenario: USB and Bluetooth share A/B setup
@@ -60,7 +60,7 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 
 ### Requirement: A/B play alternates two patches
 
-While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. The cycle MUST capture the current patch as A and the comparison slot as B at that moment. It MUST NOT send patch recall for A when Play starts. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
+While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when A/B setup is open and focus is not in an editable field, button, combobox, or dialog. The cycle MUST capture the current patch as A and the comparison slot as B at that moment. It MUST NOT send patch recall for A when Play starts. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
 
 While the cycle is running, previous, next, both selectors, and the seconds input MUST NOT be usable. Stop and X MUST stay usable, including while the chain is syncing, and MUST NOT send patch recall by themselves. Stop MUST end the cycle, leave the pedal on the patch that is loaded, and return the bar to A/B setup with Play. X MUST end the cycle and restore the normal patch bar. Disconnecting MUST end the cycle and hide the bar. Each recall MUST follow the existing patch-change chain refresh. Unsaved working edits MUST be discarded by those recalls the same way as manual navigation, without an extra confirm. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
@@ -71,6 +71,12 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 - **AND** the current patch stays `10` when the cycle starts
 - **AND** no patch recall is sent until 5 seconds have passed with the chain idle
 - **AND** the pedal is then sent patch 11 through the device session
+
+#### Scenario: Space toggles Play and Stop
+
+- **WHEN** A/B setup is open, Play is usable, and the user presses Space without focus in an editable field, button, combobox, or dialog
+- **THEN** the cycle starts as if Play had been activated
+- **AND** pressing Space again stops the cycle as if Stop had been activated
 
 #### Scenario: The cycle returns to A and continues
 
