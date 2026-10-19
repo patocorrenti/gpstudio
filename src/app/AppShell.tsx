@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Download, Heart } from "lucide-react";
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import logoDark from "@/assets/img/gp-studio-logo-dark.png";
 import logoLight from "@/assets/img/gp-studio-logo-light.png";
+import { isIosWeb } from "@/app/ios-web";
 import {
   getPwaInstallAvailability,
   promptPwaInstall,
@@ -17,6 +18,7 @@ import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
 import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider";
 import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import { PedalFootControls } from "@/features/connect/PedalFootControls";
+import { IosWebNotice } from "@/features/controller/IosWebNotice";
 import MainMenu from "@/components/main-menu";
 
 function FooterSupportCta() {
@@ -72,6 +74,8 @@ function FooterInstallCta() {
 }
 
 export function AppShell() {
+  const { pathname } = useLocation();
+  const showIosNotice = pathname === "/" && isIosWeb();
   const [installAvailability, setInstallAvailability] =
     useState<PwaInstallAvailability>(() => getPwaInstallAvailability());
 
@@ -113,9 +117,12 @@ export function AppShell() {
           </div>
         </div>
       </header>
-      <main className="flex min-h-0 flex-1 flex-col bg-linear-to-t from-muted/80 to-transparent p-6 dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent">
-        <Outlet />
-      </main>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <main className="flex min-h-0 flex-1 flex-col bg-linear-to-t from-muted/80 to-transparent p-6 dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent">
+          <Outlet />
+        </main>
+        {showIosNotice ? <IosWebNotice /> : null}
+      </div>
       <footer className="flex items-center gap-4 border-t bg-background pt-2 pr-6 pb-2.5 pl-6 text-[12px] leading-none text-muted-foreground/70">
         <p className="min-w-0 flex-1 text-left">
           <span className="font-bold">GP Studio</span>

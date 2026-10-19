@@ -188,6 +188,25 @@ The About page SHALL include an English Install section for the installed web ap
 - **THEN** the shell shows an English toast that points at the Chrome or Edge install menu
 - **AND** the current section stays About
 
+### Requirement: iPhone and iPad web home shows a connection notice
+
+When the web app is opened on an iPhone or iPad, the home screen SHALL show an English notice over the home content. The notice MUST state that connecting from iPhone or iPad is not supported for now, briefly explain that USB and Bluetooth are blocked in every browser on those devices including Chrome, and link to the same subscribe-for-updates form as About so the user can stay informed about the project. The subscribe line MUST be visually separate from the explanation. The notice MUST cover the home content so that content cannot be used while it is shown. The notice MUST NOT appear on About, Log, Editor, or Library, and MUST NOT appear in a desktop browser or in the desktop shell.
+
+#### Scenario: iPhone or iPad home
+- **WHEN** a user opens the home screen in a browser on an iPhone or iPad
+- **THEN** a notice covers the home content
+- **AND** the notice states that connecting from iPhone or iPad is not supported for now
+- **AND** the notice explains that USB and Bluetooth are blocked in every browser, including Chrome
+- **AND** the notice links to the subscribe-for-updates form to stay informed about the project
+
+#### Scenario: Other sections stay clear
+- **WHEN** that user opens About, Log, Editor, or Library
+- **THEN** the notice is not shown
+
+#### Scenario: Desktop home has no notice
+- **WHEN** a user opens the home screen in a desktop browser or the desktop shell
+- **THEN** the notice is not shown
+
 ### Requirement: Shell hosts a global toast region
 
 The shell SHALL host a global toast region that can show English status messages without changing the current section. Toasts MUST remain available on Controller, Editor, Library, and About. The toast region MUST NOT be a navigation destination. Which operations emit toasts is defined by device-connection and live-controller.
