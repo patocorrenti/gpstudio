@@ -39,6 +39,7 @@ import {
   PATCH_COUNT,
   type OmittedFactoryModel,
 } from "@/device/session";
+import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
@@ -91,7 +92,6 @@ const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 const patchChipClass =
   "rounded-[4px] bg-background hover:bg-background/90 dark:bg-muted/40 dark:hover:bg-muted/50";
 const patchActionClass = `${patchChipClass} px-3`;
-const abToggleClass = `${patchActionClass} w-14`;
 const abPlayReadyClass =
   "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
 const patchClusterEnterClass =
@@ -664,11 +664,21 @@ export function PatchBar({
             <Button
               type="button"
               variant="ghost"
+              size="icon"
               aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-              className={abToggleClass}
+              className={patchChipClass}
               onClick={abOpen ? closeAbSetup : openAbSetup}
             >
-              {abOpen ? <X /> : "A/B"}
+              {abOpen ? (
+                <X />
+              ) : (
+                <img
+                  src={abCompareIcon}
+                  alt=""
+                  aria-hidden
+                  className="size-3.5 dark:invert"
+                />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
