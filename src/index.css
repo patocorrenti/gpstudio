@@ -67,6 +67,17 @@
             transform: scale(1);
         }
     }
+    --animate-button-shine: button-shine 5s ease-in-out infinite;
+    @keyframes button-shine {
+        /* % is relative to the shine strip; exit needs ~3.5x its width. Sweep ~2.25s, rest is idle. */
+        0%,
+        55% {
+            transform: translateX(-120%) skewX(-16deg);
+        }
+        100% {
+            transform: translateX(420%) skewX(-16deg);
+        }
+    }
 }
 
 :root {

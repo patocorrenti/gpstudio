@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { DeviceModel } from "@/device/models";
-import type { AudioChain, StompAssignment } from "@/device/session";
+import type { AudioChain, ChainSlotId, StompAssignment } from "@/device/session";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { RequirePedal } from "@/features/connect/RequirePedal";
 import { AudioChainRow } from "@/features/controller/AudioChain";
@@ -20,6 +21,8 @@ function PatchBody({
   pedal: DeviceModel;
   busy: boolean;
 }) {
+  const [hoveredSlot, setHoveredSlot] = useState<ChainSlotId | null>(null);
+
   return (
     <div className="relative mt-6 flex min-h-40 w-full flex-1 flex-col items-center">
       {busy ? (
@@ -31,8 +34,16 @@ function PatchBody({
             stomps={stomps}
             pedal={pedal}
             disabled={busy}
+            hoveredSlot={hoveredSlot}
+            onHoverSlot={setHoveredSlot}
           />
-          <SlotControlPanels chain={chain} pedal={pedal} disabled={busy} />
+          <SlotControlPanels
+            chain={chain}
+            pedal={pedal}
+            disabled={busy}
+            hoveredSlot={hoveredSlot}
+            onHoverSlot={setHoveredSlot}
+          />
         </div>
       )}
     </div>
