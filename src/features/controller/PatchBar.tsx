@@ -41,6 +41,13 @@ import {
 } from "@/device/session";
 import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { useAbCycleClaim } from "@/features/controller/AbCycleClaim";
+import { AbSideLabel } from "@/features/controller/AbSideLabel";
+import {
+  AB_SECONDS_DEFAULT,
+  AbSecondsField,
+  resolveAbSeconds,
+} from "@/features/controller/AbSecondsField";
 import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
 import {
@@ -49,7 +56,6 @@ import {
   useState,
   type ChangeEvent,
   type ReactElement,
-  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
@@ -100,10 +106,6 @@ const patchActionIconClass = "size-3 text-muted-foreground";
 
 const unsavedPatchHint = "Unsaved changes will be lost";
 
-const AB_SECONDS_DEFAULT = 5;
-const AB_SECONDS_MIN = 2;
-const AB_SECONDS_MAX = 200;
-
 type AbCycle = {
   a: number;
   b: number;
@@ -113,10 +115,6 @@ type AbCycle = {
 
 function nextComparisonPatch(patch: number): number {
   return (patch + 1) % PATCH_COUNT;
-}
-
-function clampAbSeconds(value: number): number {
-  return Math.min(AB_SECONDS_MAX, Math.max(AB_SECONDS_MIN, value));
 }
 
 function toastError(fallback: string) {
@@ -197,54 +195,6 @@ function PatchNavTooltip({
   );
 }
 
-const abLabelIdleClass =
-  "text-xs font-normal tracking-wide text-muted-foreground";
-const abLabelLitClass =
-  "text-xs font-normal tracking-wide text-foreground";
-
-function AbPatchLabel({
-  label,
-  show,
-  ruled = true,
-  lit = false,
-  children,
-}: {
-  label: string;
-  show: boolean;
-  ruled?: boolean;
-  lit?: boolean;
-  children: ReactNode;
-}) {
-  const labelClass = lit ? abLabelLitClass : abLabelIdleClass;
-  const ruleClass = lit
-    ? "h-0.5 flex-1 bg-foreground/65 animate-ab-rule-settle"
-    : "h-px flex-1 bg-border";
-  return (
-    <div className="relative">
-      {show ? (
-        ruled ? (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-5 flex items-center gap-1.5"
-          >
-            <span key={lit ? "lit-l" : "idle-l"} className={ruleClass} />
-            <span className={`shrink-0 ${labelClass}`}>{label}</span>
-            <span key={lit ? "lit-r" : "idle-r"} className={ruleClass} />
-          </div>
-        ) : (
-          <span
-            aria-hidden
-            className={`pointer-events-none absolute inset-x-0 -top-5 text-center ${labelClass}`}
-          >
-            {label}
-          </span>
-        )
-      ) : null}
-      {children}
-    </div>
-  );
-}
-
 function triggerPatchDownload(filename: string, bytes: Uint8Array): void {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -277,6 +227,7 @@ export function PatchBar({
   patchBpm: number | null;
 }) {
   const session = useDeviceSession();
+  const { moduleOpen, registerStop, stopOther } = useAbCycleClaim();
   const currentName = patchNames[patch];
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -405,11 +356,7 @@ export function PatchBar({
   }
 
   function resolvedAbSeconds(): number {
-    const parsed = Number.parseInt(abSecondsText, 10);
-    if (!Number.isInteger(parsed)) {
-      return AB_SECONDS_DEFAULT;
-    }
-    return clampAbSeconds(parsed);
+    return resolveAbSeconds(abSecondsText);
   }
 
   function openAbSetup() {
@@ -445,6 +392,7 @@ export function PatchBar({
     if (abCompare === patch) {
       return;
     }
+    stopOther("patch");
     const seconds = resolvedAbSeconds();
     setAbSecondsText(String(seconds));
     cycleRef.current = {
@@ -459,24 +407,20 @@ export function PatchBar({
     setAbPlaying(true);
   }
 
-  function onAbSecondsChange(event: ChangeEvent<HTMLInputElement>) {
-    const raw = event.target.value;
-    if (raw === "") {
-      setAbSecondsText("");
-      return;
-    }
-    if (!/^\d{1,3}$/.test(raw)) {
-      return;
-    }
-    setAbSecondsText(raw);
-  }
-
-  function onAbSecondsBlur() {
-    setAbSecondsText(String(resolvedAbSeconds()));
-  }
+  const stopAbRef = useRef(stopAbCycle);
+  stopAbRef.current = stopAbCycle;
 
   useEffect(() => {
-    if (!abOpen) {
+    registerStop("patch", () => {
+      stopAbRef.current();
+    });
+    return () => {
+      registerStop("patch", null);
+    };
+  }, [registerStop]);
+
+  useEffect(() => {
+    if (!abOpen || moduleOpen) {
       return;
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -507,7 +451,7 @@ export function PatchBar({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [abOpen, abCompare, patch, abSecondsText]);
+  }, [abOpen, moduleOpen, abCompare, patch, abSecondsText]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -685,7 +629,7 @@ export function PatchBar({
             {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
           </TooltipContent>
         </Tooltip>
-        <AbPatchLabel label="A" show={abOpen} lit={abActive === "a"}>
+        <AbSideLabel label="A" show={abOpen} lit={abActive === "a"}>
           <div className="flex items-center gap-1">
             <PatchNavTooltip enabled={modified && !abPlaying}>
               <span className="inline-flex">
@@ -733,7 +677,7 @@ export function PatchBar({
               </span>
             </PatchNavTooltip>
           </div>
-        </AbPatchLabel>
+        </AbSideLabel>
       </TooltipProvider>
       {abOpen ? (
         <div className={`flex items-center gap-1 ${patchClusterEnterClass}`}>
@@ -774,20 +718,14 @@ export function PatchBar({
                 {abCountdown ?? resolvedAbSeconds()}
               </div>
             ) : (
-              <Input
-                type="text"
-                inputMode="numeric"
-                min={AB_SECONDS_MIN}
-                max={AB_SECONDS_MAX}
-                aria-label="Seconds"
+              <AbSecondsField
                 value={abSecondsText}
+                onValueChange={setAbSecondsText}
                 className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
-                onChange={onAbSecondsChange}
-                onBlur={onAbSecondsBlur}
               />
             )}
           </div>
-          <AbPatchLabel label="B" show lit={abActive === "b"}>
+          <AbSideLabel label="B" show lit={abActive === "b"}>
             <PatchSelect
               patch={abCompare}
               patchNames={patchNames}
@@ -797,7 +735,7 @@ export function PatchBar({
                 setAbCompare(next);
               }}
             />
-          </AbPatchLabel>
+          </AbSideLabel>
           {abPlaying ? (
             <Button
               type="button"
