@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Info } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,6 +9,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -85,14 +91,30 @@ function SlotControl({
   control,
   value,
   disabled,
+  onControlChange,
 }: {
   kind: EffectId;
   control: FxControl;
   value: number;
   disabled: boolean;
+  /** When set, the panel does not call the session itself. `flush` is true on release. */
+  onControlChange?: (index: number, value: number, flush: boolean) => void;
 }) {
   const session = useDeviceSession();
   const label = `${chainSlotLabel(kind)} ${control.label}`;
+
+  function writeControl(nextValue: number, flush: boolean) {
+    if (onControlChange) {
+      onControlChange(control.index, nextValue, flush);
+      return;
+    }
+    void session.setSlotControl(
+      kind,
+      control.index,
+      nextValue,
+      flush ? { flush: true } : undefined,
+    );
+  }
 
   if (control.display === "toggle") {
     return (
@@ -104,9 +126,7 @@ function SlotControl({
           disabled={disabled}
           aria-label={`${label} ${value >= 1 ? "on" : "off"}`}
           onCheckedChange={(checked) => {
-            void session.setSlotControl(kind, control.index, checked ? 1 : 0, {
-              flush: true,
-            });
+            writeControl(checked ? 1 : 0, true);
           }}
         />
       </div>
@@ -133,32 +153,70 @@ function SlotControl({
           if (nextValue === undefined) {
             return;
           }
-          void session.setSlotControl(kind, control.index, nextValue);
+          writeControl(nextValue, false);
         }}
         onValueCommit={(next) => {
           const nextValue = next[0];
           if (nextValue === undefined) {
             return;
           }
-          void session.setSlotControl(kind, control.index, nextValue, { flush: true });
+          writeControl(nextValue, true);
         }}
       />
     </div>
   );
 }
 
-function SlotControlPanel({
+export type EffectPanelSlot = AudioChainSlot & {
+  id: EffectId;
+  modelId: string;
+  values: number[];
+};
+
+/** A slot that would show a control panel. Null when off, bypassed, or unknown. */
+export function effectPanelSlot(chain: AudioChain, id: EffectId): EffectPanelSlot | null {
+  const slot = chain.find((entry) => entry.id === id);
+  if (!slot || !isEffectSlot(slot.id) || !slot.enabled) {
+    return null;
+  }
+  if (chainSlotBypassed(chain, slot.id)) {
+    return null;
+  }
+  if (slot.modelId === undefined || slot.values === undefined) {
+    return null;
+  }
+  return {
+    ...slot,
+    id: slot.id,
+    modelId: slot.modelId,
+    values: slot.values,
+  };
+}
+
+export function SlotControlPanel({
   slot,
   pedal,
   disabled,
   highlighted,
+  current = false,
   onHoverSlot,
+  onOpenAb,
+  abDisabled = false,
+  onModelChange,
+  onControlChange,
 }: {
-  slot: AudioChainSlot & { id: EffectId; modelId: string; values: number[] };
+  slot: EffectPanelSlot;
   pedal: DeviceModel;
   disabled: boolean;
   highlighted: boolean;
+  current?: boolean;
   onHoverSlot?: (id: ChainSlotId | null) => void;
+  onOpenAb?: (id: EffectId) => void;
+  abDisabled?: boolean;
+  /** When set, model edits stay on this copy and do not call the session. */
+  onModelChange?: (modelId: string) => void;
+  /** When set, the panel does not call the session itself. `flush` is true on release. */
+  onControlChange?: (index: number, value: number, flush: boolean) => void;
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
@@ -179,15 +237,21 @@ function SlotControlPanel({
   }));
   const kindLabel = chainSlotLabel(slot.id);
   const shownLabel = options.find((option) => option.id === model.id)?.label ?? model.label;
+  const marked = highlighted || current;
+
+  function openAb() {
+    onOpenAb?.(slot.id);
+  }
 
   return (
     <section
       className={cn(
         "flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 transition-[background-color,box-shadow] duration-150 dark:bg-muted/30",
-        highlighted &&
+        marked &&
           "bg-muted/80 shadow-[inset_0_0_0_1px] shadow-foreground/12 dark:bg-muted/45 dark:shadow-foreground/18",
       )}
       aria-label={`${kindLabel} controls`}
+      aria-current={current ? "true" : undefined}
       onPointerEnter={() => onHoverSlot?.(slot.id)}
       onPointerLeave={() => onHoverSlot?.(null)}
     >
@@ -197,10 +261,32 @@ function SlotControlPanel({
           collapsed ? "pb-0 md:pb-2" : "pb-2",
         )}
       >
-        <h2 className="shrink-0">
-          <ChainSlotIcon id={slot.id} size="sm" />
-          <span className="sr-only">{kindLabel}</span>
-        </h2>
+        {model.description ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                aria-label={`About ${shownLabel}`}
+                className="shrink-0 cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <ChainSlotIcon id={slot.id} size="sm" />
+              </button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{shownLabel}</DialogTitle>
+                <DialogDescription className="text-left">
+                  {model.description}
+                </DialogDescription>
+              </DialogHeader>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <span className="shrink-0">
+            <ChainSlotIcon id={slot.id} size="sm" />
+          </span>
+        )}
+        <h2 className="sr-only">{kindLabel}</h2>
         <div className="flex min-w-0 flex-1 items-center gap-0.5">
           {options.length > 1 ? (
             <ModelSelect
@@ -209,6 +295,10 @@ function SlotControlPanel({
               disabled={disabled}
               ariaLabel={`${kindLabel} model`}
               onValueChange={(value) => {
+                if (onModelChange) {
+                  onModelChange(value);
+                  return;
+                }
                 void session.setSlotModel(slot.id, value);
               }}
             />
@@ -217,28 +307,22 @@ function SlotControlPanel({
               {model.label}
             </p>
           )}
-          {model.description ? (
-            <Dialog>
-              <DialogTrigger asChild>
+          {onOpenAb ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-sm"
-                  aria-label={`About ${shownLabel}`}
-                  className="shrink-0 text-muted-foreground"
+                  size="sm"
+                  disabled={disabled || abDisabled}
+                  className="shrink-0 px-2 text-muted-foreground"
+                  onClick={openAb}
                 >
-                  <Info />
+                  A/B
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{shownLabel}</DialogTitle>
-                  <DialogDescription className="text-left">
-                    {model.description}
-                  </DialogDescription>
-                </DialogHeader>
-              </DialogContent>
-            </Dialog>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">A/B Test - Compare Modules</TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
         <Button
@@ -281,6 +365,7 @@ function SlotControlPanel({
             control={control}
             value={slot.values[control.index] ?? control.default}
             disabled={disabled}
+            onControlChange={onControlChange}
           />
         ))}
       </div>
@@ -294,48 +379,46 @@ export function SlotControlPanels({
   disabled,
   hoveredSlot = null,
   onHoverSlot,
+  omitId = null,
+  abDisabled = false,
+  onOpenAb,
 }: {
   chain: AudioChain;
   pedal: DeviceModel;
   disabled: boolean;
   hoveredSlot?: ChainSlotId | null;
   onHoverSlot?: (id: ChainSlotId | null) => void;
+  omitId?: EffectId | null;
+  abDisabled?: boolean;
+  onOpenAb?: (id: EffectId) => void;
 }) {
   const panels = chain.flatMap((slot) => {
-    if (!isEffectSlot(slot.id) || !slot.enabled) {
+    if (!isEffectSlot(slot.id) || slot.id === omitId) {
       return [];
     }
-    if (chainSlotBypassed(chain, slot.id)) {
-      return [];
-    }
-    if (slot.modelId === undefined || slot.values === undefined) {
-      return [];
-    }
-    return [
-      {
-        ...slot,
-        id: slot.id,
-        modelId: slot.modelId,
-        values: slot.values,
-      },
-    ];
+    const panel = effectPanelSlot(chain, slot.id);
+    return panel ? [panel] : [];
   });
   if (panels.length === 0) {
     return null;
   }
 
   return (
-    <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-2 px-2 pb-6 md:grid-cols-2 lg:grid-cols-3">
-      {panels.map((slot) => (
-        <SlotControlPanel
-          key={slot.id}
-          slot={slot}
-          pedal={pedal}
-          disabled={disabled}
-          highlighted={hoveredSlot === slot.id}
-          onHoverSlot={onHoverSlot}
-        />
-      ))}
-    </div>
+    <TooltipProvider delayDuration={0}>
+      <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-2 px-2 pb-6 md:grid-cols-2 lg:grid-cols-3">
+        {panels.map((slot) => (
+          <SlotControlPanel
+            key={slot.id}
+            slot={slot}
+            pedal={pedal}
+            disabled={disabled}
+            highlighted={hoveredSlot === slot.id}
+            onHoverSlot={onHoverSlot}
+            onOpenAb={onOpenAb}
+            abDisabled={abDisabled}
+          />
+        ))}
+      </div>
+    </TooltipProvider>
   );
 }
