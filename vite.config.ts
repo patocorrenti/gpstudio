@@ -24,6 +24,9 @@ export default defineConfig({
     ...VitePWA({
       registerType: "prompt",
       injectRegister: false,
+      // Chrome loads the manifest with credentials omitted. Staging basic auth
+      // then answers 401, so beforeinstallprompt never fires.
+      useCredentials: true,
       devOptions: {
         enabled: false,
       },
