@@ -30,7 +30,7 @@ export function AbSideLabel({
         ruled ? (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-5 flex items-center gap-1.5"
+            className="mb-2 flex items-center gap-1.5 md:pointer-events-none md:absolute md:inset-x-0 md:-top-5 md:mb-0"
           >
             <span key={lit ? "lit-l" : "idle-l"} className={ruleClass} />
             <span className={`shrink-0 ${labelClass}`}>{label}</span>
@@ -39,7 +39,7 @@ export function AbSideLabel({
         ) : (
           <span
             aria-hidden
-            className={`pointer-events-none absolute inset-x-0 -top-5 text-center ${labelClass}`}
+            className={`mb-2 block text-center md:pointer-events-none md:absolute md:inset-x-0 md:-top-5 md:mb-0 ${labelClass}`}
           >
             {label}
           </span>

@@ -677,8 +677,14 @@ export function PatchBar({
 
   return (
     <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
-      <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-7" : "pt-3"}`}>
-      <div className="order-1 flex w-full flex-wrap items-center justify-center gap-1 md:contents">
+      <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-3 md:pt-7" : "pt-3"}`}>
+      <div
+        className={`order-1 flex w-full md:contents ${
+          abOpen
+            ? "flex-col gap-3"
+            : "flex-wrap items-center justify-center gap-1"
+        }`}
+      >
         <AbSideLabel
           label="A"
           show={abOpen}
@@ -690,7 +696,7 @@ export function PatchBar({
               patch={abSideA}
               patchNames={patchNames}
               disabled={abPlaying}
-              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
               onSelect={(next) => {
                 if (abPlaying) {
                   return;
@@ -753,12 +759,14 @@ export function PatchBar({
           )}
         </AbSideLabel>
       {abOpen ? (
-        <div className={`flex items-center gap-1 md:order-3 ${patchClusterEnterClass}`}>
-          <div className="relative">
+        <div
+          className={`flex w-full flex-col gap-3 md:order-3 md:w-auto md:flex-row md:items-center md:gap-1 ${patchClusterEnterClass}`}
+        >
+          <div className="relative flex w-full items-center justify-center gap-2 md:w-auto">
             {abPlaying ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
+                className="pointer-events-none absolute inset-x-0 -top-[13px] hidden items-center md:flex"
               >
                 <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
                   {busy ? null : (
@@ -775,70 +783,117 @@ export function PatchBar({
                 </div>
               </div>
             ) : (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
-              >
-                Seconds
-              </span>
+              <>
+                <span className="text-xs font-normal tracking-wide text-muted-foreground md:hidden">
+                  Seconds
+                </span>
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-5 hidden text-center text-xs font-normal tracking-wide text-muted-foreground md:block"
+                >
+                  Seconds
+                </span>
+              </>
             )}
             {abPlaying ? (
-              <div
-                aria-live="polite"
-                aria-label="Seconds remaining"
-                className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
-              >
-                {abCountdown ?? resolvedAbSeconds()}
+              <div className="flex w-full flex-col items-center gap-1.5 md:w-auto">
+                <div
+                  aria-hidden
+                  className="h-[2px] w-full max-w-40 overflow-hidden rounded-full bg-border md:hidden"
+                >
+                  {busy ? null : (
+                    <div
+                      key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
+                      className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                        abActive === "b" ? "origin-right" : "origin-left"
+                      }`}
+                      style={{
+                        animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                      }}
+                    />
+                  )}
+                </div>
+                <div
+                  aria-live="polite"
+                  aria-label="Seconds remaining"
+                  className="flex h-10 w-16 items-center justify-center px-2 text-sm tabular-nums md:h-8"
+                >
+                  {abCountdown ?? resolvedAbSeconds()}
+                </div>
               </div>
             ) : (
               <AbSecondsField
                 value={abSecondsText}
                 onValueChange={setAbSecondsText}
-                className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums md:h-8 dark:border-transparent`}
               />
             )}
           </div>
-          <AbSideLabel label="B" show lit={abActive === "b"}>
+          <AbSideLabel
+            label="B"
+            show
+            lit={abActive === "b"}
+            className="w-full md:w-auto"
+          >
             <PatchSelect
               patch={abCompare}
               patchNames={patchNames}
               disabled={abPlaying}
-              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
               onSelect={(next) => {
                 setAbCompare(next);
               }}
             />
           </AbSideLabel>
-          {abPlaying ? (
+          <div className="mt-2 flex w-full items-center justify-center gap-2 md:mt-0 md:w-auto md:contents">
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className={patchChipClass}
-              aria-label="Stop"
-              onClick={() => stopAbCycle()}
+              size="sm"
+              aria-label="Close A/B test"
+              className={`${patchChipClass} px-3 md:hidden`}
+              onClick={closeAbSetup}
             >
-              <Square className="size-3 fill-current" />
+              <X className="size-3" />
+              Close
             </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={
-                abCompare === abSideA ? patchChipClass : abPlayReadyClass
-              }
-              aria-label="Play"
-              disabled={abCompare === abSideA}
-              onClick={startAbCycle}
-            >
-              <Play className="size-3 fill-current" />
-            </Button>
-          )}
+            {abPlaying ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${patchChipClass} px-3 md:size-8 md:p-0`}
+                aria-label="Stop"
+                onClick={() => stopAbCycle()}
+              >
+                <Square className="size-3 fill-current" />
+                <span className="md:hidden">Stop</span>
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`${
+                  abCompare === abSideA ? patchChipClass : abPlayReadyClass
+                } px-3 md:size-8 md:p-0`}
+                aria-label="Play"
+                disabled={abCompare === abSideA}
+                onClick={startAbCycle}
+              >
+                <Play className="size-3 fill-current" />
+                <span className="md:hidden">Play</span>
+              </Button>
+            )}
+          </div>
         </div>
       ) : null}
       </div>
-      <div className="order-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:contents">
+      <div
+        className={`order-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:contents ${
+          abOpen ? "max-md:hidden" : ""
+        }`}
+      >
       <TooltipProvider delayDuration={0}>
         <Tooltip>
           <TooltipTrigger asChild>

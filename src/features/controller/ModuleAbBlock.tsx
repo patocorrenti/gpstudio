@@ -633,7 +633,7 @@ export function ModuleAbBlock({
               </TooltipTrigger>
               <TooltipContent side="bottom">Set side A and close</TooltipContent>
             </Tooltip>
-            <div className="w-full pt-7">
+            <div className="w-full md:pt-7">
               <AbSideLabel label="A" show lit={playing && sounding === "a"} className="w-full">
                 <div className={sounding === "a" ? undefined : "opacity-60 transition-opacity"}>
                   <SlotControlPanel
@@ -653,7 +653,7 @@ export function ModuleAbBlock({
             <div className="relative h-8 w-full">
               <div className="absolute top-0 left-1/2 z-10 -translate-x-1/2">{playStop}</div>
             </div>
-            <div className="w-full pt-7">
+            <div className="w-full md:pt-7">
               <div className="relative flex w-full flex-col items-center">
                 {playing ? (
                   <div
@@ -707,7 +707,7 @@ export function ModuleAbBlock({
               </TooltipTrigger>
               <TooltipContent side="bottom">Set side B and close</TooltipContent>
             </Tooltip>
-            <div className="w-full pt-7">
+            <div className="w-full md:pt-7">
               <AbSideLabel label="B" show lit={playing && sounding === "b"} className="w-full">
                 <div className={sounding === "b" ? undefined : "opacity-60 transition-opacity"}>
                   <SlotControlPanel
