@@ -312,10 +312,10 @@ export function SlotControlPanel({
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   disabled={disabled || abDisabled}
-                  className="shrink-0 px-2 text-muted-foreground"
+                  className="shrink-0 px-2"
                   onClick={openAb}
                 >
                   A/B

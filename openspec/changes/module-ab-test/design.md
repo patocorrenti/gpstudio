@@ -61,7 +61,7 @@ Space is one window listener. While the module block is open it belongs to that 
 
 The info button is removed. When `model.description` is set, the kind icon is a button that opens the existing description dialog (`About` is not the label; the accessible name stays `About ${model label}`). Without a description the icon is not a button.
 
-The A/B control is a button labeled `A/B` with tooltip `A/B Test - Compare Modules`, in the header slot the info button used. `Use A` (tooltip `Set side A and close`) is centered above side A, `Play` / `Stop` is centered above the seconds field, and `Use B` (tooltip `Set side B and close`) is centered above side B.
+The A/B control is an outline button labeled `A/B` with tooltip `A/B Test - Compare Modules`, in the header slot the info button used. Use A and Use B are outline buttons too, so they read as buttons before hover. The block uses the patch bar band (`bg-muted`, `dark:bg-black/35`), bleeding to the page edges. `Use A` (tooltip `Set side A and close`) is centered above side A, `Play` / `Stop` is centered above the seconds field, and `Use B` (tooltip `Set side B and close`) is centered above side B. The panels stay in the same column as the grid.
 
 The seconds input is the same control patch A/B uses: accessible name `Seconds`, integers 2–200, default 5, empty allowed while typing, clamp on blur and Play. Lift that input into a sibling under `src/features/controller/` and use it from `PatchBar` and the block so the range cannot drift. UI imports `@/device/session` only.
 
