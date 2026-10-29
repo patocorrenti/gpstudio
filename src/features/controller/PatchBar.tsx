@@ -677,35 +677,14 @@ export function PatchBar({
 
   return (
     <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
-      <div className="flex flex-wrap items-center justify-center gap-1 px-6 pt-7 pb-3">
-      <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-              className={patchChipClass}
-              onClick={abOpen ? closeAbSetup : openAbSetup}
-            >
-              {abOpen ? (
-                <X />
-              ) : (
-                <img
-                  src={abCompareIcon}
-                  alt=""
-                  aria-hidden
-                  className="size-3.5 dark:invert"
-                />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-          </TooltipContent>
-        </Tooltip>
-        <AbSideLabel label="A" show={abOpen} lit={abActive === "a"}>
+      <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-7" : "pt-3"}`}>
+      <div className="order-1 flex w-full flex-wrap items-center justify-center gap-1 md:contents">
+        <AbSideLabel
+          label="A"
+          show={abOpen}
+          lit={abActive === "a"}
+          className="w-full md:order-2 md:w-auto"
+        >
           {abOpen ? (
             <PatchSelect
               patch={abSideA}
@@ -720,46 +699,50 @@ export function PatchBar({
               }}
             />
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex w-full items-center gap-1">
               <PatchNavTooltip enabled={modified && !abPlaying}>
-                <span className="inline-flex">
+                <span className="inline-flex shrink-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     aria-label="Previous patch"
                     disabled={busy || abPlaying}
-                    className={patchChipClass}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
                     onClick={() => void session.stepPatch(-1)}
                   >
                     <ChevronLeft />
                   </Button>
                 </span>
               </PatchNavTooltip>
-              <PatchSelect
-                patch={patch}
-                patchNames={patchNames}
-                disabled={busy || abPlaying}
-                triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
-                wrapTrigger={(trigger) => (
-                  <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
-                )}
-                onSelect={(next) => {
-                  if (busy || abPlaying) {
-                    return;
-                  }
-                  void session.setPatch(next);
-                }}
-              />
+              <div className="min-w-0 flex-1 md:w-auto md:flex-none">
+                <PatchSelect
+                  patch={patch}
+                  patchNames={patchNames}
+                  disabled={busy || abPlaying}
+                  triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+                  wrapTrigger={(trigger) => (
+                    <PatchNavTooltip enabled={modified && !abPlaying}>
+                      {trigger}
+                    </PatchNavTooltip>
+                  )}
+                  onSelect={(next) => {
+                    if (busy || abPlaying) {
+                      return;
+                    }
+                    void session.setPatch(next);
+                  }}
+                />
+              </div>
               <PatchNavTooltip enabled={modified && !abPlaying}>
-                <span className="inline-flex">
+                <span className="inline-flex shrink-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     aria-label="Next patch"
                     disabled={busy || abPlaying}
-                    className={patchChipClass}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
                     onClick={() => void session.stepPatch(1)}
                   >
                     <ChevronRight />
@@ -769,9 +752,8 @@ export function PatchBar({
             </div>
           )}
         </AbSideLabel>
-      </TooltipProvider>
       {abOpen ? (
-        <div className={`flex items-center gap-1 ${patchClusterEnterClass}`}>
+        <div className={`flex items-center gap-1 md:order-3 ${patchClusterEnterClass}`}>
           <div className="relative">
             {abPlaying ? (
               <div
@@ -855,9 +837,39 @@ export function PatchBar({
           )}
         </div>
       ) : null}
+      </div>
+      <div className="order-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:contents">
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+              className={`md:order-1 ${patchChipClass}`}
+              onClick={abOpen ? closeAbSetup : openAbSetup}
+            >
+              {abOpen ? (
+                <X />
+              ) : (
+                <img
+                  src={abCompareIcon}
+                  alt=""
+                  aria-hidden
+                  className="size-3.5 dark:invert"
+                />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {abOpen ? null : (
-      <div className={`flex flex-wrap items-center gap-1 ${patchClusterEnterClass}`}>
-      <div className="flex items-center gap-1">
+      <div className={`contents md:order-4 md:flex md:flex-wrap md:items-center md:gap-1 ${patchClusterEnterClass}`}>
+      <div className="contents md:flex md:items-center md:gap-1">
         <Button
           type="button"
           variant="ghost"
@@ -967,6 +979,7 @@ export function PatchBar({
       <PatchLevels model={model} volume={patchVolume} bpm={patchBpm} disabled={busy} />
       </div>
       )}
+      </div>
       </div>
       <Dialog
         open={renameOpen}
