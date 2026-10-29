@@ -1,6 +1,10 @@
+import { useEffect, useState } from "react";
 import { Bug, Download, Heart, Mail } from "lucide-react";
-import { toast } from "sonner";
-import { promptPwaInstall } from "@/app/pwa-install";
+import {
+  getPwaInstallAvailability,
+  promptPwaInstall,
+  subscribePwaInstall,
+} from "@/app/pwa-install";
 import githubMark from "@/assets/img/github-mark.svg";
 import microsoftStoreBadgeDark from "@/assets/img/get-it-from-microsoft-dark.svg";
 import microsoftStoreBadgeLight from "@/assets/img/get-it-from-microsoft-light.svg";
@@ -19,6 +23,18 @@ const CHANGELOG_URL =
 const SHOW_MICROSOFT_STORE_BADGE = false;
 
 export function AboutPage() {
+  const [canInstall, setCanInstall] = useState(
+    () => getPwaInstallAvailability() === "installable",
+  );
+
+  useEffect(() => {
+    const sync = () => {
+      setCanInstall(getPwaInstallAvailability() === "installable");
+    };
+    sync();
+    return subscribePwaInstall(sync);
+  }, []);
+
   return (
     <section className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-4">
@@ -137,76 +153,72 @@ export function AboutPage() {
         </p>
       </div>
 
-      <div className="space-y-5 border-t border-border pt-6">
-        <h2 className="text-xl font-semibold tracking-tight">Install GP Studio</h2>
-        <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
-          <li>
-            <span className="font-medium text-foreground/80">Works offline.</span>{" "}
-            Tweak your tones anywhere, no internet needed.
-          </li>
-          <li>
-            <span className="font-medium text-foreground/80">Feels like a real app.</span>{" "}
-            Own window, Start menu and taskbar, no browser tabs.
-          </li>
-          <li>
-            <span className="font-medium text-foreground/80">Always up to date.</span>{" "}
-            New features arrive automatically.
-          </li>
-        </ul>
-        <div className="flex flex-col items-start gap-3 min-[500px]:flex-row min-[500px]:items-center">
-          <Button
-            type="button"
-            className="relative h-auto gap-2 overflow-hidden border-lime-400 bg-lime-400 px-8 py-3 text-base text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
-            onClick={() => {
-              void promptPwaInstall().then((result) => {
-                if (result === "installed") {
-                  toast("GP Studio is already installed.");
-                  return;
-                }
-                if (result === "unavailable") {
-                  toast(
-                    "Use Install app in your Chrome or Edge menu to install GP Studio.",
-                  );
-                }
-              });
-            }}
-          >
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine group-hover/button:invisible dark:via-lime-200/22"
-            />
-            <Download className="relative size-4 shrink-0" aria-hidden />
-            <span className="relative">Install now</span>
-          </Button>
-          {SHOW_MICROSOFT_STORE_BADGE ? (
-            <>
-              <span className="text-sm text-muted-foreground">or</span>
-              <button
-                type="button"
-                className="inline-flex shrink-0 cursor-pointer rounded-md bg-transparent p-1 transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"
-                aria-label="Get it from Microsoft Store"
-              >
-                <img
-                  src={microsoftStoreBadgeLight}
-                  alt=""
-                  className="h-11 w-auto dark:hidden"
-                />
-                <img
-                  src={microsoftStoreBadgeDark}
-                  alt=""
-                  className="hidden h-11 w-auto dark:block"
-                />
-              </button>
-            </>
-          ) : null}
+      {canInstall ? (
+        <div className="space-y-5 border-t border-border pt-6">
+          <h2 className="text-xl font-semibold tracking-tight">
+            Install GP Studio
+          </h2>
+          <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
+            <li>
+              <span className="font-medium text-foreground/80">Works offline.</span>{" "}
+              Tweak your tones anywhere, no internet needed.
+            </li>
+            <li>
+              <span className="font-medium text-foreground/80">
+                Feels like a real app.
+              </span>{" "}
+              Own window, Start menu and taskbar, no browser tabs.
+            </li>
+            <li>
+              <span className="font-medium text-foreground/80">Always up to date.</span>{" "}
+              New features arrive automatically.
+            </li>
+          </ul>
+          <div className="flex flex-col items-start gap-3 min-[500px]:flex-row min-[500px]:items-center">
+            <Button
+              type="button"
+              className="relative h-auto gap-2 overflow-hidden border-lime-400 bg-lime-400 px-8 py-3 text-base text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
+              onClick={() => {
+                void promptPwaInstall();
+              }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine group-hover/button:invisible dark:via-lime-200/22"
+              />
+              <Download className="relative size-4 shrink-0" aria-hidden />
+              <span className="relative">Install now</span>
+            </Button>
+            {SHOW_MICROSOFT_STORE_BADGE ? (
+              <>
+                <span className="text-sm text-muted-foreground">or</span>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 cursor-pointer rounded-md bg-transparent p-1 transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"
+                  aria-label="Get it from Microsoft Store"
+                >
+                  <img
+                    src={microsoftStoreBadgeLight}
+                    alt=""
+                    className="h-11 w-auto dark:hidden"
+                  />
+                  <img
+                    src={microsoftStoreBadgeDark}
+                    alt=""
+                    className="hidden h-11 w-auto dark:block"
+                  />
+                </button>
+              </>
+            ) : null}
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground/60">
+            Works on Windows, Mac and Linux (Chrome or Edge) and Android (Chrome,
+            Bluetooth only).
+            <br />
+            iPhone and iPad can&apos;t connect to the pedal.
+          </p>
         </div>
-        <p className="text-[11px] leading-snug text-muted-foreground/60">
-          Works on Windows, Mac and Linux (Chrome or Edge) and Android (Chrome,
-          Bluetooth only).
-          <br />
-          iPhone and iPad can&apos;t connect to the pedal.
-        </p>
-      </div>
+      ) : null}
 
       <div className="space-y-4 border-t border-border pt-6">
         <h2 className="text-xl font-semibold tracking-tight">
