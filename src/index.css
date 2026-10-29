@@ -67,6 +67,35 @@
             transform: scale(1);
         }
     }
+    --animate-button-shine: button-shine 5s ease-in-out infinite;
+    @keyframes button-shine {
+        /* % is relative to the shine strip; exit needs ~3.5x its width. Sweep ~2.25s, rest is idle. */
+        0%,
+        55% {
+            transform: translateX(-120%) skewX(-16deg);
+        }
+        100% {
+            transform: translateX(420%) skewX(-16deg);
+        }
+    }
+    --animate-ab-dwell: ab-dwell-progress linear forwards;
+    @keyframes ab-dwell-progress {
+        from {
+            transform: scaleX(0);
+        }
+        to {
+            transform: scaleX(1);
+        }
+    }
+    --animate-ab-rule-settle: ab-rule-settle 0.55s ease-out forwards;
+    @keyframes ab-rule-settle {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0.5;
+        }
+    }
 }
 
 :root {

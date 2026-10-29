@@ -1,11 +1,10 @@
-import { Bug, ChevronRight, Heart, Mail } from "lucide-react";
+import { Bug, Download, Heart, Mail } from "lucide-react";
+import { toast } from "sonner";
+import { promptPwaInstall } from "@/app/pwa-install";
 import githubMark from "@/assets/img/github-mark.svg";
+import microsoftStoreBadgeDark from "@/assets/img/get-it-from-microsoft-dark.svg";
+import microsoftStoreBadgeLight from "@/assets/img/get-it-from-microsoft-light.svg";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 const actionButtonClassName =
   "h-auto w-full flex-row items-center justify-start gap-2.5 whitespace-normal px-4 py-3 min-[500px]:flex-col min-[500px]:items-center min-[500px]:justify-center min-[500px]:gap-1.5";
@@ -13,257 +12,124 @@ const actionButtonClassName =
 const actionLabelClassName =
   "flex flex-col items-start gap-0.5 text-left min-[500px]:items-center min-[500px]:text-center";
 
-const CHANGELOG = [
-  {
-    version: "1.0.0-beta.3",
-    notes: [
-      "Quick connection feature improvements",
-      "Officially in open beta",
-    ],
-  },
-  {
-    version: "1.0.0-beta.2",
-    notes: [
-      "User SnapTone slots on NS, with names from the pedal",
-      "Warn when downloading a patch that includes a custom SnapTone",
-    ],
-  },
-  {
-    version: "1.0.0-beta.1",
-    notes: [
-      "Quick connect remembers your pedals and connection preferences and connects automatically when the app opens",
-      "Import and export presets between GP-5 and GP-50",
-      "Global settings for GP-5",
-      "Verifies the GP-50 is powered on when connecting over USB",
-      "Responsive layout for phones",
-    ],
-  },
-  {
-    version: "0.5.0",
-    notes: [
-      "Added GP-5 compatibility",
-      "Improved Bluetooth connection stability",
-      "Improved USB connection stability",
-    ],
-  },
-  {
-    version: "0.4.0",
-    notes: [
-      "Footswitch and tuner control",
-      "Many UI improvements",
-      "Removed the upload warning when the patch has no changes",
-      "Warn when downloading a patch that includes a custom IR",
-      "Fixed custom IR names not showing over USB",
-      "Released under the MIT license",
-      "New connection screen",
-      "Simplified Web Bluetooth connection steps",
-    ],
-  },
-  {
-    version: "0.3.1",
-    notes: [
-      "Substantial improvement to connection stability",
-      "Unified connection strategy for USB and Bluetooth",
-    ],
-  },
-  {
-    version: "0.3.0",
-    notes: ["Stomp control for GP-5 and Footswitch A-B for GP-50"],
-  },
-  {
-    version: "0.2.2",
-    notes: [
-      "Fixed Bluetooth disconnecting after the first preset dump",
-      "Fixed console errors on app load",
-    ],
-  },
-  {
-    version: "0.2.1",
-    notes: ["Global settings control for GP-5"],
-  },
-  {
-    version: "0.2.0",
-    notes: [
-      "Removed the blink when changing patches over Bluetooth",
-      "Global settings control for GP-50",
-      "Patch volume (GP-5 and GP-50) and patch BPM (GP-50) on the patch bar",
-      "Separate module catalogs for GP-5 and GP-50",
-      "User IR support for CAB slots",
-      "Patch search",
-      "Model search with description and Based on",
-    ],
-  },
-  {
-    version: "0.1.1",
-    notes: ["Faster and more stable connection to the pedal"],
-  },
-  {
-    version: "0.1.0",
-    notes: [
-      "Connect GP-5 and GP-50 over USB and Bluetooth",
-      "Live patch control (00–99) with names from the pedal",
-      "Current-patch audio chain: on/off, order, factory models, and knobs",
-      "Drag-and-drop reorder of movable modules",
-      "Save, rename, and duplicate the current patch",
-      "Download and load Valeton .prst files for the connected model",
-      "Follow live pedal changes over Bluetooth",
-      "MIDI in log",
-      "Light and dark appearance",
-    ],
-  },
-] as const;
+const CHANGELOG_URL =
+  "https://github.com/patocorrenti/gpstudio/blob/main/CHANGELOG.md";
 
-function ChangelogVersion({
-  version,
-  notes,
-  defaultOpen = false,
-}: {
-  version: string;
-  notes: readonly string[];
-  defaultOpen?: boolean;
-}) {
-  return (
-    <Collapsible defaultOpen={defaultOpen} className="group/changelog">
-      <CollapsibleTrigger className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-        <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]/changelog:rotate-90" />
-        <span className="font-mono text-foreground">Version {version}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ul className="list-disc space-y-2 pb-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
-          {notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+// Show again once the Edge-hosted PWA is listed in the Microsoft Store.
+const SHOW_MICROSOFT_STORE_BADGE = false;
 
 export function AboutPage() {
   return (
-    <section className="mx-auto max-w-2xl space-y-10">
+    <section className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-4">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             About GP Studio
           </h1>
-          <p className="text-sm text-muted-foreground/60 mt-5 mb-5">
-            GP Studio is a free <a href="https://github.com/patocorrenti/gpstudio" target="_blank" rel="noopener noreferrer" className="text-foreground/60 underline underline-offset-4 hover:text-foreground">open source</a> controller for the Valeton GP-5/50 multi-effects.
+          <p className="mt-5 mb-5 text-muted-foreground leading-relaxed">
+            <a
+              href={CHANGELOG_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+            >
+              Version 1.0.0
+            </a>{" "}
+            · Free controller for the Valeton GP-5/50 multi-effects.
           </p>
         </div>
-        <p className="text-muted-foreground leading-relaxed">
-          I'm{" "}
-          <a
-            href="https://patocorrenti.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+        <div className="mt-6 grid grid-cols-1 gap-3 min-[500px]:grid-cols-2 min-[42rem]:grid-cols-[1.2fr_1fr_1fr_1fr]">
+          <Button
+            asChild
+            variant="outline"
+            className={actionButtonClassName}
           >
-            Pato
-          </a>
-          , a hobby guitarist, product designer, and developer.
-        </p>
-        <p className="text-muted-foreground leading-relaxed">
-          <strong>GP Studio</strong> is the controller I always wanted to have —
-          now that I found the pedal I didn't know I always wanted.
-        </p>
-        <p className="text-muted-foreground leading-relaxed">
-          I hope you enjoy using it as much as I enjoyed building it.
-        </p>
-        <div className="mt-6 rounded-lg bg-muted/80 p-3 dark:bg-muted/50">
-          <div className="grid grid-cols-1 gap-3 min-[500px]:grid-cols-2 min-[42rem]:grid-cols-[1.2fr_1fr_1fr_1fr]">
-            <Button
-              asChild
-              variant="default"
-              className={`${actionButtonClassName} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500 hover:text-white dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600`}
+            <a
+              href="https://ko-fi.com/patocorrenti"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <a
-                href="https://ko-fi.com/patocorrenti"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Heart
-                  className="size-5 shrink-0 fill-current motion-safe:animate-heartbeat"
-                  aria-hidden
-                />
-                <span className={actionLabelClassName}>
-                  <span className="text-sm font-semibold">
-                    Support GP Studio
-                  </span>
-                  <span className="text-xs font-normal opacity-70">
-                    if you like it
-                  </span>
+              <Heart
+                className="size-5 shrink-0 fill-current text-lime-500 motion-safe:animate-heartbeat dark:text-lime-400"
+                aria-hidden
+              />
+              <span className={actionLabelClassName}>
+                <span className="text-sm font-semibold text-foreground">
+                  Support GP Studio
                 </span>
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={actionButtonClassName}
+                <span className="text-xs font-normal text-muted-foreground">
+                  if you like it
+                </span>
+              </span>
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className={actionButtonClassName}
+          >
+            <a
+              href="https://forms.gle/wbZYesraBR2QevhUA"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <a
-                href="https://forms.gle/wbZYesraBR2QevhUA"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Mail className="size-5 shrink-0" aria-hidden />
-                <span className={actionLabelClassName}>
-                  <span className="text-sm font-semibold text-foreground">
-                    Subscribe
-                  </span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    to stay informed
-                  </span>
+              <Mail className="size-5 shrink-0" aria-hidden />
+              <span className={actionLabelClassName}>
+                <span className="text-sm font-semibold text-foreground">
+                  Subscribe
                 </span>
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={actionButtonClassName}
+                <span className="text-xs font-normal text-muted-foreground">
+                  to stay informed
+                </span>
+              </span>
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className={actionButtonClassName}
+          >
+            <a
+              href="https://forms.gle/PhvZEPBty96WWzDDA"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <a
-                href="https://forms.gle/PhvZEPBty96WWzDDA"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Bug className="size-5 shrink-0" aria-hidden />
-                <span className={actionLabelClassName}>
-                  <span className="text-sm font-semibold text-foreground">
-                    Report a Bug
-                  </span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    if something is off
-                  </span>
+              <Bug className="size-5 shrink-0" aria-hidden />
+              <span className={actionLabelClassName}>
+                <span className="text-sm font-semibold text-foreground">
+                  Report a Bug
                 </span>
-              </a>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className={actionButtonClassName}
+                <span className="text-xs font-normal text-muted-foreground">
+                  if something is off
+                </span>
+              </span>
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className={actionButtonClassName}
+          >
+            <a
+              href="https://github.com/patocorrenti/gpstudio"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <a
-                href="https://github.com/patocorrenti/gpstudio"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <img
-                  src={githubMark}
-                  alt=""
-                  className="size-5 shrink-0 dark:invert"
-                />
-                <span className={actionLabelClassName}>
-                  <span className="text-sm font-semibold text-foreground">
-                    Get the Code
-                  </span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    it's open source!
-                  </span>
+              <img
+                src={githubMark}
+                alt=""
+                className="size-5 shrink-0 dark:invert"
+              />
+              <span className={actionLabelClassName}>
+                <span className="text-sm font-semibold text-foreground">
+                  Get the Code
                 </span>
-              </a>
-            </Button>
-          </div>
+                <span className="text-xs font-normal text-muted-foreground">
+                  it's open source!
+                </span>
+              </span>
+            </a>
+          </Button>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-muted-foreground/60">
           GP Studio is 100% free. Support is entirely voluntary and comes with
@@ -271,24 +137,100 @@ export function AboutPage() {
         </p>
       </div>
 
-      <div className="space-y-3 border-t border-border pt-10">
-        <h2 className="text-lg font-semibold tracking-tight">Upcoming Features</h2>
+      <div className="space-y-5 border-t border-border pt-6">
+        <h2 className="text-xl font-semibold tracking-tight">Install GP Studio</h2>
         <ul className="list-disc space-y-2 pl-5 text-muted-foreground leading-relaxed marker:text-muted-foreground/40">
-          <li>Desktop builds for Windows and Linux</li>
-          <li>AB Test to compare presets</li>
+          <li>
+            <span className="font-medium text-foreground/80">Works offline.</span>{" "}
+            Tweak your tones anywhere, no internet needed.
+          </li>
+          <li>
+            <span className="font-medium text-foreground/80">Feels like a real app.</span>{" "}
+            Own window, Start menu and taskbar, no browser tabs.
+          </li>
+          <li>
+            <span className="font-medium text-foreground/80">Always up to date.</span>{" "}
+            New features arrive automatically.
+          </li>
         </ul>
+        <div className="flex flex-col items-start gap-3 min-[500px]:flex-row min-[500px]:items-center">
+          <Button
+            type="button"
+            className="relative h-auto gap-2 overflow-hidden border-lime-400 bg-lime-400 px-8 py-3 text-base text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
+            onClick={() => {
+              void promptPwaInstall().then((result) => {
+                if (result === "installed") {
+                  toast("GP Studio is already installed.");
+                  return;
+                }
+                if (result === "unavailable") {
+                  toast(
+                    "Use Install app in your Chrome or Edge menu to install GP Studio.",
+                  );
+                }
+              });
+            }}
+          >
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine group-hover/button:invisible dark:via-lime-200/22"
+            />
+            <Download className="relative size-4 shrink-0" aria-hidden />
+            <span className="relative">Install now</span>
+          </Button>
+          {SHOW_MICROSOFT_STORE_BADGE ? (
+            <>
+              <span className="text-sm text-muted-foreground">or</span>
+              <button
+                type="button"
+                className="inline-flex shrink-0 cursor-pointer rounded-md bg-transparent p-1 transition-colors duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"
+                aria-label="Get it from Microsoft Store"
+              >
+                <img
+                  src={microsoftStoreBadgeLight}
+                  alt=""
+                  className="h-11 w-auto dark:hidden"
+                />
+                <img
+                  src={microsoftStoreBadgeDark}
+                  alt=""
+                  className="hidden h-11 w-auto dark:block"
+                />
+              </button>
+            </>
+          ) : null}
+        </div>
+        <p className="text-[11px] leading-snug text-muted-foreground/60">
+          Works on Windows, Mac and Linux (Chrome or Edge) and Android (Chrome,
+          Bluetooth only).
+          <br />
+          iPhone and iPad can&apos;t connect to the pedal.
+        </p>
       </div>
 
-      <div className="space-y-1 border-t border-border pt-10">
-        <h2 className="mb-2 text-lg font-semibold tracking-tight">Changelog</h2>
-        {CHANGELOG.map((entry, index) => (
-          <ChangelogVersion
-            key={entry.version}
-            version={entry.version}
-            notes={entry.notes}
-            defaultOpen={index === 0}
-          />
-        ))}
+      <div className="space-y-4 border-t border-border pt-6">
+        <h2 className="text-xl font-semibold tracking-tight">
+          A note from the author
+        </h2>
+        <p className="text-muted-foreground leading-relaxed">
+          I&apos;m{" "}
+          <a
+            href="https://patocorrenti.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+          >
+            Pato Correnti
+          </a>
+          , a hobby guitarist, product engineer, and designer.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          <strong>GP Studio</strong> is the controller I always wanted to have —
+          now that I found the pedal I didn&apos;t know I always wanted.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          I hope you enjoy using it as much as I enjoyed building it.
+        </p>
       </div>
     </section>
   );

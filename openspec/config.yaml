@@ -77,7 +77,7 @@ context: |
       live state or command-out read capabilities (liveFromPedal, commandToPedal)
       instead of forking UI. Patch commandToPedal is true on USB and Bluetooth.
   - Device state: shared TypeScript layer, independent of transport
-  - No HTTP backend. The app talks directly to the pedal.
+  - No HTTP backend. The app talks directly to the pedal. The production web app may send one best-effort same-origin GET `/usage` per cold start; failure is ignored. That request is not an application backend.
   - Electron is rejected (heavier, worse mobile path).
 
   Architecture:
@@ -297,6 +297,8 @@ context: |
   - Do not run in-browser verification (browser tools, headless Chrome,
     screenshots, click-throughs) unless the user explicitly asks for it.
     Typecheck / lint is fine. The user tests the UI themselves.
+  - Do not specify merging or publishing to the `live` branch in a change.
+    The user merges and publishes manually or through a skill.
 
 rules:
   proposal:
@@ -314,6 +316,8 @@ rules:
     - If the request is direct-lane work (bugfix, copy, UI polish, no-behavior
       refactor, Purpose/typo in specs), do not scaffold a change; say it is
       direct-lane and stop so it can be implemented without propose/archive
+    - Do not specify merging or publishing to the `live` branch. The user
+      merges and publishes manually or through a skill.
   specs:
     - Use WHEN/THEN scenarios (Given/When/Then is fine)
     - Phase 1 capabilities live under midi-transport, device-connection, and live-controller
@@ -361,6 +365,8 @@ rules:
     - Call out web vs desktop verification where MIDI backends differ
     - Do not add in-browser verification as a required task unless the user
       explicitly asked for browser testing
+    - Do not add a task that merges or publishes to the `live` branch. The
+      user merges and publishes manually or through a skill.
 
 operations:
   apply:
