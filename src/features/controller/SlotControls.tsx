@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -287,7 +288,7 @@ export function SlotControlPanel({
           </span>
         )}
         <h2 className="sr-only">{kindLabel}</h2>
-        <div className="flex min-w-0 flex-1 items-center gap-0.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {options.length > 1 ? (
             <ModelSelect
               value={model.id}
@@ -312,16 +313,22 @@ export function SlotControlPanel({
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="A/B Test - Compare Settings"
                   disabled={disabled || abDisabled}
-                  className="shrink-0 px-2"
+                  className="shrink-0 rounded-[4px] border-transparent bg-background hover:bg-[oklch(0.965_0.008_255)]! active:translate-y-0.5! dark:bg-muted/40 dark:hover:bg-[oklch(0.305_0.045_255)]!"
                   onClick={openAb}
                 >
-                  A/B
+                  <img
+                    src={abCompareIcon}
+                    alt=""
+                    aria-hidden
+                    className="size-3.5 dark:invert"
+                  />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">A/B Test - Compare Modules</TooltipContent>
+              <TooltipContent side="bottom">A/B Test - Compare Settings</TooltipContent>
             </Tooltip>
           ) : null}
         </div>

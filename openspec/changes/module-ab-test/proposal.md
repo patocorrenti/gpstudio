@@ -4,7 +4,7 @@ Patch A/B already alternates two onboard patches on a fixed interval. Comparing 
 
 ## What Changes
 
-- Each visible effect panel (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) gains an **A/B** button where the info button sits today. Tooltip: `A/B Test - Compare Modules`.
+- Each visible effect panel (NR, PRE, DST, NS, AMP, CAB, EQ, MOD, DLY, RVB) gains an **A/B** button where the info button sits today. Tooltip: `A/B Test - Compare Settings`.
 - The model description dialog moves to the module icon in that panel header. Activating the icon opens the same dialog the info button opens today. The icon stays non-interactive when the loaded model has no description. The info button goes away.
 - Activating A/B opens one module A/B block directly under the audio chain and above the other panels. The chosen panel leaves the panel grid and becomes side A in that block. The audio chain row does not change: the slot stays in the chain with its on/off switch.
 - The block sits on the same darker band as patch A/B, edge to edge. **Use A** sits centered above panel A, **Play** sits centered above the seconds input, and **Use B** sits centered above panel B. Use A and Use B set that version on the pedal through the existing model and control writes, do not save the patch, and close the block. Left to right: panel A, a seconds input, panel B.
