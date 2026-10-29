@@ -1,17 +1,19 @@
-# Deploy: merging main into live publishes https://gpstudio.patocorrenti.com
+# Deploy by branch. Work happens on main; merging main into a deploy branch publishes it.
+#   staging -> https://staging.gpstudio.patocorrenti.com (password protected)
+#   live    -> https://gpstudio.patocorrenti.com
 # If the build fails nothing is uploaded and the site stays as it was.
 name: Deploy
 
 on:
   push:
-    branches: [live]
+    branches: [staging, live]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-live
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -22,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    if: github.ref_name == 'live'
+    if: github.ref_name == 'live' || github.ref_name == 'staging'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -39,8 +41,10 @@ jobs:
 
       - name: Upload
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Each branch has its own key; on the server each one can only write to its own site folder.
+          DEPLOY_SSH_KEY: ${{ github.ref_name == 'live' && secrets.DEPLOY_SSH_KEY || secrets.DEPLOY_SSH_KEY_STAGING }}
         run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then echo "Missing deploy key secret for $GITHUB_REF_NAME" >&2; exit 1; fi
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
