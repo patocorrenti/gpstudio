@@ -574,13 +574,13 @@ export function ModuleAbBlock({
   );
 
   return (
-    <div className="mt-6 flex w-full max-w-6xl flex-col gap-3 px-2">
+    <div className="mt-6 -mx-6 w-[calc(100%+3rem)] border-y border-border bg-muted py-4 dark:bg-black/35">
       <TooltipProvider delayDuration={0}>
-        <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-start">
+        <div className="mx-auto flex w-[calc(100%-3rem)] max-w-6xl flex-col gap-3 px-2 lg:flex-row lg:items-start">
           <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="sm" onClick={() => void useSide("a")}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void useSide("a")}>
                   Use A
                 </Button>
               </TooltipTrigger>
@@ -652,7 +652,7 @@ export function ModuleAbBlock({
           <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="sm" onClick={() => void useSide("b")}>
+                <Button type="button" variant="outline" size="sm" onClick={() => void useSide("b")}>
                   Use B
                 </Button>
               </TooltipTrigger>
