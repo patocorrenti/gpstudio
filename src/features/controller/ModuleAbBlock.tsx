@@ -33,8 +33,10 @@ import {
   SlotControlPanel,
   type EffectPanelSlot,
 } from "@/features/controller/SlotControls";
+const chipClass =
+  "rounded-[4px] border-transparent bg-background hover:bg-[oklch(0.965_0.008_255)]! active:translate-y-0.5! dark:bg-muted/40 dark:hover:bg-[oklch(0.305_0.045_255)]!";
 const playReadyClass =
-  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
+  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
 
 type SlotVersion = {
   modelId: string;
@@ -562,7 +564,7 @@ export function ModuleAbBlock({
   }
 
   const playStop = playing ? (
-    <Button type="button" variant="ghost" size="sm" onClick={stopCycle}>
+    <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={stopCycle}>
       <Square className="size-3 fill-current" />
       Stop
     </Button>
@@ -580,7 +582,7 @@ export function ModuleAbBlock({
           <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="outline" size="sm" onClick={() => void useSide("a")}>
+                <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => void useSide("a")}>
                   Use A
                 </Button>
               </TooltipTrigger>
@@ -588,15 +590,17 @@ export function ModuleAbBlock({
             </Tooltip>
             <div className="w-full pt-7">
               <AbSideLabel label="A" show lit={playing && sounding === "a"} className="w-full">
-                <SlotControlPanel
-                  slot={panelSlot(aVersion)}
-                  pedal={pedal}
-                  disabled={false}
-                  highlighted={false}
-                  current={sounding === "a"}
-                  onHoverSlot={onHoverSlot}
-                  {...sideWriters("a")}
-                />
+                <div className={sounding === "a" ? undefined : "opacity-60 transition-opacity"}>
+                  <SlotControlPanel
+                    slot={panelSlot(aVersion)}
+                    pedal={pedal}
+                    disabled={false}
+                    highlighted={false}
+                    current={sounding === "a"}
+                    onHoverSlot={onHoverSlot}
+                    {...sideWriters("a")}
+                  />
+                </div>
               </AbSideLabel>
             </div>
           </div>
@@ -652,7 +656,7 @@ export function ModuleAbBlock({
           <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" variant="outline" size="sm" onClick={() => void useSide("b")}>
+                <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => void useSide("b")}>
                   Use B
                 </Button>
               </TooltipTrigger>
@@ -660,15 +664,17 @@ export function ModuleAbBlock({
             </Tooltip>
             <div className="w-full pt-7">
               <AbSideLabel label="B" show lit={playing && sounding === "b"} className="w-full">
-                <SlotControlPanel
-                  slot={panelSlot(bVersion)}
-                  pedal={pedal}
-                  disabled={false}
-                  highlighted={false}
-                  current={sounding === "b"}
-                  onHoverSlot={onHoverSlot}
-                  {...sideWriters("b")}
-                />
+                <div className={sounding === "b" ? undefined : "opacity-60 transition-opacity"}>
+                  <SlotControlPanel
+                    slot={panelSlot(bVersion)}
+                    pedal={pedal}
+                    disabled={false}
+                    highlighted={false}
+                    current={sounding === "b"}
+                    onHoverSlot={onHoverSlot}
+                    {...sideWriters("b")}
+                  />
+                </div>
               </AbSideLabel>
             </div>
           </div>

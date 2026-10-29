@@ -96,10 +96,10 @@ function customAssetsForDownload(session: DeviceSession): CustomAssetWarning | n
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
 const patchChipClass =
-  "rounded-[4px] bg-background hover:bg-background/90 dark:bg-muted/40 dark:hover:bg-muted/50";
+  "rounded-[4px] border-transparent bg-background hover:bg-[oklch(0.965_0.008_255)]! active:translate-y-0.5! dark:bg-muted/40 dark:hover:bg-[oklch(0.305_0.045_255)]!";
 const patchActionClass = `${patchChipClass} px-3`;
 const abPlayReadyClass =
-  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
+  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
 const patchClusterEnterClass =
   "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-4 motion-safe:duration-300";
 const patchActionIconClass = "size-3 text-muted-foreground";
@@ -773,7 +773,7 @@ export function PatchBar({
           disabled={busy || !modified}
           className={
             modified && !busy
-              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
+              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
               : patchActionClass
           }
           aria-label="Save patch"
