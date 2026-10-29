@@ -1035,9 +1035,9 @@ While a pedal is connected, the shell chrome next to Global MUST offer a Tuner c
 
 ### Requirement: Controller offers patch A/B setup
 
-After the patch bar is shown, Controller SHALL offer an A/B control at the left of that bar, before previous. Its tooltip MUST read `A/B Test - Compare Patches`. Activating it MUST open A/B setup on the same bar and MUST NOT send patch recall. While A/B setup is open and the cycle is not running, the bar MUST show, from left to right: an X that closes the setup, previous, the current-patch selector, next, a seconds input, a comparison-patch selector, and Play. The tooltip on X MUST read `Close A/B test`.
+After the patch bar is shown, Controller SHALL offer an A/B control at the left of that bar, before previous. Its tooltip MUST read `A/B Test - Compare Patches`. Activating it MUST open A/B setup on the same bar and MUST NOT send patch recall. While A/B setup is open and the cycle is not running, the bar MUST show, from left to right: an X that closes the setup, a side A selector, a seconds input, a side B selector, and Play. Previous and next MUST NOT be shown. The tooltip on X MUST read `Close A/B test`.
 
-While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol, or BPM, and MUST NOT offer rename, duplicate, download, or upload. Previous, the current-patch selector, and next MUST keep their existing recall, wrap, unsaved-changes tooltip, and chain-sync lock. The seconds input MUST show an integer dwell from 2 through 200 and MUST show 5 when the setup opens. Clearing the field while editing MUST be allowed; blur or Play MUST resolve an empty value to 5 and clamp out-of-range values into that range. The comparison selector MUST list patches `00`–`99` with the same index and onboard-name labeling as the current-patch selector, and MUST show the next slot after the current patch when the setup opens, wrapping from `99` to `00`. Changing the comparison slot or the seconds input MUST NOT change the selected patch and MUST NOT send patch recall. Choosing the comparison slot equal to the current patch MUST leave Play unusable. Closing with X MUST restore the normal patch bar and MUST NOT send patch recall. Disconnecting MUST hide the bar and leave A/B setup closed. The same setup MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol, or BPM, and MUST NOT offer rename, duplicate, download, or upload. Side A MUST be a patch selector with the same index and onboard-name labeling as side B, without previous or next. It MUST show the loaded patch when the setup opens. Changing side A MUST NOT send patch recall and MUST NOT follow later patch recalls. The seconds input MUST show an integer dwell from 2 through 200 and MUST show 5 when the setup opens. Clearing the field while editing MUST be allowed; blur or Play MUST resolve an empty value to 5 and clamp out-of-range values into that range. Side B MUST list patches `00`–`99` with the same labeling, and MUST show the next slot after the loaded patch when the setup opens, wrapping from `99` to `00`. Changing side B or the seconds input MUST NOT change the loaded patch and MUST NOT send patch recall. Choosing side B equal to side A MUST leave Play unusable. Closing with X MUST restore the normal patch bar and MUST NOT send patch recall. Disconnecting MUST hide the bar and leave A/B setup closed. The same setup MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
 #### Scenario: A/B control sits at the left of the bar
 
@@ -1049,7 +1049,8 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 #### Scenario: Opening setup replaces the action cluster
 
 - **WHEN** the current patch is `10` and the user activates A/B
-- **THEN** the bar shows X, previous, the current-patch selector, next, a seconds input reading 5, a comparison selector reading `11`, and Play
+- **THEN** the bar shows X, a side A selector reading `10`, a seconds input reading 5, a side B selector reading `11`, and Play
+- **AND** previous and next are not shown
 - **AND** Save, Options, Reload, P-Vol, and BPM are not shown
 - **AND** no patch recall is sent solely because the setup opened
 
@@ -1059,12 +1060,13 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 - **THEN** the comparison selector reads `00`
 - **AND** the current patch stays `99`
 
-#### Scenario: Current-patch navigation still recalls
+#### Scenario: Side A selector does not recall
 
-- **WHEN** A/B setup is open, the cycle is not running, the chain is idle, and the user selects patch `42` from the current-patch selector
-- **THEN** the current-patch selector reads `42`
-- **AND** the pedal is sent patch 42 through the device session
-- **AND** the comparison selector does not change
+- **WHEN** A/B setup is open, the cycle is not running, side A is `10`, and the user selects patch `42` from the side A selector
+- **THEN** the side A selector reads `42`
+- **AND** the loaded patch stays `10`
+- **AND** no patch recall is sent
+- **AND** the side B selector does not change
 
 #### Scenario: Comparison selector does not recall
 
@@ -1075,7 +1077,7 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 
 #### Scenario: Same slot disables Play
 
-- **WHEN** A/B setup is open and the comparison slot is the same index as the current patch
+- **WHEN** A/B setup is open and side B is the same index as side A
 - **THEN** Play is not usable
 - **AND** no patch recall is sent
 
@@ -1093,9 +1095,9 @@ While that setup is open, Controller MUST NOT show Save, Options, Reload, P-Vol,
 
 ### Requirement: A/B play alternates two patches
 
-While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when A/B setup is open and focus is not in an editable field, button, combobox, or dialog. The cycle MUST capture the current patch as A and the comparison slot as B at that moment. It MUST NOT send patch recall for A when Play starts. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
+While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when A/B setup is open and focus is not in an editable field, button, combobox, or dialog. The cycle MUST capture side A's slot and side B's slot at that moment. It MUST NOT send patch recall for A when Play starts if the pedal is already on that slot. If the pedal is on a different slot, Play MUST recall side A before the first dwell. Side A MUST keep showing its captured slot while the pedal is on side B. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
 
-While the cycle is running, previous, next, both selectors, and the seconds input MUST NOT be usable. Stop and X MUST stay usable, including while the chain is syncing, and MUST NOT send patch recall by themselves. Stop MUST end the cycle, leave the pedal on the patch that is loaded, and return the bar to A/B setup with Play. X MUST end the cycle and restore the normal patch bar. Disconnecting MUST end the cycle and hide the bar. Each recall MUST follow the existing patch-change chain refresh. Unsaved working edits MUST be discarded by those recalls the same way as manual navigation, without an extra confirm. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+While the cycle is running, both selectors and the seconds input MUST NOT be usable. Previous and next stay hidden. Stop and X MUST stay usable, including while the chain is syncing. X MUST NOT send patch recall by itself. Stop MUST end the cycle, recall side A when the pedal is not already on that slot, and return the bar to A/B setup with Play. Side A stays the selected slot. X MUST end the cycle and restore the normal patch bar. A patch change reported by the pedal MUST end the cycle if one is running, close A/B setup, and MUST NOT send another patch recall solely because the setup closed. An app recall from this cycle MUST NOT close the setup. Disconnecting MUST end the cycle and hide the bar. Each recall MUST follow the existing patch-change chain refresh. Unsaved working edits MUST be discarded by those recalls the same way as manual navigation, without an extra confirm. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Play dwells on the loaded patch before the first switch
 
@@ -1104,6 +1106,7 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 - **AND** the current patch stays `10` when the cycle starts
 - **AND** no patch recall is sent until 5 seconds have passed with the chain idle
 - **AND** the pedal is then sent patch 11 through the device session
+- **AND** the side A selector still reads `10`
 
 #### Scenario: Space toggles Play and Stop
 
@@ -1124,13 +1127,20 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 - **AND** the dwell starts once the chain is idle
 - **AND** the other slot is recalled only after that full dwell
 
-#### Scenario: Stop leaves the sounding patch
+#### Scenario: Stop returns to side A
 
-- **WHEN** a cycle is running, patch `11` is loaded, and the user activates Stop
+- **WHEN** a cycle is running, side A is patch `10`, patch `11` is loaded, and the user activates Stop
 - **THEN** the cycle ends
-- **AND** the current patch stays `11`
+- **AND** the pedal is sent patch 10 through the device session
 - **AND** the bar stays in A/B setup and shows Play
-- **AND** no patch recall is sent solely because Stop ran
+- **AND** the side A selector still reads `10`
+
+#### Scenario: A pedal patch change closes A/B
+
+- **WHEN** A/B setup is open and the pedal changes the current patch
+- **THEN** the cycle ends if one is running
+- **AND** the normal patch bar is shown
+- **AND** no patch recall is sent solely because the setup closed
 
 #### Scenario: Close during the cycle restores the normal bar
 
@@ -1142,7 +1152,7 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 #### Scenario: Stop and close stay usable while the chain syncs
 
 - **WHEN** a cycle recall is in progress and the chain is syncing
-- **THEN** previous, next, both selectors, and the seconds input are not usable
+- **THEN** both selectors and the seconds input are not usable
 - **AND** Stop and X remain usable
 - **AND** activating either one does not send another patch recall
 
