@@ -511,7 +511,7 @@ export function ConnectionStatus() {
           navigate("/");
           openDialogRef.current();
         }}
-        className={connected ? "gap-2.5" : undefined}
+        className={`h-8 px-3 text-sm md:h-7 md:px-2.5 md:text-[0.8rem]${connected ? " gap-2.5" : ""}`}
       >
         <span
           aria-hidden

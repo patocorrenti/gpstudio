@@ -143,23 +143,25 @@ export function ScanPanel({
         </TabsContent>
         )}
         <TabsContent value="bluetooth" className="flex flex-col gap-4">
-          <ModeNotes
-            notes={[
-              {
-                icon: ArrowLeftRight,
-                text: (
-                  <span className="text-foreground">
-                    <span className="font-bold">Fully interactive</span>
-                    {" "}—{" "}Pedal and computer talk to each other.
-                  </span>
-                ),
-              },
-              {
-                icon: Turtle,
-                text: "Slower connection",
-              },
-            ]}
-          />
+          {bluetoothOnly ? null : (
+            <ModeNotes
+              notes={[
+                {
+                  icon: ArrowLeftRight,
+                  text: (
+                    <span className="text-foreground">
+                      <span className="font-bold">Fully interactive</span>
+                      {" "}—{" "}Pedal and computer talk to each other.
+                    </span>
+                  ),
+                },
+                {
+                  icon: Turtle,
+                  text: "Slower connection",
+                },
+              ]}
+            />
+          )}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           {busy && bleEndpoints.length === 0 && !error ? (
             <p className="text-sm text-muted-foreground">
