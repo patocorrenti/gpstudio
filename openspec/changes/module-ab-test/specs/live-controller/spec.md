@@ -150,9 +150,9 @@ Changing the selected model or a control value MUST go through the device sessio
 
 ### Requirement: A/B play alternates two patches
 
-While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when A/B setup is open, the module A/B block is not open, and focus is not in an editable field, button, combobox, or dialog. While the module A/B block is open, Space MUST NOT start or stop this patch cycle. Starting this cycle while a module A/B cycle is running MUST stop that module cycle without closing the module A/B block and MUST NOT apply a module version solely because the patch cycle started. The cycle MUST capture the current patch as A and the comparison slot as B at that moment. It MUST NOT send patch recall for A when Play starts. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
+While A/B setup is open and Play is usable, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when A/B setup is open, the module A/B block is not open, and focus is not in an editable field, button, combobox, or dialog. While the module A/B block is open, Space MUST NOT start or stop this patch cycle. Starting this cycle while a module A/B cycle is running MUST stop that module cycle without closing the module A/B block and MUST NOT apply a module version solely because the patch cycle started. The cycle MUST capture side A's slot and side B's slot at that moment. It MUST NOT send patch recall for A when Play starts if the pedal is already on that slot. If the pedal is on a different slot, Play MUST recall side A before the first dwell. Side A MUST keep showing its captured slot while the pedal is on side B. After the chain is idle, it MUST wait the captured dwell in seconds, then recall B through the device session. After that recall's chain is idle, it MUST wait the same dwell, then recall A, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT send patch recall while the chain is syncing.
 
-While the cycle is running, previous, next, both selectors, and the seconds input MUST NOT be usable. Stop and X MUST stay usable, including while the chain is syncing, and MUST NOT send patch recall by themselves. Stop MUST end the cycle, leave the pedal on the patch that is loaded, and return the bar to A/B setup with Play. X MUST end the cycle and restore the normal patch bar. Disconnecting MUST end the cycle and hide the bar. Each recall MUST follow the existing patch-change chain refresh. Unsaved working edits MUST be discarded by those recalls the same way as manual navigation, without an extra confirm. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+While the cycle is running, both selectors and the seconds input MUST NOT be usable. Previous and next stay hidden. Stop and X MUST stay usable, including while the chain is syncing. X MUST NOT send patch recall by itself. Stop MUST end the cycle, recall side A when the pedal is not already on that slot, and return the bar to A/B setup with Play. Side A stays the selected slot. X MUST end the cycle and restore the normal patch bar. A patch change reported by the pedal MUST end the cycle if one is running, close A/B setup, and MUST NOT send another patch recall solely because the setup closed. An app recall from this cycle MUST NOT close the setup. Disconnecting MUST end the cycle and hide the bar. Each recall MUST follow the existing patch-change chain refresh. Unsaved working edits MUST be discarded by those recalls the same way as manual navigation, without an extra confirm. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Play dwells on the loaded patch before the first switch
 
@@ -161,6 +161,7 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 - **AND** the current patch stays `10` when the cycle starts
 - **AND** no patch recall is sent until 5 seconds have passed with the chain idle
 - **AND** the pedal is then sent patch 11 through the device session
+- **AND** the side A selector still reads `10`
 
 #### Scenario: Space toggles Play and Stop
 
@@ -195,13 +196,20 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 - **AND** the dwell starts once the chain is idle
 - **AND** the other slot is recalled only after that full dwell
 
-#### Scenario: Stop leaves the sounding patch
+#### Scenario: Stop returns to side A
 
-- **WHEN** a cycle is running, patch `11` is loaded, and the user activates Stop
+- **WHEN** a cycle is running, side A is patch `10`, patch `11` is loaded, and the user activates Stop
 - **THEN** the cycle ends
-- **AND** the current patch stays `11`
+- **AND** the pedal is sent patch 10 through the device session
 - **AND** the bar stays in A/B setup and shows Play
-- **AND** no patch recall is sent solely because Stop ran
+- **AND** the side A selector still reads `10`
+
+#### Scenario: A pedal patch change closes A/B
+
+- **WHEN** A/B setup is open and the pedal changes the current patch
+- **THEN** the cycle ends if one is running
+- **AND** the normal patch bar is shown
+- **AND** no patch recall is sent solely because the setup closed
 
 #### Scenario: Close during the cycle restores the normal bar
 
@@ -213,7 +221,7 @@ While the cycle is running, previous, next, both selectors, and the seconds inpu
 #### Scenario: Stop and close stay usable while the chain syncs
 
 - **WHEN** a cycle recall is in progress and the chain is syncing
-- **THEN** previous, next, both selectors, and the seconds input are not usable
+- **THEN** both selectors and the seconds input are not usable
 - **AND** Stop and X remain usable
 - **AND** activating either one does not send another patch recall
 
@@ -318,7 +326,7 @@ Only one module A/B block MUST be open. While it is open, A/B controls on the re
 
 While module A/B is open, activating Play MUST start a cycle and show Stop in place of Play. Space MUST start or stop that cycle the same way when the block is open and focus is not in an editable field, button, combobox, or dialog. Starting this cycle while a patch A/B cycle is running MUST stop that patch cycle without closing patch A/B setup and MUST NOT send patch recall solely because the module cycle started. The module cycle MUST capture side A and side B at that moment. It MUST NOT re-apply the side that is already sounding when Play starts. After the chain is idle, it MUST wait the seconds shown when that dwell starts, then apply the other captured side through the device session. After that apply's chain is idle, it MUST wait the seconds shown when the next dwell starts, then apply the remaining side, and MUST repeat that alternation. A chain sync that starts during a dwell MUST cancel that dwell; the next dwell MUST start only once the chain is idle again. The cycle MUST NOT apply a side while the chain is syncing. Applying a side MUST make that slot's model and control values match the captured side.
 
-While the cycle is running, both sides MUST stay usable. An edit on the sounding side MUST go through the device session, with the same throttle and on-change rules as a normal panel, and MUST update that captured side. An edit on the other side, including a model change, MUST update only that captured side and MUST NOT send a model or control write until that side is applied. The seconds input MUST be replaced by a countdown of the seconds left in the current dwell, and a progress line above that countdown MUST show that dwell running toward the other side. The sounding side's rule MUST be lit, and the other side's rule MUST not. Both sides MUST keep showing their captured versions, including those edits. The sounding side MUST stay marked, and the module box of the side that is not sounding MUST stay at 60% opacity. Use A, Use B, and Stop MUST stay usable, including while the chain is syncing. Stop MUST NOT apply a side by itself. Stop MUST end the cycle, leave the pedal on the side that was last applied, and return the block to setup with Play, with that side sounding. Use A or Use B MUST end the cycle, set that captured side on the pedal when it is not already there, MUST NOT save the patch, and return the slot's panel to the grid showing the chosen side. Disconnect, turning that slot off, NS bypass hiding that panel, or the chain-refresh busy overlay MUST end the cycle and leave the pedal on the side last applied. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
+While the cycle is running, both sides MUST stay usable. An edit on the sounding side MUST go through the device session, with the same throttle and on-change rules as a normal panel, and MUST update that captured side. An edit on the other side, including a model change, MUST update only that captured side and MUST NOT send a model or control write until that side is applied. The seconds input MUST be replaced by a countdown of the seconds left in the current dwell, and a progress line above that countdown MUST show that dwell running toward the other side. The sounding side's rule MUST be lit, and the other side's rule MUST not. Both sides MUST keep showing their captured versions, including those edits. The sounding side MUST stay marked, and the module box of the side that is not sounding MUST stay at 60% opacity. Use A, Use B, and Stop MUST stay usable, including while the chain is syncing. Stop MUST end the cycle, set the slot to captured side A when it is not already there, and return the block to setup with Play, with side A sounding. Stop MUST NOT save the patch. Use A or Use B MUST end the cycle, set that captured side on the pedal when it is not already there, MUST NOT save the patch, and return the slot's panel to the grid showing the chosen side. Disconnect, turning that slot off, NS bypass hiding that panel, or the chain-refresh busy overlay MUST end the cycle and leave the pedal on the side last applied. The same cycle MUST be used on USB and Bluetooth. Controller MUST NOT send raw MIDI.
 
 #### Scenario: Play dwells on A before the first switch
 
@@ -356,14 +364,14 @@ While the cycle is running, both sides MUST stay usable. An edit on the sounding
 - **AND** the dwell starts once the chain is idle
 - **AND** the other side is applied only after that full dwell
 
-#### Scenario: Stop leaves the sounding side
+#### Scenario: Stop returns to side A
 
 - **WHEN** a module cycle is running, side B was the last side applied, and the user activates Stop
 - **THEN** the cycle ends
-- **AND** the slot stays on side B
+- **AND** the slot is set to side A through the device session
 - **AND** the block stays open and shows Play
-- **AND** side B is sounding
-- **AND** no model or control write is sent solely because Stop ran
+- **AND** side A is sounding
+- **AND** the patch is not saved
 
 #### Scenario: Use A during the cycle sets A and closes
 

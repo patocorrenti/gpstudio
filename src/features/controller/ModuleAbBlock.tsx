@@ -210,6 +210,7 @@ export function ModuleAbBlock({
   const liveRef = useRef(live);
   const secondsRef = useRef(secondsText);
   const leaveRef = useRef(false);
+  const returnToARef = useRef(false);
   const useTicket = useRef(0);
   const writeTailRef = useRef<Promise<void>>(Promise.resolve());
   localSideRef.current = localSide;
@@ -227,16 +228,59 @@ export function ModuleAbBlock({
     cycleRef.current = null;
   }
 
-  function stopCycle() {
+  function stopCycle(goToA = true) {
     if (!playingRef.current && !applyingRef.current) {
       return;
     }
+    const captured = cycleRef.current;
     playingRef.current = false;
-    if (applyingRef.current) {
+    if (!goToA || !captured) {
+      returnToARef.current = false;
+      if (applyingRef.current) {
+        return;
+      }
+      setPlaying(false);
+      bindStoppedSides();
       return;
     }
+    const versionA = copyVersion(captured.a);
+    returnToARef.current = true;
+    soundingRef.current = "a";
+    setSounding("a");
     setPlaying(false);
-    bindStoppedSides();
+    setLocalSide({ modelId: captured.b.modelId, values: captured.b.values.slice() });
+    void enqueueWrite(async () => {
+      applyingRef.current = true;
+      try {
+        if (!returnToARef.current || !mountedRef.current) {
+          return;
+        }
+        const snapshot = session.getSnapshot();
+        if (snapshot.status === "connected") {
+          const slot = effectPanelSlot(snapshot.chain, kind);
+          if (!slot || !sideMatches(slot, versionA, snapshot.model)) {
+            await applyCapturedSide(
+              session,
+              kind,
+              versionA,
+              () => returnToARef.current && mountedRef.current,
+            );
+          }
+        }
+      } finally {
+        applyingRef.current = false;
+      }
+      if (!returnToARef.current || !mountedRef.current) {
+        return;
+      }
+      const cycle = cycleRef.current;
+      if (cycle) {
+        setLocalSide({ modelId: cycle.b.modelId, values: cycle.b.values.slice() });
+      }
+      cycleRef.current = null;
+      setFrozen(null);
+      returnToARef.current = false;
+    });
   }
 
   function enqueueWrite<T>(work: () => Promise<T>): Promise<T> {
@@ -355,6 +399,7 @@ export function ModuleAbBlock({
     }
     stopOther("module");
     leaveRef.current = false;
+    returnToARef.current = false;
     const seconds = resolveAbSeconds(secondsRef.current);
     setSecondsText(String(seconds));
     const soundingNow = soundingRef.current;
@@ -380,7 +425,7 @@ export function ModuleAbBlock({
 
   useEffect(() => {
     registerStop("module", () => {
-      stopRef.current();
+      stopRef.current(false);
     });
     return () => {
       registerStop("module", null);
@@ -484,7 +529,7 @@ export function ModuleAbBlock({
         }
         if (!playingRef.current) {
           setPlaying(false);
-          if (!leaveRef.current) {
+          if (!leaveRef.current && !returnToARef.current) {
             bindStoppedSides();
           }
           return;
@@ -534,8 +579,8 @@ export function ModuleAbBlock({
   }
 
   const liveVersion = { modelId: live.modelId, values: live.values };
-  const aVersion = playing && frozen ? frozen.a : sounding === "a" ? liveVersion : localSide;
-  const bVersion = playing && frozen ? frozen.b : sounding === "b" ? liveVersion : localSide;
+  const aVersion = frozen ? frozen.a : sounding === "a" ? liveVersion : localSide;
+  const bVersion = frozen ? frozen.b : sounding === "b" ? liveVersion : localSide;
 
   function panelSlot(version: SlotVersion): EffectPanelSlot {
     return {
@@ -564,7 +609,7 @@ export function ModuleAbBlock({
   }
 
   const playStop = playing ? (
-    <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={stopCycle}>
+    <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => stopCycle()}>
       <Square className="size-3 fill-current" />
       Stop
     </Button>

@@ -244,6 +244,7 @@ export function PatchBar({
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [abOpen, setAbOpen] = useState(false);
   const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
+  const [abSideA, setAbSideA] = useState(0);
   const [abCompare, setAbCompare] = useState(0);
   const [abPlaying, setAbPlaying] = useState(false);
   const [abActive, setAbActive] = useState<"a" | "b" | null>(null);
@@ -360,8 +361,10 @@ export function PatchBar({
   }
 
   function openAbSetup() {
+    abOpenRef.current = true;
     setOptionsOpen(false);
     setAbSecondsText(String(AB_SECONDS_DEFAULT));
+    setAbSideA(patch);
     setAbCompare(nextComparisonPatch(patch));
     playingRef.current = false;
     cycleRef.current = null;
@@ -372,6 +375,8 @@ export function PatchBar({
   }
 
   function closeAbSetup() {
+    stopRecallRef.current += 1;
+    abOpenRef.current = false;
     playingRef.current = false;
     cycleRef.current = null;
     setAbPlaying(false);
@@ -380,23 +385,53 @@ export function PatchBar({
     setAbOpen(false);
   }
 
-  function stopAbCycle() {
+  function stopAbCycle(recallA = true) {
+    const slotA = cycleRef.current?.a;
     playingRef.current = false;
     cycleRef.current = null;
     setAbPlaying(false);
     setAbActive(null);
     setAbCountdown(null);
+    if (!recallA || slotA === undefined) {
+      return;
+    }
+    const ticket = stopRecallRef.current + 1;
+    stopRecallRef.current = ticket;
+    void (async () => {
+      const snapshot = session.getSnapshot();
+      if (snapshot.status !== "connected") {
+        return;
+      }
+      if (snapshot.chainSync === "syncing") {
+        try {
+          await waitUntilChainIdle(session);
+        } catch {
+          return;
+        }
+      }
+      if (
+        stopRecallRef.current !== ticket ||
+        playingRef.current ||
+        !abOpenRef.current
+      ) {
+        return;
+      }
+      const after = session.getSnapshot();
+      if (after.status === "connected" && after.patch !== slotA) {
+        await recallPatch(slotA);
+      }
+    })();
   }
 
   function startAbCycle() {
-    if (abCompare === patch) {
+    if (abCompare === abSideA) {
       return;
     }
     stopOther("patch");
     const seconds = resolvedAbSeconds();
     setAbSecondsText(String(seconds));
     cycleRef.current = {
-      a: patch,
+      a: abSideA,
       b: abCompare,
       dwellMs: seconds * 1000,
       next: "b",
@@ -405,14 +440,55 @@ export function PatchBar({
     setAbActive("a");
     setAbCountdown(seconds);
     setAbPlaying(true);
+    if (patch !== abSideA) {
+      void recallPatch(abSideA);
+    }
   }
 
   const stopAbRef = useRef(stopAbCycle);
+  const closeAbRef = useRef(closeAbSetup);
+  const abOpenRef = useRef(abOpen);
+  const followedPatchRef = useRef(patch);
+  const appRecallRef = useRef<number | null>(null);
+  const stopRecallRef = useRef(0);
   stopAbRef.current = stopAbCycle;
+  closeAbRef.current = closeAbSetup;
+  abOpenRef.current = abOpen;
+
+  function recallPatch(slot: number): Promise<void> {
+    appRecallRef.current = slot;
+    const before = session.getSnapshot();
+    const pending = session.setPatch(slot);
+    const after = session.getSnapshot();
+    if (
+      before.status !== "connected" ||
+      after.status !== "connected" ||
+      after.patch === before.patch
+    ) {
+      if (appRecallRef.current === slot) {
+        appRecallRef.current = null;
+      }
+    }
+    return pending;
+  }
+
+  useEffect(() => {
+    if (!abOpen) {
+      followedPatchRef.current = patch;
+      appRecallRef.current = null;
+      return;
+    }
+    if (patch === followedPatchRef.current || patch === appRecallRef.current) {
+      followedPatchRef.current = patch;
+      appRecallRef.current = null;
+      return;
+    }
+    closeAbRef.current();
+  }, [abOpen, patch]);
 
   useEffect(() => {
     registerStop("patch", () => {
-      stopAbRef.current();
+      stopAbRef.current(false);
     });
     return () => {
       registerStop("patch", null);
@@ -451,7 +527,7 @@ export function PatchBar({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [abOpen, moduleOpen, abCompare, patch, abSecondsText]);
+  }, [abOpen, moduleOpen, abCompare, abSideA, patch, abSecondsText]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -499,7 +575,7 @@ export function PatchBar({
           }
         });
         try {
-          await session.setPatch(target);
+          await recallPatch(target);
         } catch {
           unsubscribe();
           current.next = previousNext;
@@ -630,53 +706,68 @@ export function PatchBar({
           </TooltipContent>
         </Tooltip>
         <AbSideLabel label="A" show={abOpen} lit={abActive === "a"}>
-          <div className="flex items-center gap-1">
-            <PatchNavTooltip enabled={modified && !abPlaying}>
-              <span className="inline-flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Previous patch"
-                  disabled={busy || abPlaying}
-                  className={patchChipClass}
-                  onClick={() => void session.stepPatch(-1)}
-                >
-                  <ChevronLeft />
-                </Button>
-              </span>
-            </PatchNavTooltip>
+          {abOpen ? (
             <PatchSelect
-              patch={patch}
+              patch={abSideA}
               patchNames={patchNames}
-              disabled={busy || abPlaying}
+              disabled={abPlaying}
               triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
-              wrapTrigger={(trigger) => (
-                <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
-              )}
               onSelect={(next) => {
-                if (busy || abPlaying) {
+                if (abPlaying) {
                   return;
                 }
-                void session.setPatch(next);
+                setAbSideA(next);
               }}
             />
-            <PatchNavTooltip enabled={modified && !abPlaying}>
-              <span className="inline-flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Next patch"
-                  disabled={busy || abPlaying}
-                  className={patchChipClass}
-                  onClick={() => void session.stepPatch(1)}
-                >
-                  <ChevronRight />
-                </Button>
-              </span>
-            </PatchNavTooltip>
-          </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <PatchNavTooltip enabled={modified && !abPlaying}>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Previous patch"
+                    disabled={busy || abPlaying}
+                    className={patchChipClass}
+                    onClick={() => void session.stepPatch(-1)}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                </span>
+              </PatchNavTooltip>
+              <PatchSelect
+                patch={patch}
+                patchNames={patchNames}
+                disabled={busy || abPlaying}
+                triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+                wrapTrigger={(trigger) => (
+                  <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
+                )}
+                onSelect={(next) => {
+                  if (busy || abPlaying) {
+                    return;
+                  }
+                  void session.setPatch(next);
+                }}
+              />
+              <PatchNavTooltip enabled={modified && !abPlaying}>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Next patch"
+                    disabled={busy || abPlaying}
+                    className={patchChipClass}
+                    onClick={() => void session.stepPatch(1)}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </span>
+              </PatchNavTooltip>
+            </div>
+          )}
         </AbSideLabel>
       </TooltipProvider>
       {abOpen ? (
@@ -743,7 +834,7 @@ export function PatchBar({
               size="icon"
               className={patchChipClass}
               aria-label="Stop"
-              onClick={stopAbCycle}
+              onClick={() => stopAbCycle()}
             >
               <Square className="size-3 fill-current" />
             </Button>
@@ -753,10 +844,10 @@ export function PatchBar({
               variant="ghost"
               size="icon"
               className={
-                abCompare === patch ? patchChipClass : abPlayReadyClass
+                abCompare === abSideA ? patchChipClass : abPlayReadyClass
               }
               aria-label="Play"
-              disabled={abCompare === patch}
+              disabled={abCompare === abSideA}
               onClick={startAbCycle}
             >
               <Play className="size-3 fill-current" />
