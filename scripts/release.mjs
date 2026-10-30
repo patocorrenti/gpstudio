@@ -35,8 +35,8 @@ function printHelp() {
   node scripts/release.mjs --check
 
 Version is x.y.z, x.y.z-beta.N, or x.y.z-rc.N.
-Updates the changelog and every app version number, commits, creates annotated tag v<version>, and pushes the branch and the tag.
---no-push stops after the local tag. --check only verifies the version numbers match.`);
+Runs npm run build (the same check as deploy), then updates the changelog and every app version number, commits, creates annotated tag v<version>, and pushes the branch and the tag.
+The build runs before any version file changes. --no-push stops after the local tag. --check only verifies the version numbers match.`);
 }
 
 function parseArgs(argv) {
@@ -363,6 +363,14 @@ function assertNotBehindUpstream() {
   }
 }
 
+function assertProductionBuild() {
+  console.log("Build: npm run build");
+  execFileSync("npm", ["run", "build"], {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
+
 function assertTagAvailable(version) {
   try {
     git(["rev-parse", "--verify", "--quiet", `refs/tags/v${version}`]);
@@ -415,6 +423,7 @@ if (dryRun) {
 
 assertCleanWorktree();
 assertNotBehindUpstream();
+assertProductionBuild();
 applyRelease(current, version, nextNotes);
 assertVersionsInSync(version);
 

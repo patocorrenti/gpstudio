@@ -106,7 +106,7 @@ export function PedalWelcome() {
           className="hidden h-[30px] w-auto dark:block"
         />
         <span className="text-[10px] leading-none tracking-wide text-muted-foreground/70">
-          v1.0.1
+          v1.0.2
         </span>
       </div>
       <div className="mt-2 flex w-full min-w-0 flex-col items-center gap-5 md:mt-[-24px] md:gap-3">

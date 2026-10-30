@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "GP Studio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.patocorrenti.gpstudio",
   "build": {
     "frontendDist": "../dist",
