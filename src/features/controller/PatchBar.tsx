@@ -677,6 +677,7 @@ export function PatchBar({
 
   return (
     <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
+      <TooltipProvider delayDuration={0}>
       <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-3 md:pt-7" : "pt-3"}`}>
       <div
         className={`order-1 flex w-full md:contents ${
@@ -962,34 +963,32 @@ export function PatchBar({
           abOpen ? "max-md:hidden" : ""
         }`}
       >
-      <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-              className={`md:order-1 ${patchChipClass}`}
-              onClick={abOpen ? closeAbSetup : openAbSetup}
-            >
-              {abOpen ? (
-                <X />
-              ) : (
-                <img
-                  src={abCompareIcon}
-                  alt=""
-                  aria-hidden
-                  className="size-3.5 dark:invert"
-                />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+            className={`md:order-1 ${patchChipClass}`}
+            onClick={abOpen ? closeAbSetup : openAbSetup}
+          >
+            {abOpen ? (
+              <X />
+            ) : (
+              <img
+                src={abCompareIcon}
+                alt=""
+                aria-hidden
+                className="size-3.5 dark:invert"
+              />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+        </TooltipContent>
+      </Tooltip>
       {abOpen ? null : (
       <div className={`contents md:order-4 md:flex md:flex-wrap md:items-center md:gap-1 ${patchClusterEnterClass}`}>
       <div className="contents md:flex md:items-center md:gap-1">
@@ -1104,6 +1103,7 @@ export function PatchBar({
       )}
       </div>
       </div>
+      </TooltipProvider>
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {
