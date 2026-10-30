@@ -25,6 +25,10 @@ function PatchBody({
 }) {
   const [hoveredSlot, setHoveredSlot] = useState<ChainSlotId | null>(null);
   const [abSlot, setAbSlot] = useState<EffectId | null>(null);
+  const [revealRequest, setRevealRequest] = useState<{
+    id: EffectId;
+    nonce: number;
+  } | null>(null);
   const { setModuleOpen } = useAbCycleClaim();
 
   function openModuleAb(id: EffectId) {
@@ -40,6 +44,17 @@ function PatchBody({
     setAbSlot(null);
   }
 
+  function revealSlot(id: EffectId) {
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      return;
+    }
+    if (effectPanelSlot(chain, id) === null) {
+      return;
+    }
+    setHoveredSlot(id);
+    setRevealRequest({ id, nonce: Date.now() });
+  }
+
   useEffect(() => {
     if (abSlot === null) {
       return;
@@ -49,6 +64,18 @@ function PatchBody({
       setAbSlot(null);
     }
   }, [abSlot, busy, chain, setModuleOpen]);
+
+  useEffect(() => {
+    if (!revealRequest || abSlot !== revealRequest.id) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-module-ab="${revealRequest.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [revealRequest, abSlot]);
 
   const abLive = abSlot !== null && effectPanelSlot(chain, abSlot) !== null;
 
@@ -65,6 +92,7 @@ function PatchBody({
             disabled={busy}
             hoveredSlot={hoveredSlot}
             onHoverSlot={setHoveredSlot}
+            onRevealSlot={revealSlot}
           />
           {abSlot !== null && abLive ? (
             <ModuleAbBlock
@@ -85,6 +113,7 @@ function PatchBody({
             omitId={abSlot}
             abDisabled={abSlot !== null}
             onOpenAb={openModuleAb}
+            revealRequest={revealRequest}
           />
         </div>
       )}

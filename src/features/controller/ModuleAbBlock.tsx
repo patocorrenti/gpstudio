@@ -608,34 +608,200 @@ export function ModuleAbBlock({
     };
   }
 
-  const playStop = playing ? (
-    <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => stopCycle()}>
-      <Square className="size-3 fill-current" />
-      Stop
-    </Button>
-  ) : (
-    <Button type="button" variant="ghost" size="sm" className={playReadyClass} onClick={startCycle}>
-      <Play className="size-3 fill-current" />
-      Play
-    </Button>
+  function renderPlayStop() {
+    return playing ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={chipClass}
+        onClick={() => stopCycle()}
+      >
+        <Square className="size-3 fill-current" />
+        Stop
+      </Button>
+    ) : (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={playReadyClass}
+        onClick={startCycle}
+      >
+        <Play className="size-3 fill-current" />
+        Play
+      </Button>
+    );
+  }
+
+  function renderUseA() {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={chipClass}
+            onClick={() => void useSide("a")}
+          >
+            Use A
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Set side A and close</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  function renderUseB() {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={chipClass}
+            onClick={() => void useSide("b")}
+          >
+            Use B
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Set side B and close</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  const dwellMs = cycleRef.current?.dwellMs ?? resolveAbSeconds(secondsText) * 1000;
+
+  const secondsMobile = (
+    <div className="flex w-full items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        {playing ? (
+          <>
+            <div
+              aria-hidden
+              className="flex shrink-0 items-center gap-1.5 self-stretch"
+            >
+              <div className="relative min-h-10 w-0.5 self-stretch overflow-hidden rounded-full bg-border">
+                <div
+                  key={`mobile-${dwellEpoch}-${sounding}`}
+                  className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
+                    sounding === "b" ? "origin-bottom" : "origin-top"
+                  }`}
+                  style={{ animationDuration: `${dwellMs}ms` }}
+                />
+              </div>
+              <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                A
+              </span>
+            </div>
+            <div
+              aria-live="polite"
+              aria-label="Seconds remaining"
+              className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
+            >
+              {countdown ?? resolveAbSeconds(secondsText)}
+            </div>
+            <span className="text-xs font-normal tracking-wide text-muted-foreground">
+              Seconds
+            </span>
+          </>
+        ) : (
+          <>
+            <div
+              aria-hidden
+              className="flex shrink-0 items-center gap-1.5 self-stretch"
+            >
+              <span className="invisible min-h-10 w-0.5 self-stretch" />
+              <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                A
+              </span>
+            </div>
+            <AbSecondsField
+              value={secondsText}
+              onValueChange={setSecondsText}
+              className={`${chipClass} h-10 w-16 px-2 text-center tabular-nums`}
+            />
+            <span className="text-xs font-normal tracking-wide text-muted-foreground">
+              Seconds
+            </span>
+          </>
+        )}
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {renderUseA()}
+        {renderUseB()}
+        {renderPlayStop()}
+      </div>
+    </div>
+  );
+
+  const secondsDesktop = (
+    <div className="relative flex w-full flex-col items-center">
+      {playing ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
+        >
+          <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
+            <div
+              key={`${dwellEpoch}-${sounding}`}
+              className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                sounding === "b" ? "origin-right" : "origin-left"
+              }`}
+              style={{ animationDuration: `${dwellMs}ms` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+        >
+          Seconds
+        </span>
+      )}
+      {playing ? (
+        <div
+          aria-live="polite"
+          aria-label="Seconds remaining"
+          className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
+        >
+          {countdown ?? resolveAbSeconds(secondsText)}
+        </div>
+      ) : (
+        <AbSecondsField
+          value={secondsText}
+          onValueChange={setSecondsText}
+          className="h-8 w-16 px-2 text-center tabular-nums"
+        />
+      )}
+    </div>
   );
 
   return (
-    <div className="mt-6 -mx-6 w-[calc(100%+3rem)] border-y border-border bg-muted py-4 dark:bg-black/35">
+    <div
+      data-module-ab={kind}
+      className="mt-6 -mx-6 w-[calc(100%+3rem)] border-y border-border bg-muted py-4 dark:bg-black/35"
+    >
       <TooltipProvider delayDuration={0}>
         <div className="mx-auto flex w-[calc(100%-3rem)] max-w-6xl flex-col gap-3 px-2 lg:flex-row lg:items-start">
-          <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => void useSide("a")}>
-                  Use A
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Set side A and close</TooltipContent>
-            </Tooltip>
-            <div className="w-full pt-7">
-              <AbSideLabel label="A" show lit={playing && sounding === "a"} className="w-full">
-                <div className={sounding === "a" ? undefined : "opacity-60 transition-opacity"}>
+          <div className="order-1 flex min-w-0 w-full flex-col items-center gap-2 lg:order-1 lg:flex-1">
+            <div className="hidden lg:block">{renderUseA()}</div>
+            <div className="w-full md:pt-7">
+              <AbSideLabel
+                label="A"
+                show
+                lit={playing && sounding === "a"}
+                railOnMobile
+                className="w-full"
+              >
+                <div
+                  className={
+                    sounding === "a" ? undefined : "opacity-60 transition-opacity"
+                  }
+                >
                   <SlotControlPanel
                     slot={panelSlot(aVersion)}
                     pedal={pedal}
@@ -649,67 +815,24 @@ export function ModuleAbBlock({
               </AbSideLabel>
             </div>
           </div>
-          <div className="flex w-16 shrink-0 flex-col items-center gap-2 self-center lg:self-start">
-            <div className="relative h-8 w-full">
-              <div className="absolute top-0 left-1/2 z-10 -translate-x-1/2">{playStop}</div>
-            </div>
-            <div className="w-full pt-7">
-              <div className="relative flex w-full flex-col items-center">
-                {playing ? (
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
-                  >
-                    <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
-                      <div
-                        key={`${dwellEpoch}-${sounding}`}
-                        className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
-                          sounding === "b" ? "origin-right" : "origin-left"
-                        }`}
-                        style={{
-                          animationDuration: `${cycleRef.current?.dwellMs ?? resolveAbSeconds(secondsText) * 1000}ms`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
-                  >
-                    Seconds
-                  </span>
-                )}
-                {playing ? (
-                  <div
-                    aria-live="polite"
-                    aria-label="Seconds remaining"
-                    className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
-                  >
-                    {countdown ?? resolveAbSeconds(secondsText)}
-                  </div>
-                ) : (
-                  <AbSecondsField
-                    value={secondsText}
-                    onValueChange={setSecondsText}
-                    className="h-8 w-16 px-2 text-center tabular-nums"
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button type="button" variant="ghost" size="sm" className={chipClass} onClick={() => void useSide("b")}>
-                  Use B
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Set side B and close</TooltipContent>
-            </Tooltip>
-            <div className="w-full pt-7">
-              <AbSideLabel label="B" show lit={playing && sounding === "b"} className="w-full">
-                <div className={sounding === "b" ? undefined : "opacity-60 transition-opacity"}>
+
+          <div className="order-2 w-full lg:hidden">{secondsMobile}</div>
+
+          <div className="order-3 flex min-w-0 w-full flex-col items-center gap-2 lg:order-3 lg:flex-1">
+            <div className="hidden lg:block">{renderUseB()}</div>
+            <div className="w-full md:pt-7">
+              <AbSideLabel
+                label="B"
+                show
+                lit={playing && sounding === "b"}
+                railOnMobile
+                className="w-full"
+              >
+                <div
+                  className={
+                    sounding === "b" ? undefined : "opacity-60 transition-opacity"
+                  }
+                >
                   <SlotControlPanel
                     slot={panelSlot(bVersion)}
                     pedal={pedal}
@@ -722,6 +845,15 @@ export function ModuleAbBlock({
                 </div>
               </AbSideLabel>
             </div>
+          </div>
+
+          <div className="order-2 hidden w-16 shrink-0 flex-col items-center gap-2 self-center lg:flex lg:self-start">
+            <div className="relative h-8 w-full">
+              <div className="absolute top-0 left-1/2 z-10 -translate-x-1/2">
+                {renderPlayStop()}
+              </div>
+            </div>
+            <div className="w-full pt-6">{secondsDesktop}</div>
           </div>
         </div>
       </TooltipProvider>
