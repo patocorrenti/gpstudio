@@ -32,10 +32,12 @@ import { cn } from "@/lib/utils";
 
 /** Cable through the icon: pt-1.5 + grip h-3 + gap-2 + half of size-14. */
 const CHAIN_CABLE_TOP = "calc(3.375rem + 1px)";
+/** Mobile: taller top (pt-3 + grip h-5 + gap-2.5 + half icon). */
+const CHAIN_CABLE_TOP_MOBILE = "calc(4.375rem + 1px)";
 
 function slotClassName(enabled: boolean, highlighted: boolean): string {
   return cn(
-    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-2 pt-1.5 pb-2 text-center transition-[background-color,box-shadow] duration-150",
+    "relative flex min-w-18 flex-col items-center gap-2 rounded-lg px-2 pt-3 pb-4 text-center transition-[background-color,box-shadow] duration-150 max-md:min-w-20 max-md:gap-2.5 md:pt-1.5 md:pb-2",
     enabled ? "bg-muted text-foreground dark:bg-muted/40" : "text-muted-foreground",
     enabled &&
       highlighted &&
@@ -106,7 +108,7 @@ function AudioChainSlotView({
       ) : null}
       <span
         className={cn(
-          "relative z-10 flex h-3 w-full items-center justify-center",
+          "relative z-10 flex h-5 w-full items-center justify-center md:h-3",
           movable && !slot.enabled && "opacity-50",
         )}
         aria-hidden
@@ -118,12 +120,22 @@ function AudioChainSlotView({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/15 transition-opacity",
+          "pointer-events-none absolute z-[1] hidden h-0.5 bg-muted-foreground/15 transition-opacity md:block",
           isDragging && "opacity-0",
           isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
           isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
         )}
         style={{ top: CHAIN_CABLE_TOP }}
+      />
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute z-[1] h-0.5 bg-muted-foreground/15 transition-opacity md:hidden",
+          isDragging && "opacity-0",
+          isFirst ? "left-[-0.75rem]" : "left-[-0.25rem]",
+          isLast ? "right-[-0.75rem]" : "right-[-0.25rem]",
+        )}
+        style={{ top: CHAIN_CABLE_TOP_MOBILE }}
       />
       <div className="relative flex min-h-6 w-full flex-col items-center justify-center">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
@@ -147,11 +159,11 @@ function AudioChainSlotView({
         </div>
       </div>
       <Switch
-        size="sm"
+        size="default"
         checked={slot.enabled}
         disabled={disabled}
         className={cn(
-          "relative z-10",
+          "relative z-10 mt-3 h-6 w-11 shrink-0 [&_[data-slot=switch-thumb]]:size-4 md:mt-0 md:h-[14px] md:w-[24px] md:[&_[data-slot=switch-thumb]]:size-3",
           "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-muted-foreground/45 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-primary-foreground",
         )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
@@ -213,7 +225,7 @@ export function AudioChainRow({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
-        <div className="w-full overflow-x-auto">
+        <div className="w-full overflow-x-auto pb-3 md:pb-0">
           <ol
             aria-label="Audio chain"
             className="mx-auto flex w-max min-w-full items-center justify-center gap-2 px-3"
