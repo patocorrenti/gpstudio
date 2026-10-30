@@ -221,6 +221,7 @@ export function SlotControlPanel({
   onModelChange,
   onControlChange,
   revealRequest = null,
+  startExpanded = false,
 }: {
   slot: EffectPanelSlot;
   pedal: DeviceModel;
@@ -236,11 +237,15 @@ export function SlotControlPanel({
   onControlChange?: (index: number, value: number, flush: boolean) => void;
   /** Mobile: expand and scroll when the chain icon for this slot is tapped. */
   revealRequest?: { id: EffectId; nonce: number } | null;
+  /** Mobile: open expanded on mount, even when this slot was collapsed. */
+  startExpanded?: boolean;
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
   const panelRef = useRef<HTMLElement>(null);
-  const [expanded, setExpanded] = useState(() => readExpandedPanels().has(slot.id));
+  const [expanded, setExpanded] = useState(
+    () => startExpanded || readExpandedPanels().has(slot.id),
+  );
   const collapsed = !expanded;
 
   useEffect(() => {
