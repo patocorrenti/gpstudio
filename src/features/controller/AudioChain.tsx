@@ -73,6 +73,7 @@ function AudioChainSlotView({
   const label = chainSlotLabel(slot.id);
   const bypassed = chainSlotBypassed(chain, slot.id);
   const power = slot.enabled ? "on" : "off";
+  const effectId = isEffectSlot(slot.id) ? slot.id : null;
   const movable = isMovableEffect(slot.id);
   const sortable = movable && !disabled;
   const stompTarget = slot.id !== "exp";
@@ -142,10 +143,7 @@ function AudioChainSlotView({
       />
       <div className="relative flex min-h-6 w-full flex-col items-center justify-center">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
-          {onRevealSlot &&
-          slot.enabled &&
-          !bypassed &&
-          isEffectSlot(slot.id) ? (
+          {onRevealSlot && slot.enabled && !bypassed && effectId !== null ? (
             <button
               type="button"
               className="relative cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:pointer-events-none md:cursor-grab"
@@ -158,7 +156,7 @@ function AudioChainSlotView({
                 if (window.matchMedia("(min-width: 768px)").matches) {
                   return;
                 }
-                onRevealSlot(slot.id);
+                onRevealSlot(effectId);
               }}
             >
               <ChainSlotIcon id={slot.id} enabled={slot.enabled} />

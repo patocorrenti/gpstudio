@@ -29,6 +29,7 @@ npm run release -- <version> --note "English bullet" --note "Another bullet"
 
 That command:
 
+- runs `npm run build` (`tsc -b`, then the Vite build — the same check as deploy) and stops before changing any version file if it fails
 - prepends a `## [<version>]` section to root `CHANGELOG.md` and keeps older versions
 - sets the same version in `package.json`, `package-lock.json` (root package only), `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (package `app`), `src-tauri/tauri.conf.json`, the footer version marker `{' '}vX.Y.Z` in `src/app/AppShell.tsx`, the home logo version `vX.Y.Z` in `src/features/controller/PedalWelcome.tsx`, the About link text `Version X.Y.Z` in `src/features/about/AboutPage.tsx`, and `softwareVersion` in `index.html`
 - commits `feat: release <version>`
