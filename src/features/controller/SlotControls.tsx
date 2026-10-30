@@ -102,6 +102,7 @@ function SlotControl({
   onControlChange?: (index: number, value: number, flush: boolean) => void;
 }) {
   const session = useDeviceSession();
+  const [dragging, setDragging] = useState(false);
   const label = `${chainSlotLabel(kind)} ${control.label}`;
 
   function writeControl(nextValue: number, flush: boolean) {
@@ -137,8 +138,20 @@ function SlotControl({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-foreground/70">{control.label}</span>
-        <span className="font-medium tabular-nums">
+        <span
+          className={cn(
+            "origin-left text-foreground/70 transition-transform duration-150",
+            dragging && "relative z-10 scale-150 font-medium text-foreground",
+          )}
+        >
+          {control.label}
+        </span>
+        <span
+          className={cn(
+            "origin-right font-medium tabular-nums transition-transform duration-150",
+            dragging && "relative z-10 scale-150",
+          )}
+        >
           {formatControlValue(control, value)}
         </span>
       </div>
@@ -154,10 +167,12 @@ function SlotControl({
           if (nextValue === undefined) {
             return;
           }
+          setDragging(true);
           writeControl(nextValue, false);
         }}
         onValueCommit={(next) => {
           const nextValue = next[0];
+          setDragging(false);
           if (nextValue === undefined) {
             return;
           }
