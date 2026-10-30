@@ -63,7 +63,8 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,svg,png,woff,woff2}"],
         globIgnores: ["**/pwa-192.png", "**/pwa-512.png"],
-        navigateFallbackDenylist: [/^\/usage$/],
+        // Server-side paths on the same domain (nginx): the app shell must not answer them.
+        navigateFallbackDenylist: [/^\/usage$/, /^\/stats(\/|$)/, /^\/download\//],
       },
     }),
   ],
