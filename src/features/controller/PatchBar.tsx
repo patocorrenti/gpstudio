@@ -764,63 +764,106 @@ export function PatchBar({
           className={`flex w-full flex-col gap-3 md:order-3 md:w-auto md:flex-row md:items-center md:gap-1 ${patchClusterEnterClass}`}
         >
           <div className="relative flex w-full items-center md:w-auto md:justify-center">
-            {/* Mobile seconds row */}
+            {/* Mobile seconds row + actions */}
             <div className="flex w-full items-center gap-2 md:hidden">
-              {abPlaying ? (
-                <>
-                  <div
-                    aria-hidden
-                    className="flex shrink-0 items-center gap-1.5 self-stretch"
-                  >
-                    <div className="relative w-0.5 self-stretch min-h-10 overflow-hidden rounded-full bg-border">
-                      {busy ? null : (
-                        <div
-                          key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
-                          className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
-                            abActive === "b" ? "origin-bottom" : "origin-top"
-                          }`}
-                          style={{
-                            animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
-                          }}
-                        />
-                      )}
+              <div className="flex min-w-0 items-center gap-2">
+                {abPlaying ? (
+                  <>
+                    <div
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <div className="relative min-h-10 w-0.5 self-stretch overflow-hidden rounded-full bg-border">
+                        {busy ? null : (
+                          <div
+                            key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
+                            className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
+                              abActive === "b" ? "origin-bottom" : "origin-top"
+                            }`}
+                            style={{
+                              animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                            }}
+                          />
+                        )}
+                      </div>
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
                     </div>
-                    <span className="invisible shrink-0 text-xs font-normal tracking-wide">
-                      A
+                    <div
+                      aria-live="polite"
+                      aria-label="Seconds remaining"
+                      className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
+                    >
+                      {abCountdown ?? resolvedAbSeconds()}
+                    </div>
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
                     </span>
-                  </div>
-                  <div
-                    aria-live="polite"
-                    aria-label="Seconds remaining"
-                    className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
-                  >
-                    {abCountdown ?? resolvedAbSeconds()}
-                  </div>
-                  <span className="text-xs font-normal tracking-wide text-muted-foreground">
-                    Seconds
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div
-                    aria-hidden
-                    className="flex shrink-0 items-center gap-1.5 self-stretch"
-                  >
-                    <span className="w-0.5 self-stretch min-h-10 invisible" />
-                    <span className="invisible shrink-0 text-xs font-normal tracking-wide">
-                      A
+                  </>
+                ) : (
+                  <>
+                    <div
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <span className="invisible min-h-10 w-0.5 self-stretch" />
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
+                    </div>
+                    <AbSecondsField
+                      value={abSecondsText}
+                      onValueChange={setAbSecondsText}
+                      className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                    />
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
                     </span>
-                  </div>
-                  <AbSecondsField
-                    value={abSecondsText}
-                    onValueChange={setAbSecondsText}
-                    className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
-                  />
-                  <span className="text-xs font-normal tracking-wide text-muted-foreground">
-                    Seconds
-                  </span>
-                </>
-              )}
+                  </>
+                )}
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Close A/B test"
+                  className={`${patchChipClass} px-2.5`}
+                  onClick={closeAbSetup}
+                >
+                  <X className="size-3" />
+                  Close
+                </Button>
+                {abPlaying ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${patchChipClass} px-2.5`}
+                    aria-label="Stop"
+                    onClick={() => stopAbCycle()}
+                  >
+                    <Square className="size-3 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${
+                      abCompare === abSideA ? patchChipClass : abPlayReadyClass
+                    } px-2.5`}
+                    aria-label="Play"
+                    disabled={abCompare === abSideA}
+                    onClick={startAbCycle}
+                  >
+                    <Play className="size-3 fill-current" />
+                    Play
+                  </Button>
+                )}
+              </div>
             </div>
             {/* Desktop seconds control */}
             <div className="relative hidden md:block">
@@ -885,47 +928,32 @@ export function PatchBar({
               }}
             />
           </AbSideLabel>
-          <div className="mt-2 flex w-full items-center justify-center gap-2 md:mt-0 md:w-auto md:contents">
+          {abPlaying ? (
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              aria-label="Close A/B test"
-              className={`${patchChipClass} px-3 md:hidden`}
-              onClick={closeAbSetup}
+              size="icon"
+              className={`hidden md:inline-flex ${patchChipClass}`}
+              aria-label="Stop"
+              onClick={() => stopAbCycle()}
             >
-              <X className="size-3" />
-              Close
+              <Square className="size-3 fill-current" />
             </Button>
-            {abPlaying ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={`${patchChipClass} px-3 md:size-8 md:p-0`}
-                aria-label="Stop"
-                onClick={() => stopAbCycle()}
-              >
-                <Square className="size-3 fill-current" />
-                <span className="md:hidden">Stop</span>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={`${
-                  abCompare === abSideA ? patchChipClass : abPlayReadyClass
-                } px-3 md:size-8 md:p-0`}
-                aria-label="Play"
-                disabled={abCompare === abSideA}
-                onClick={startAbCycle}
-              >
-                <Play className="size-3 fill-current" />
-                <span className="md:hidden">Play</span>
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`hidden md:inline-flex ${
+                abCompare === abSideA ? patchChipClass : abPlayReadyClass
+              }`}
+              aria-label="Play"
+              disabled={abCompare === abSideA}
+              onClick={startAbCycle}
+            >
+              <Play className="size-3 fill-current" />
+            </Button>
+          )}
         </div>
       ) : null}
       </div>
