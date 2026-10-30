@@ -186,7 +186,7 @@ Planned changes, in order:
 2. `midi-transport` — `MidiTransport` (endpoints + bytes, `kind: usb-midi`) + Web MIDI + Rust commands `midi_list_ports` / `open` / `send` + inbound events. No BLE.
 3. `device-connection` — detect GP-5/GP-50, connect, session state (global control + modal, not a route)
 4. `live-controller` — patch, volume, module on/off, tuner (official CC)
-5. Later: `preset-editor` (SysEx), `preset-library`, IR / NAM file upload
+5. Later: `preset-editor` (SysEx), `preset-library`, IR / NAM file upload (working plan: `docs/nam-snaptone-upload.md`; still out of scope until that change)
 
 Spec domains: `midi-transport`, `device-connection`, `live-controller`, `bluetooth-link`, `inbound-log`. Editor and library are not specified until their own change.
 
@@ -210,7 +210,7 @@ Windows packaging: `tauri build` → NSIS/MSI installer. Web: the hosted Vite ap
 
 - Tauri mobile app
 - Preset-library read/write, Library `.prst` import, library reorder (Save / rename / duplicate of the current patch, exporting the connected model’s `.prst`, and loading either model’s `.prst` into the working patch are in scope; not the Library route, not a dump SET)
-- IR / SnapTone / NAM file upload (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope)
+- IR / SnapTone / NAM file upload (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). Working plan for the upload change: `docs/nam-snaptone-upload.md`
 - Applying inbound volume, BPM, tuner, or other CCs that are not module on/off to the snapshot while the patch stays the same. Bluetooth live patch-volume SysEx, live-module / Stomp footswitch, live chain-order, live model/control for the ten effects, and live global reports (including CC 1 / CC 28 for master and Patch | Stomp) are in scope. USB does not apply live parameters.
 - Treating USB as duplex for live controls, or applying USB inbound live-module / Stomp / live chain-order / live globals
 - Relative step CCs (CC 17, CC 19, CC 21) over either link. Tuner write (CC 58, 0 / 127), patch volume (CC 7), GP-50 BPM (CC 73/74), GP-50 master volume (CC 1), and GP-50 Patch | Stomp (CC 28) are sent on USB and Bluetooth. GP-50 global SysEx rows (input / No CAB / REC / BT / monitor / REC mode) and GP-5 global SysEx rows (input / No CAB / REC / BT REC / monitor / screen brightness, footswitch family `1115`) use the parameter-write family. GP-5 does not use CC 1, CC 28, a Global-settings volume write, REC mode, or Global BPM. A pitch/note tuner display in the app stays later.
