@@ -187,11 +187,33 @@ function AudioChainSlotView({
         </div>
       </div>
       <Switch
+        size="sm"
+        checked={slot.enabled}
+        disabled={disabled}
+        className={cn(
+          "relative z-10 hidden md:inline-flex",
+          "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-muted-foreground/45 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-primary-foreground",
+        )}
+        aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+        onCheckedChange={(checked) => {
+          if (checked === slot.enabled) {
+            return;
+          }
+          void session.toggleChainSlot(slot.id);
+        }}
+      />
+      <Switch
         size="default"
         checked={slot.enabled}
         disabled={disabled}
         className={cn(
-          "relative z-10 mt-3 h-6 w-11 shrink-0 [&_[data-slot=switch-thumb]]:size-4 md:mt-0 md:h-[14px] md:w-[24px] md:[&_[data-slot=switch-thumb]]:size-3",
+          "relative z-10 mt-3 md:hidden",
           "data-checked:bg-primary/45 data-unchecked:bg-foreground/20 dark:data-unchecked:bg-muted-foreground/45 dark:data-unchecked:[&_[data-slot=switch-thumb]]:bg-primary-foreground",
         )}
         aria-label={bypassed ? `${label} ${power}, bypassed` : `${label} ${power}`}
