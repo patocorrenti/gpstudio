@@ -55,6 +55,18 @@ export default defineConfig({
             type: "image/png",
             purpose: "any",
           },
+          {
+            src: "/pwa-maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/pwa-maskable-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
         ],
       },
       workbox: {
@@ -62,7 +74,12 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,svg,png,woff,woff2}"],
-        globIgnores: ["**/pwa-192.png", "**/pwa-512.png"],
+        globIgnores: [
+          "**/pwa-192.png",
+          "**/pwa-512.png",
+          "**/pwa-maskable-192.png",
+          "**/pwa-maskable-512.png",
+        ],
         // Server-side paths on the same domain (nginx): the app shell must not answer them.
         navigateFallbackDenylist: [/^\/usage$/, /^\/stats(\/|$)/, /^\/download\//],
       },
