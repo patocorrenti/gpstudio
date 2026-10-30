@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
-import { Bug, Download, Heart, Mail } from "lucide-react";
+import { Bug, Download, Heart, Mail, RefreshCw } from "lucide-react";
 import {
   getPwaInstallAvailability,
   promptPwaInstall,
   subscribePwaInstall,
 } from "@/app/pwa-install";
+import {
+  applyAppUpdate,
+  checkForAppUpdate,
+  getAppUpdateState,
+  subscribePwaUpdate,
+  type AppUpdateCheck,
+} from "@/app/pwa-update";
 import githubMark from "@/assets/img/github-mark.svg";
 import microsoftStoreBadgeDark from "@/assets/img/get-it-from-microsoft-dark.svg";
 import microsoftStoreBadgeLight from "@/assets/img/get-it-from-microsoft-light.svg";
@@ -21,6 +28,74 @@ const CHANGELOG_URL =
 
 // Show again once the Edge-hosted PWA is listed in the Microsoft Store.
 const SHOW_MICROSOFT_STORE_BADGE = false;
+
+const UPDATE_CHECK_MESSAGES: Partial<Record<AppUpdateCheck, string>> = {
+  current: "You're on the latest version.",
+  downloading: "Downloading the new version…",
+  failed: "Couldn't check. Are you offline?",
+};
+
+const textButtonClassName =
+  "inline-flex cursor-pointer items-center gap-1.5 text-foreground/80 underline underline-offset-4 hover:text-foreground disabled:cursor-default disabled:opacity-60";
+
+function UpdateCheck() {
+  const [state, setState] = useState(getAppUpdateState);
+  const [checking, setChecking] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      setState(getAppUpdateState());
+    };
+    sync();
+    return subscribePwaUpdate(sync);
+  }, []);
+
+  if (state === "unavailable") {
+    return null;
+  }
+
+  if (state === "ready") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        A new version is ready.{" "}
+        <button
+          type="button"
+          className={textButtonClassName}
+          onClick={() => {
+            void applyAppUpdate();
+          }}
+        >
+          Reload to update
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+      <button
+        type="button"
+        className={textButtonClassName}
+        disabled={checking}
+        onClick={async () => {
+          setChecking(true);
+          setMessage(null);
+          const result = await checkForAppUpdate();
+          setChecking(false);
+          setMessage(UPDATE_CHECK_MESSAGES[result] ?? null);
+        }}
+      >
+        <RefreshCw
+          className={`size-3.5 shrink-0 ${checking ? "motion-safe:animate-spin" : ""}`}
+          aria-hidden
+        />
+        {checking ? "Checking…" : "Check for updates"}
+      </button>
+      {message ? <span aria-live="polite">{message}</span> : null}
+    </p>
+  );
+}
 
 export function AboutPage() {
   const [canInstall, setCanInstall] = useState(
@@ -53,6 +128,7 @@ export function AboutPage() {
             </a>{" "}
             · Free controller for the Valeton GP-5/50 multi-effects.
           </p>
+          <UpdateCheck />
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 min-[500px]:grid-cols-2 min-[42rem]:grid-cols-[1.2fr_1fr_1fr_1fr]">
           <Button

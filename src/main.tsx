@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { toast } from "sonner";
 import { App } from "@/app/App";
 import { initPwaInstallPrompt } from "@/app/pwa-install";
+import { markPwaUpdateReady, trackPwaUpdates } from "@/app/pwa-update";
 import { reportUsageOpen } from "@/app/usage-ping";
 import { isTauriRuntime } from "@/midi/detect";
 import "./index.css";
@@ -72,9 +73,15 @@ async function registerProductionServiceWorker(): Promise<void> {
   let skipWaiting: (() => Promise<void>) | undefined;
   skipWaiting = registerSW({
     onNeedRefresh() {
+      markPwaUpdateReady();
       showPwaUpdateToast(() => {
         void skipWaiting?.();
       });
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) {
+        trackPwaUpdates(registration, () => skipWaiting?.() ?? Promise.resolve());
+      }
     },
   });
 }
