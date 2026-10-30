@@ -621,7 +621,10 @@ export function ModuleAbBlock({
   );
 
   return (
-    <div className="mt-6 -mx-6 w-[calc(100%+3rem)] border-y border-border bg-muted py-4 dark:bg-black/35">
+    <div
+      data-module-ab={kind}
+      className="mt-6 -mx-6 w-[calc(100%+3rem)] border-y border-border bg-muted py-4 dark:bg-black/35"
+    >
       <TooltipProvider delayDuration={0}>
         <div className="mx-auto flex w-[calc(100%-3rem)] max-w-6xl flex-col gap-3 px-2 lg:flex-row lg:items-start">
           <div className="flex min-w-0 w-full flex-col items-center gap-2 lg:flex-1">

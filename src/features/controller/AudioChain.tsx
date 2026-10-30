@@ -18,6 +18,7 @@ import type { DeviceModel } from "@/device/models";
 import {
   chainSlotBypassed,
   chainSlotLabel,
+  isEffectSlot,
   isMovableEffect,
   type AudioChain,
   type AudioChainSlot,
@@ -55,6 +56,7 @@ function AudioChainSlotView({
   isLast,
   highlighted,
   onHoverSlot,
+  onRevealSlot,
 }: {
   slot: AudioChainSlot;
   chain: AudioChain;
@@ -65,6 +67,7 @@ function AudioChainSlotView({
   isLast: boolean;
   highlighted: boolean;
   onHoverSlot?: (id: ChainSlotId | null) => void;
+  onRevealSlot?: (id: EffectId) => void;
 }) {
   const session = useDeviceSession();
   const label = chainSlotLabel(slot.id);
@@ -139,23 +142,48 @@ function AudioChainSlotView({
       />
       <div className="relative flex min-h-6 w-full flex-col items-center justify-center">
         <div className={cn("relative", slot.enabled ? "z-10" : "z-0")}>
-          <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
-          {bypassed ? (
-            <span
-              className="pointer-events-none absolute inset-0 z-10 flex translate-y-[3px] items-center justify-center"
-              aria-hidden="true"
+          {onRevealSlot &&
+          slot.enabled &&
+          !bypassed &&
+          isEffectSlot(slot.id) ? (
+            <button
+              type="button"
+              className="relative cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:pointer-events-none md:cursor-grab"
+              aria-label={`Show ${label} controls`}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                  return;
+                }
+                onRevealSlot(slot.id);
+              }}
             >
-              <Ban
-                className={cn(
-                  "size-11 drop-shadow-sm",
-                  slot.enabled
-                    ? "text-destructive"
-                    : "text-muted-foreground/35",
-                )}
-                strokeWidth={2.5}
-              />
-            </span>
-          ) : null}
+              <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
+            </button>
+          ) : (
+            <>
+              <ChainSlotIcon id={slot.id} enabled={slot.enabled} />
+              {bypassed ? (
+                <span
+                  className="pointer-events-none absolute inset-0 z-10 flex translate-y-[3px] items-center justify-center"
+                  aria-hidden="true"
+                >
+                  <Ban
+                    className={cn(
+                      "size-11 drop-shadow-sm",
+                      slot.enabled
+                        ? "text-destructive"
+                        : "text-muted-foreground/35",
+                    )}
+                    strokeWidth={2.5}
+                  />
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
       <Switch
@@ -191,6 +219,7 @@ export function AudioChainRow({
   disabled,
   hoveredSlot = null,
   onHoverSlot,
+  onRevealSlot,
 }: {
   chain: AudioChain;
   stomps: StompAssignment;
@@ -198,6 +227,7 @@ export function AudioChainRow({
   disabled: boolean;
   hoveredSlot?: ChainSlotId | null;
   onHoverSlot?: (id: ChainSlotId | null) => void;
+  onRevealSlot?: (id: EffectId) => void;
 }) {
   const session = useDeviceSession();
   const sensors = useSensors(
@@ -242,6 +272,7 @@ export function AudioChainRow({
                   isLast={index === chain.length - 1}
                   highlighted={slot.enabled && hoveredSlot === slot.id}
                   onHoverSlot={onHoverSlot}
+                  onRevealSlot={onRevealSlot}
                 />
               </li>
             ))}
