@@ -689,6 +689,7 @@ export function PatchBar({
           label="A"
           show={abOpen}
           lit={abActive === "a"}
+          railOnMobile={abOpen}
           className="w-full md:order-2 md:w-auto"
         >
           {abOpen ? (
@@ -762,77 +763,116 @@ export function PatchBar({
         <div
           className={`flex w-full flex-col gap-3 md:order-3 md:w-auto md:flex-row md:items-center md:gap-1 ${patchClusterEnterClass}`}
         >
-          <div className="relative flex w-full items-center justify-center gap-2 md:w-auto">
-            {abPlaying ? (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 -top-[13px] hidden items-center md:flex"
-              >
-                <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
-                  {busy ? null : (
-                    <div
-                      key={`${dwellEpoch}-${abActive ?? "a"}`}
-                      className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
-                        abActive === "b" ? "origin-right" : "origin-left"
-                      }`}
-                      style={{
-                        animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                <span className="text-xs font-normal tracking-wide text-muted-foreground md:hidden">
-                  Seconds
-                </span>
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 -top-5 hidden text-center text-xs font-normal tracking-wide text-muted-foreground md:block"
-                >
-                  Seconds
-                </span>
-              </>
-            )}
-            {abPlaying ? (
-              <div className="flex w-full flex-col items-center gap-1.5 md:w-auto">
+          <div className="relative flex w-full items-center md:w-auto md:justify-center">
+            {/* Mobile seconds row */}
+            <div className="flex w-full items-center gap-2 md:hidden">
+              {abPlaying ? (
+                <>
+                  <div
+                    aria-hidden
+                    className="flex shrink-0 items-center gap-1.5 self-stretch"
+                  >
+                    <div className="relative w-0.5 self-stretch min-h-10 overflow-hidden rounded-full bg-border">
+                      {busy ? null : (
+                        <div
+                          key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
+                          className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
+                            abActive === "b" ? "origin-bottom" : "origin-top"
+                          }`}
+                          style={{
+                            animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                          }}
+                        />
+                      )}
+                    </div>
+                    <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                      A
+                    </span>
+                  </div>
+                  <div
+                    aria-live="polite"
+                    aria-label="Seconds remaining"
+                    className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
+                  >
+                    {abCountdown ?? resolvedAbSeconds()}
+                  </div>
+                  <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                    Seconds
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div
+                    aria-hidden
+                    className="flex shrink-0 items-center gap-1.5 self-stretch"
+                  >
+                    <span className="w-0.5 self-stretch min-h-10 invisible" />
+                    <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                      A
+                    </span>
+                  </div>
+                  <AbSecondsField
+                    value={abSecondsText}
+                    onValueChange={setAbSecondsText}
+                    className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                  />
+                  <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                    Seconds
+                  </span>
+                </>
+              )}
+            </div>
+            {/* Desktop seconds control */}
+            <div className="relative hidden md:block">
+              {abPlaying ? (
                 <div
                   aria-hidden
-                  className="h-[2px] w-full max-w-40 overflow-hidden rounded-full bg-border md:hidden"
+                  className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
                 >
-                  {busy ? null : (
-                    <div
-                      key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
-                      className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
-                        abActive === "b" ? "origin-right" : "origin-left"
-                      }`}
-                      style={{
-                        animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
-                      }}
-                    />
-                  )}
+                  <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
+                    {busy ? null : (
+                      <div
+                        key={`${dwellEpoch}-${abActive ?? "a"}`}
+                        className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                          abActive === "b" ? "origin-right" : "origin-left"
+                        }`}
+                        style={{
+                          animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
+              ) : (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+                >
+                  Seconds
+                </span>
+              )}
+              {abPlaying ? (
                 <div
                   aria-live="polite"
                   aria-label="Seconds remaining"
-                  className="flex h-10 w-16 items-center justify-center px-2 text-sm tabular-nums md:h-8"
+                  className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
                 >
                   {abCountdown ?? resolvedAbSeconds()}
                 </div>
-              </div>
-            ) : (
-              <AbSecondsField
-                value={abSecondsText}
-                onValueChange={setAbSecondsText}
-                className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums md:h-8 dark:border-transparent`}
-              />
-            )}
+              ) : (
+                <AbSecondsField
+                  value={abSecondsText}
+                  onValueChange={setAbSecondsText}
+                  className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                />
+              )}
+            </div>
           </div>
           <AbSideLabel
             label="B"
             show
             lit={abActive === "b"}
+            railOnMobile
             className="w-full md:w-auto"
           >
             <PatchSelect

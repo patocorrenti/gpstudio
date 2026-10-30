@@ -87,6 +87,15 @@
             transform: scaleX(1);
         }
     }
+    --animate-ab-dwell-y: ab-dwell-progress-y linear forwards;
+    @keyframes ab-dwell-progress-y {
+        from {
+            transform: scaleY(0);
+        }
+        to {
+            transform: scaleY(1);
+        }
+    }
     --animate-ab-rule-settle: ab-rule-settle 0.55s ease-out forwards;
     @keyframes ab-rule-settle {
         from {
