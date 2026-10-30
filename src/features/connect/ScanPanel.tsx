@@ -41,6 +41,7 @@ function ModeNotes({
 }
 
 export function ScanPanel({
+  bluetoothOnly,
   linkTab,
   onLinkTabChange,
   usbEndpoints,
@@ -52,6 +53,7 @@ export function ScanPanel({
   onToggleStartup,
   onRefresh,
 }: {
+  bluetoothOnly: boolean;
   linkTab: LinkMode;
   onLinkTabChange: (value: LinkMode) => void;
   usbEndpoints: Array<ListedPedal & { startup: boolean }>;
@@ -69,7 +71,7 @@ export function ScanPanel({
         <DialogTitle>Connect</DialogTitle>
       </DialogHeader>
       <Tabs
-        value={linkTab}
+        value={bluetoothOnly ? "bluetooth" : linkTab}
         onValueChange={(value) => {
           if (value !== "usb" && value !== "bluetooth") {
             return;
@@ -78,16 +80,19 @@ export function ScanPanel({
         }}
         className="gap-4"
       >
-        <TabsList className="mt-2 grid h-12 w-full grid-cols-2 group-data-horizontal/tabs:h-12">
-          <TabsTrigger value="usb" className="gap-1.5 px-2 dark:data-active:bg-background">
-            <Usb />
-            USB
-          </TabsTrigger>
-          <TabsTrigger value="bluetooth" className="gap-1.5 px-2 dark:data-active:bg-background">
-            <Bluetooth />
-            Bluetooth
-          </TabsTrigger>
-        </TabsList>
+        {bluetoothOnly ? null : (
+          <TabsList className="mt-2 grid h-12 w-full grid-cols-2 group-data-horizontal/tabs:h-12">
+            <TabsTrigger value="usb" className="gap-1.5 px-2 dark:data-active:bg-background">
+              <Usb />
+              USB
+            </TabsTrigger>
+            <TabsTrigger value="bluetooth" className="gap-1.5 px-2 dark:data-active:bg-background">
+              <Bluetooth />
+              Bluetooth
+            </TabsTrigger>
+          </TabsList>
+        )}
+        {bluetoothOnly ? null : (
         <TabsContent value="usb" className="flex flex-col gap-4">
           <ModeNotes
             notes={[
@@ -136,24 +141,27 @@ export function ScanPanel({
             onToggleStartup={onToggleStartup}
           />
         </TabsContent>
+        )}
         <TabsContent value="bluetooth" className="flex flex-col gap-4">
-          <ModeNotes
-            notes={[
-              {
-                icon: ArrowLeftRight,
-                text: (
-                  <span className="text-foreground">
-                    <span className="font-bold">Fully interactive</span>
-                    {" "}—{" "}Pedal and computer talk to each other.
-                  </span>
-                ),
-              },
-              {
-                icon: Turtle,
-                text: "Slower connection",
-              },
-            ]}
-          />
+          {bluetoothOnly ? null : (
+            <ModeNotes
+              notes={[
+                {
+                  icon: ArrowLeftRight,
+                  text: (
+                    <span className="text-foreground">
+                      <span className="font-bold">Fully interactive</span>
+                      {" "}—{" "}Pedal and computer talk to each other.
+                    </span>
+                  ),
+                },
+                {
+                  icon: Turtle,
+                  text: "Slower connection",
+                },
+              ]}
+            />
+          )}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           {busy && bleEndpoints.length === 0 && !error ? (
             <p className="text-sm text-muted-foreground">

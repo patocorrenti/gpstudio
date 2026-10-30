@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { Button } from "@/components/ui/button";
@@ -102,6 +102,7 @@ function SlotControl({
   onControlChange?: (index: number, value: number, flush: boolean) => void;
 }) {
   const session = useDeviceSession();
+  const [dragging, setDragging] = useState(false);
   const label = `${chainSlotLabel(kind)} ${control.label}`;
 
   function writeControl(nextValue: number, flush: boolean) {
@@ -137,8 +138,20 @@ function SlotControl({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-foreground/70">{control.label}</span>
-        <span className="font-medium tabular-nums">
+        <span
+          className={cn(
+            "origin-left text-foreground/70 transition-transform duration-150",
+            dragging && "relative z-10 scale-150 font-medium text-foreground",
+          )}
+        >
+          {control.label}
+        </span>
+        <span
+          className={cn(
+            "origin-right font-medium tabular-nums transition-transform duration-150",
+            dragging && "relative z-10 scale-150",
+          )}
+        >
           {formatControlValue(control, value)}
         </span>
       </div>
@@ -154,10 +167,12 @@ function SlotControl({
           if (nextValue === undefined) {
             return;
           }
+          setDragging(true);
           writeControl(nextValue, false);
         }}
         onValueCommit={(next) => {
           const nextValue = next[0];
+          setDragging(false);
           if (nextValue === undefined) {
             return;
           }
@@ -205,6 +220,7 @@ export function SlotControlPanel({
   abDisabled = false,
   onModelChange,
   onControlChange,
+  revealRequest = null,
 }: {
   slot: EffectPanelSlot;
   pedal: DeviceModel;
@@ -218,11 +234,26 @@ export function SlotControlPanel({
   onModelChange?: (modelId: string) => void;
   /** When set, the panel does not call the session itself. `flush` is true on release. */
   onControlChange?: (index: number, value: number, flush: boolean) => void;
+  /** Mobile: expand and scroll when the chain icon for this slot is tapped. */
+  revealRequest?: { id: EffectId; nonce: number } | null;
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
+  const panelRef = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(() => readExpandedPanels().has(slot.id));
   const collapsed = !expanded;
+
+  useEffect(() => {
+    if (!revealRequest || revealRequest.id !== slot.id) {
+      return;
+    }
+    setExpanded(true);
+    setPanelExpanded(slot.id, true);
+    const timer = window.setTimeout(() => {
+      panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [revealRequest, slot.id]);
   const model = modelById(slot.modelId);
   if (!model) {
     return null;
@@ -246,8 +277,10 @@ export function SlotControlPanel({
 
   return (
     <section
+      ref={panelRef}
+      data-slot-panel={slot.id}
       className={cn(
-        "flex min-w-0 w-full flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 transition-[background-color,box-shadow] duration-150 dark:bg-muted/30",
+        "flex min-w-0 w-full scroll-mt-20 flex-col gap-3 rounded-lg bg-muted/60 px-4 py-3 transition-[background-color,box-shadow] duration-150 dark:bg-muted/30",
         marked &&
           "bg-muted/80 shadow-[inset_0_0_0_1px] shadow-foreground/12 dark:bg-muted/45 dark:shadow-foreground/18",
       )}
@@ -389,6 +422,7 @@ export function SlotControlPanels({
   omitId = null,
   abDisabled = false,
   onOpenAb,
+  revealRequest = null,
 }: {
   chain: AudioChain;
   pedal: DeviceModel;
@@ -398,6 +432,7 @@ export function SlotControlPanels({
   omitId?: EffectId | null;
   abDisabled?: boolean;
   onOpenAb?: (id: EffectId) => void;
+  revealRequest?: { id: EffectId; nonce: number } | null;
 }) {
   const panels = chain.flatMap((slot) => {
     if (!isEffectSlot(slot.id) || slot.id === omitId) {
@@ -423,6 +458,7 @@ export function SlotControlPanels({
             onHoverSlot={onHoverSlot}
             onOpenAb={onOpenAb}
             abDisabled={abDisabled}
+            revealRequest={revealRequest}
           />
         ))}
       </div>

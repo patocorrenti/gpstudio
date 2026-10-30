@@ -11,7 +11,6 @@ import {
   subscribePwaInstall,
   type PwaInstallAvailability,
 } from "@/app/pwa-install";
-import MainMenu from "@/components/main-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,6 +19,7 @@ import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider"
 import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import { PedalFootControls } from "@/features/connect/PedalFootControls";
 import { IosWebNotice } from "@/features/controller/IosWebNotice";
+import MainMenu from "@/components/main-menu";
 
 function FooterSupportCta() {
   return (

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import logoDark from "@/assets/img/gp-studio-logo-dark.png";
 import logoLight from "@/assets/img/gp-studio-logo-light.png";
+import lineBlack from "@/assets/img/gp5-50-line-black.png";
+import lineWhite from "@/assets/img/gp5-50-line-white.png";
 import pedalsConnectPedalsDark from "@/assets/img/pedal-connect-pedals-dark.png";
 import pedalsConnectPedalsLight from "@/assets/img/pedal-connect-pedals-light.png";
 import pedalsConnectWiresDark from "@/assets/img/pedal-connect-wires-dark.png";
@@ -44,7 +46,10 @@ export function PedalWelcome() {
   const [plugIn, setPlugIn] = useState(0);
 
   function updatePointer(event: PointerEvent<HTMLDivElement>) {
-    if (reducedMotion) {
+    if (
+      reducedMotion ||
+      window.matchMedia("(max-width: 767px)").matches
+    ) {
       return;
     }
     const target = tiltTargetRef.current;
@@ -85,7 +90,7 @@ export function PedalWelcome() {
 
   return (
     <div
-      className="group flex flex-1 flex-col items-center justify-center gap-4 pb-16 text-muted-foreground"
+      className="group flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-x-clip pb-16 text-muted-foreground"
       onPointerMove={updatePointer}
       onPointerLeave={resetPointer}
     >
@@ -104,16 +109,16 @@ export function PedalWelcome() {
           v1.0.0
         </span>
       </div>
-      <div className="mt-[-24px] flex flex-col items-center gap-3">
+      <div className="mt-2 flex w-full min-w-0 flex-col items-center gap-5 md:mt-[-24px] md:gap-3">
         <button
           type="button"
           ref={tiltTargetRef}
-          className="inline-flex cursor-pointer appearance-none border-0 bg-transparent p-0 [perspective:900px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex w-full max-w-[240px] cursor-pointer appearance-none border-0 bg-transparent p-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:w-[450px] md:max-w-none md:[perspective:900px]"
           aria-haspopup="dialog"
           aria-label="Connect a Multi-Effects"
           onClick={openConnect}
         >
-          <div className="relative w-[450px]">
+          <div className="relative hidden w-full md:block">
             <img
               src={pedalsConnectPedalsDark}
               alt=""
@@ -143,17 +148,31 @@ export function PedalWelcome() {
               style={wireTiltStyle}
             />
           </div>
+          <div className="w-full md:hidden">
+            <img
+              src={lineBlack}
+              alt=""
+              aria-hidden
+              className="h-auto w-full dark:hidden"
+            />
+            <img
+              src={lineWhite}
+              alt=""
+              aria-hidden
+              className="hidden h-auto w-full dark:block"
+            />
+          </div>
         </button>
-        <div ref={ctaRef} className="flex flex-col items-center gap-2.5">
+        <div ref={ctaRef} className="flex w-full max-w-[240px] flex-col items-center gap-2.5 md:w-auto md:max-w-none">
           <Button
             type="button"
             size="lg"
-            className="relative h-10 overflow-hidden border-lime-400 bg-lime-400 px-4 text-sm whitespace-normal text-black/80 shadow-none transition-[color,background-color,box-shadow] hover:bg-lime-300 hover:text-black/80 hover:shadow-[0_0_10px_1px] hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-lime-400/10 dark:hover:text-lime-300 dark:hover:shadow-[0_0_12px_1px] dark:hover:shadow-lime-400/25"
+            className="relative h-10 w-full overflow-hidden border-lime-400 bg-lime-400 px-4 text-sm whitespace-normal text-black/80 shadow-none hover:bg-lime-400 hover:text-black/80 hover:shadow-none md:w-auto md:transition-[color,background-color,box-shadow] md:hover:bg-lime-300 md:hover:shadow-[0_0_10px_1px] md:hover:shadow-lime-400/30 dark:border-lime-400 dark:bg-transparent dark:text-lime-400 dark:hover:bg-transparent dark:hover:text-lime-400 dark:hover:shadow-none md:dark:hover:bg-lime-400/10 md:dark:hover:text-lime-300 md:dark:hover:shadow-[0_0_12px_1px] md:dark:hover:shadow-lime-400/25"
             onClick={openConnect}
           >
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine group-hover/button:invisible dark:via-lime-200/22"
+              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent motion-safe:animate-button-shine md:group-hover/button:invisible dark:via-lime-200/22"
             />
             <span className="relative">Connect a Multi-Effects</span>
           </Button>

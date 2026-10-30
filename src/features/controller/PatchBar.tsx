@@ -677,41 +677,28 @@ export function PatchBar({
 
   return (
     <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
-      <div className="flex flex-wrap items-center justify-center gap-1 px-6 pt-7 pb-3">
       <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-              className={patchChipClass}
-              onClick={abOpen ? closeAbSetup : openAbSetup}
-            >
-              {abOpen ? (
-                <X />
-              ) : (
-                <img
-                  src={abCompareIcon}
-                  alt=""
-                  aria-hidden
-                  className="size-3.5 dark:invert"
-                />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
-          </TooltipContent>
-        </Tooltip>
-        <AbSideLabel label="A" show={abOpen} lit={abActive === "a"}>
+      <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-3 md:pt-7" : "pt-3"}`}>
+      <div
+        className={`order-1 flex w-full md:contents ${
+          abOpen
+            ? "flex-col gap-3"
+            : "flex-wrap items-center justify-center gap-1"
+        }`}
+      >
+        <AbSideLabel
+          label="A"
+          show={abOpen}
+          lit={abActive === "a"}
+          railOnMobile={abOpen}
+          className="w-full md:order-2 md:w-auto"
+        >
           {abOpen ? (
             <PatchSelect
               patch={abSideA}
               patchNames={patchNames}
               disabled={abPlaying}
-              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
               onSelect={(next) => {
                 if (abPlaying) {
                   return;
@@ -720,46 +707,50 @@ export function PatchBar({
               }}
             />
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex w-full items-center gap-1">
               <PatchNavTooltip enabled={modified && !abPlaying}>
-                <span className="inline-flex">
+                <span className="inline-flex shrink-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     aria-label="Previous patch"
                     disabled={busy || abPlaying}
-                    className={patchChipClass}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
                     onClick={() => void session.stepPatch(-1)}
                   >
                     <ChevronLeft />
                   </Button>
                 </span>
               </PatchNavTooltip>
-              <PatchSelect
-                patch={patch}
-                patchNames={patchNames}
-                disabled={busy || abPlaying}
-                triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
-                wrapTrigger={(trigger) => (
-                  <PatchNavTooltip enabled={modified && !abPlaying}>{trigger}</PatchNavTooltip>
-                )}
-                onSelect={(next) => {
-                  if (busy || abPlaying) {
-                    return;
-                  }
-                  void session.setPatch(next);
-                }}
-              />
+              <div className="min-w-0 flex-1 md:w-auto md:flex-none">
+                <PatchSelect
+                  patch={patch}
+                  patchNames={patchNames}
+                  disabled={busy || abPlaying}
+                  triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+                  wrapTrigger={(trigger) => (
+                    <PatchNavTooltip enabled={modified && !abPlaying}>
+                      {trigger}
+                    </PatchNavTooltip>
+                  )}
+                  onSelect={(next) => {
+                    if (busy || abPlaying) {
+                      return;
+                    }
+                    void session.setPatch(next);
+                  }}
+                />
+              </div>
               <PatchNavTooltip enabled={modified && !abPlaying}>
-                <span className="inline-flex">
+                <span className="inline-flex shrink-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     aria-label="Next patch"
                     disabled={busy || abPlaying}
-                    className={patchChipClass}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
                     onClick={() => void session.stepPatch(1)}
                   >
                     <ChevronRight />
@@ -769,59 +760,170 @@ export function PatchBar({
             </div>
           )}
         </AbSideLabel>
-      </TooltipProvider>
       {abOpen ? (
-        <div className={`flex items-center gap-1 ${patchClusterEnterClass}`}>
-          <div className="relative">
-            {abPlaying ? (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
-              >
-                <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
-                  {busy ? null : (
+        <div
+          className={`flex w-full flex-col gap-3 md:order-3 md:w-auto md:flex-row md:items-center md:gap-1 ${patchClusterEnterClass}`}
+        >
+          <div className="relative flex w-full items-center md:w-auto md:justify-center">
+            {/* Mobile seconds row + actions */}
+            <div className="flex w-full items-center gap-2 md:hidden">
+              <div className="flex min-w-0 items-center gap-2">
+                {abPlaying ? (
+                  <>
                     <div
-                      key={`${dwellEpoch}-${abActive ?? "a"}`}
-                      className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
-                        abActive === "b" ? "origin-right" : "origin-left"
-                      }`}
-                      style={{
-                        animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
-                      }}
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <div className="relative min-h-10 w-0.5 self-stretch overflow-hidden rounded-full bg-border">
+                        {busy ? null : (
+                          <div
+                            key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
+                            className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
+                              abActive === "b" ? "origin-bottom" : "origin-top"
+                            }`}
+                            style={{
+                              animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                            }}
+                          />
+                        )}
+                      </div>
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
+                    </div>
+                    <div
+                      aria-live="polite"
+                      aria-label="Seconds remaining"
+                      className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
+                    >
+                      {abCountdown ?? resolvedAbSeconds()}
+                    </div>
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <span className="invisible min-h-10 w-0.5 self-stretch" />
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
+                    </div>
+                    <AbSecondsField
+                      value={abSecondsText}
+                      onValueChange={setAbSecondsText}
+                      className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
                     />
-                  )}
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Close A/B test"
+                  className={`${patchChipClass} px-2.5`}
+                  onClick={closeAbSetup}
+                >
+                  <X className="size-3" />
+                  Close
+                </Button>
+                {abPlaying ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${patchChipClass} px-2.5`}
+                    aria-label="Stop"
+                    onClick={() => stopAbCycle()}
+                  >
+                    <Square className="size-3 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${
+                      abCompare === abSideA ? patchChipClass : abPlayReadyClass
+                    } px-2.5`}
+                    aria-label="Play"
+                    disabled={abCompare === abSideA}
+                    onClick={startAbCycle}
+                  >
+                    <Play className="size-3 fill-current" />
+                    Play
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Desktop seconds control */}
+            <div className="relative hidden md:block">
+              {abPlaying ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
+                >
+                  <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
+                    {busy ? null : (
+                      <div
+                        key={`${dwellEpoch}-${abActive ?? "a"}`}
+                        className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                          abActive === "b" ? "origin-right" : "origin-left"
+                        }`}
+                        style={{
+                          animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
-              >
-                Seconds
-              </span>
-            )}
-            {abPlaying ? (
-              <div
-                aria-live="polite"
-                aria-label="Seconds remaining"
-                className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
-              >
-                {abCountdown ?? resolvedAbSeconds()}
-              </div>
-            ) : (
-              <AbSecondsField
-                value={abSecondsText}
-                onValueChange={setAbSecondsText}
-                className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
-              />
-            )}
+              ) : (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+                >
+                  Seconds
+                </span>
+              )}
+              {abPlaying ? (
+                <div
+                  aria-live="polite"
+                  aria-label="Seconds remaining"
+                  className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
+                >
+                  {abCountdown ?? resolvedAbSeconds()}
+                </div>
+              ) : (
+                <AbSecondsField
+                  value={abSecondsText}
+                  onValueChange={setAbSecondsText}
+                  className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                />
+              )}
+            </div>
           </div>
-          <AbSideLabel label="B" show lit={abActive === "b"}>
+          <AbSideLabel
+            label="B"
+            show
+            lit={abActive === "b"}
+            railOnMobile
+            className="w-full md:w-auto"
+          >
             <PatchSelect
               patch={abCompare}
               patchNames={patchNames}
               disabled={abPlaying}
-              triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
               onSelect={(next) => {
                 setAbCompare(next);
               }}
@@ -832,7 +934,7 @@ export function PatchBar({
               type="button"
               variant="ghost"
               size="icon"
-              className={patchChipClass}
+              className={`hidden md:inline-flex ${patchChipClass}`}
               aria-label="Stop"
               onClick={() => stopAbCycle()}
             >
@@ -843,9 +945,9 @@ export function PatchBar({
               type="button"
               variant="ghost"
               size="icon"
-              className={
+              className={`hidden md:inline-flex ${
                 abCompare === abSideA ? patchChipClass : abPlayReadyClass
-              }
+              }`}
               aria-label="Play"
               disabled={abCompare === abSideA}
               onClick={startAbCycle}
@@ -855,9 +957,41 @@ export function PatchBar({
           )}
         </div>
       ) : null}
+      </div>
+      <div
+        className={`order-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:contents ${
+          abOpen ? "max-md:hidden" : ""
+        }`}
+      >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+            className={`md:order-1 ${patchChipClass}`}
+            onClick={abOpen ? closeAbSetup : openAbSetup}
+          >
+            {abOpen ? (
+              <X />
+            ) : (
+              <img
+                src={abCompareIcon}
+                alt=""
+                aria-hidden
+                className="size-3.5 dark:invert"
+              />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+        </TooltipContent>
+      </Tooltip>
       {abOpen ? null : (
-      <div className={`flex flex-wrap items-center gap-1 ${patchClusterEnterClass}`}>
-      <div className="flex items-center gap-1">
+      <div className={`contents md:order-4 md:flex md:flex-wrap md:items-center md:gap-1 ${patchClusterEnterClass}`}>
+      <div className="contents md:flex md:items-center md:gap-1">
         <Button
           type="button"
           variant="ghost"
@@ -968,6 +1102,8 @@ export function PatchBar({
       </div>
       )}
       </div>
+      </div>
+      </TooltipProvider>
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {

@@ -10,6 +10,7 @@ import type { LinkMode } from "@/device/link";
 import { displayModelName, type DeviceModel } from "@/device/models";
 import { isTauriRuntime } from "@/midi/detect";
 import type { MidiEndpoint } from "@/midi/types";
+import { isAndroidWeb } from "@/app/android-web";
 import {
   clearStartup,
   forgetPedal,
@@ -81,8 +82,11 @@ export function ConnectionStatus() {
   const navigate = useNavigate();
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
-  const { open, setOpen } = useConnectDialog();
-  const [linkTab, setLinkTab] = useState<LinkMode>("usb");
+  const { open, setOpen, registerConnectOpener } = useConnectDialog();
+  const androidWeb = isAndroidWeb();
+  const [linkTab, setLinkTab] = useState<LinkMode>(
+    androidWeb ? "bluetooth" : "usb",
+  );
   const [usbEndpoints, setUsbEndpoints] = useState<MidiEndpoint[]>([]);
   const [bleEndpoints, setBleEndpoints] = useState<BluetoothEndpoint[]>([]);
   const [preferences, setPreferences] = useState(readPreferences);
@@ -90,7 +94,8 @@ export function ConnectionStatus() {
   const [pending, setPending] = useState<LinkEndpoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const openOnTab = useRef<LinkMode>("usb");
+  const openOnTab = useRef<LinkMode>(androidWeb ? "bluetooth" : "usb");
+  const openDialogRef = useRef<() => void>(() => {});
   const dialogOpen = useRef(open);
   dialogOpen.current = open;
   const connected = snapshot.status === "connected";
@@ -131,7 +136,18 @@ export function ConnectionStatus() {
   }, [snapshot.status, setOpen]);
 
   useEffect(() => {
+    return registerConnectOpener(() => {
+      openDialogRef.current();
+    });
+  }, [registerConnectOpener]);
+
+  useEffect(() => {
     if (!open) {
+      return;
+    }
+    if (isAndroidWeb()) {
+      setLinkTab("bluetooth");
+      openOnTab.current = "bluetooth";
       return;
     }
     setLinkTab(openOnTab.current);
@@ -139,7 +155,7 @@ export function ConnectionStatus() {
   }, [open]);
 
   useEffect(() => {
-    if (session.getSnapshot().status !== "disconnected") {
+    if (isAndroidWeb() || session.getSnapshot().status !== "disconnected") {
       return;
     }
     const prefs = readPreferences();
@@ -314,8 +330,19 @@ export function ConnectionStatus() {
     }
   }
 
+  openDialogRef.current = () => {
+    const android = isAndroidWeb();
+    const tab: LinkMode = android ? "bluetooth" : "usb";
+    openOnTab.current = tab;
+    setLinkTab(tab);
+    setOpen(true);
+    if (android && session.getSnapshot().status !== "connected") {
+      void scanBluetooth(true);
+    }
+  };
+
   useEffect(() => {
-    if (!open || connected || linkTab !== "usb") {
+    if (!open || connected || linkTab !== "usb" || isAndroidWeb()) {
       return;
     }
     let cancelled = false;
@@ -458,7 +485,7 @@ export function ConnectionStatus() {
     try {
       await session.disconnect();
       setPending(null);
-      setLinkTab("usb");
+      setLinkTab(isAndroidWeb() ? "bluetooth" : "usb");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not disconnect.",
@@ -482,11 +509,9 @@ export function ConnectionStatus() {
         aria-label={connected ? `Connected to ${label}` : "Connect a pedal"}
         onClick={() => {
           navigate("/");
-          openOnTab.current = "usb";
-          setLinkTab("usb");
-          setOpen(true);
+          openDialogRef.current();
         }}
-        className={connected ? "gap-2.5" : undefined}
+        className={`h-8 px-3 text-sm md:h-7 md:px-2.5 md:text-[0.8rem]${connected ? " gap-2.5" : ""}`}
       >
         <span
           aria-hidden
@@ -536,6 +561,7 @@ export function ConnectionStatus() {
             />
           ) : (
             <ScanPanel
+              bluetoothOnly={androidWeb}
               linkTab={linkTab}
               onLinkTabChange={(value) => {
                 setError(null);
