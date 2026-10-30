@@ -853,7 +853,7 @@ export function ModuleAbBlock({
                 {renderPlayStop()}
               </div>
             </div>
-            <div className="w-full pt-7">{secondsDesktop}</div>
+            <div className="w-full pt-6">{secondsDesktop}</div>
           </div>
         </div>
       </TooltipProvider>
