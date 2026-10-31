@@ -30,7 +30,7 @@ import {
 import { modelById } from "@/device/catalog";
 import { userIrDisplayName } from "@/device/ir-names";
 import { type DeviceModel } from "@/device/models";
-import { userNsDisplayName } from "@/device/nam-names";
+import { userSnapDisplayName } from "@/device/nam-names";
 import {
   chainSlotLabel,
   type DeviceSession,
@@ -85,7 +85,7 @@ function customAssetsForDownload(session: DeviceSession): CustomAssetWarning | n
       irName = userIrDisplayName(model, snapshot.userIrNames);
     }
     if (model.userNsSlot !== undefined) {
-      nsName = userNsDisplayName(model, snapshot.userNsNames);
+      nsName = userSnapDisplayName(model, snapshot.userSnapSlots);
     }
   }
   if (irName === null && nsName === null) {

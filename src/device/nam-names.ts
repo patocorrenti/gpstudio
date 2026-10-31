@@ -64,6 +64,18 @@ export function userNsDisplayName(
   return dumped ? dumped : model.label;
 }
 
+/** Picker label for protocol indices 50–79. Same names the SnapTone modal lists. */
+export function userSnapDisplayName(
+  model: { label: string; userNsSlot?: number },
+  slots: readonly { name: string | null }[] | undefined,
+): string {
+  if (model.userNsSlot === undefined || model.userNsSlot < SNAP_PROTOCOL_FIRST) {
+    return model.label;
+  }
+  const dumped = slots?.[model.userNsSlot - SNAP_PROTOCOL_FIRST]?.name?.trim();
+  return dumped ? dumped : model.label;
+}
+
 function midiPayload(bytes: Uint8Array): Uint8Array {
   if (bytes.length >= 3 && bytes[0] === 0x80 && bytes[1] === 0x80 && bytes[2] === 0xf0) {
     return bytes.subarray(2);

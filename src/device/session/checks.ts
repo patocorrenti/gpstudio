@@ -863,11 +863,11 @@ async function assertUserNsSession(): Promise<void> {
     bluetooth.push(liveNsUserSnapTone());
     const afterLive = session.getSnapshot();
     const liveNs = afterLive.status === "connected" ? afterLive.chain.find((slot) => slot.id === "ns") : undefined;
-    if (liveNs?.modelId !== "ns-user-03") {
+    if (liveNs?.modelId !== "ns-user-58") {
       throw new Error("Bluetooth live user SnapTone notify must update NS like a factory SnapTone");
     }
     await session.setSlotModel("ns", "ns-14-dst");
-    await session.setSlotModel("ns", "ns-user-03");
+    await session.setSlotModel("ns", "ns-user-58");
     const factorySet = encodeSlotModel("bluetooth", "ns", [0x00, 0x00, 0x00, 0x0f]);
     const userSet = encodeSlotModel("bluetooth", "ns", [0x3a, 0x00, 0x00, 0x0f]);
     const last = bluetooth.sent[bluetooth.sent.length - 1];
@@ -880,10 +880,10 @@ async function assertUserNsSession(): Promise<void> {
       factorySet[0].length !== userSet[0].length ||
       userSet[0].length > 80 ||
       !packetsEqual(last, userSet[0]) ||
-      selectedNs?.modelId !== "ns-user-03" ||
+      selectedNs?.modelId !== "ns-user-58" ||
       namCount() !== 1
     ) {
-      throw new Error("Selecting SnapTone 03 must send the existing model SET and no SnapTone file");
+      throw new Error("Selecting SnapTone 58 must send the existing model SET and no SnapTone file");
     }
     await session.setPatch(1);
     const afterPatch = session.getSnapshot();
