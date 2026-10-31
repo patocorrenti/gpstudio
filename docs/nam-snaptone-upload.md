@@ -144,7 +144,7 @@ DeviceSession     manda esos bytes al slot elegido
 - Si el puerto MIDI está ocupado, sugerir cerrar Valeton Suite.
 - Textos de UI en inglés, siguiendo el tono que ya tiene la app.
 
-**Fuera de alcance** en esta tarea, salvo que salga casi gratis: subir IRs de gabinete, borrar slots, buscar en TONE3000, preview de audio del NAM, barrer patches para ver cuáles usan un slot.
+**Fuera de alcance** en esta tarea, salvo que salga casi gratis: subir IRs de gabinete, borrar slots (el comando y el tamaño del cuerpo están en `src/snaptone/RESEARCH.md`, sección 9; no está implementado), buscar en TONE3000, preview de audio del NAM, barrer patches para ver cuáles usan un slot.
 
 ## Fases
 

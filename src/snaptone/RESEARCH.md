@@ -112,6 +112,55 @@ Same SnapTone file and same upload command.
 - Differences that do **not** change the blob: preset body length (466 vs 511, `session.mjs` lines 261–263), `.prst` size (507 vs 552, `README.md` line 422), and GP-50-only preset commands (`session.mjs` lines 13–15). None of those run during a SnapTone upload.
 - `device` on `convertNamToSnapTone` can be dropped for this change. GP-5 and GP-50 blobs match.
 
+## 9. Deleting a user SnapTone
+
+VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. Suite 1.1.2 does send one. The sizes below come from that binary. They are not a pedal capture, and they are not a guess to put on the wire.
+
+Binary: Valeton Suite 1.1.2 for Android, `lib/arm64-v8a/libapp.so`. Addresses are file offsets.
+
+The send epilogue is the same call as import: `movz x2, #cmd`, then `bl 0x620900`. `x2` is only the function code. The set kind `0x11` is added by that sender, as it is for `0x25`. Sites in this binary:
+
+- `0x21` import IR at `0x6955c4`
+- `0x22` delete IR at `0x694528`
+- `0x25` import SnapTone at `0x6929f8`
+- `0x26` delete SnapTone at `0x691538`
+- `0x27` rename SnapTone at `0x691010`
+- `0x46` delete preset at `0x6e028c`
+
+How a body is sized. Each field is a descriptor (`bl 0x6245c0`), a length stored at descriptor +7, and a data pointer at +19. `bl 0x37e898` concatenates those fields, then the send runs. Import stores lengths 4, 4, 16, 16, 32, then the file length. That is the known body from section 5: `nId` u32, `fxId` u32, name[16], node[16], `fPara`[32], file[2696]. The first of those 4-byte descriptors points at `w31` (the zero register), which is `nId = 0`. Delete preset stores one length, 4, after copying 4 bytes: the slot as a u32.
+
+Delete SnapTone (inner function `0x6913d8`) stores two lengths, in this order:
+
+- 4 bytes (`movz x0, #0x4` at `0x6914d0`)
+- 16 bytes (`movz x0, #0x10` at `0x691508`)
+
+Delete IR stores the same pair (`0x6944c0` and `0x6944f8`) under command `0x22`.
+
+The field bytes are 20. With the set kind and the function code in front, the logical payload is `[0x11, 0x26]` plus those 20 bytes, 22 bytes total. The 19-byte frame cap from section 5 splits that into two frames, 19 then 3. ACK, resend, and the 20 ms gap are the same send path as section 5.
+
+What the two fields are, as far as the descriptors show:
+
+- The 4-byte field is a live value, the second argument of `deleteTC`. It is not the hard-coded zero `nId`. It has the same width as import's `fxId` and as delete-preset's slot word.
+- The 16-byte field is a runtime buffer, the first argument of `deleteTC` after the bytes helper at `0x3ce5f8`. Import's zeroed node is not built that way. The width is the name field (`NAME_FIELD`, 16).
+
+Not on the wire:
+
+- `movz x2, #0x8` and `bl 0x94e43c` at `0x6914a4` copy 8 bytes into the builder object. There is no third descriptor for that copy.
+- `movz x1, #0xa` at `0x6912ec` is stored on a model object and then taken down the UI path (`bl 0x5c1a04`, branch to `0x39725c`). It is not a chunk length. Ten is also `NAME_MAX`; that does not make it a payload byte.
+
+Still open, until a MIDI capture of Suite deleting one user slot:
+
+- The integer in the 4 bytes. Import addresses a SnapTone as `fxId = 0x0f000000 + slot` and sends `nId` 0. Delete preset addresses a preset as the raw slot u32. Either integer fits this descriptor.
+- The 16 bytes. The width and the runtime source say the name field. They may be the slot's current name, or 16 zeros.
+
+Do not send `0x26` until those two are read off the wire. A wrong body already wedged a pedal once.
+
+Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x26`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
+
+USB only, for the same reason as section 7: this send is the USB SysEx path.
+
+When the two fields are known, a delete matches the upload gate. USB, user slots 50–79 only, the same ACK and resend limits, then read `0x24` again. The slot is clear only when its flag is not 0. The name the pedal leaves behind is not specified; do not assume it becomes `"Empty"`.
+
 ## Decision 1
 
 Two gates tripped. Delta specs for `device-connection` and `live-controller` were updated. Section 2 does not start until that summary is accepted.
@@ -127,6 +176,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - VLTN's `isEmptySlot` (`app/src/shared/tone3000.ts` lines 167–184) treats `""` as empty, which disagrees with the flag and with the GP-5 model picker. The flag is the one marked verified on hardware. Follow the flag.
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
 - The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
+- SnapTone delete is command `0x26` with a 4-byte field and then 16 bytes (section 9). Which integer is in the 4 bytes, and whether the 16 bytes are the current name or zeros, needs a capture of Suite deleting one user slot. Until then the command is not sent.
 
 ## Golden compare
 
