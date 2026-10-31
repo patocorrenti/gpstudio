@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Save, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
+import { AudioLines, ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Save, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +42,7 @@ import {
 import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { useAbCycleClaim } from "@/features/controller/AbCycleClaim";
+import { SnapToneDialog } from "@/features/controller/SnapToneDialog";
 import { AbSideLabel } from "@/features/controller/AbSideLabel";
 import {
   AB_SECONDS_DEFAULT,
@@ -164,7 +165,10 @@ function savePatchWithToast(
       if (before) {
         await before();
       }
-      await session.savePatch();
+      const saved = await session.savePatch();
+      if (saved === "busy") {
+        throw new Error("The pedal is busy.");
+      }
     }),
     {
       loading: "Saving patch…",
@@ -242,6 +246,7 @@ export function PatchBar({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [snapOpen, setSnapOpen] = useState(false);
   const [abOpen, setAbOpen] = useState(false);
   const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
   const [abSideA, setAbSideA] = useState(0);
@@ -1084,6 +1089,19 @@ export function PatchBar({
               <Upload className={patchActionIconClass} />
               Upload
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+              onClick={() => {
+                setOptionsOpen(false);
+                setSnapOpen(true);
+              }}
+            >
+              <AudioLines className={patchActionIconClass} />
+              SnapTones
+            </Button>
           </PopoverContent>
         </Popover>
         <input
@@ -1104,6 +1122,7 @@ export function PatchBar({
       </div>
       </div>
       </TooltipProvider>
+      <SnapToneDialog open={snapOpen} onOpenChange={setSnapOpen} session={session} />
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {

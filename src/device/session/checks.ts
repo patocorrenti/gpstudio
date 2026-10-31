@@ -7,6 +7,13 @@ import { decodePrstFile, encodePrstFile } from "@/device/patch-store";
 import { GP5_TOB_PRST_HEX, GP50_TOB_PRST_HEX } from "@/device/prst-tob-fixtures";
 import { planUploadedPatch } from "@/device/session/patch-io";
 import { CHAIN_TIMEOUT_MS, DeviceSession } from "./device-session";
+import "@/snaptone/golden";
+import {
+  SNAP_FILE_BYTES,
+  encodeSnapImportFrames,
+  encodeSnapPayload,
+  parseSnapSysex,
+} from "@/device/snaptone-table";
 import type { MidiTransport } from "@/midi/types";
 import type { EffectId } from "@/device/chain";
 import {
@@ -1842,6 +1849,228 @@ async function assertSilentNameListFailsConnect(): Promise<void> {
 }
 
 void assertSilentNameListFailsConnect().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+function snapAckFrame(): Uint8Array {
+  const frame = encodeSnapPayload(Uint8Array.from([0x14, 0x08, 0x00]))[0];
+  if (!frame) {
+    throw new Error("SnapTone ACK frame is missing");
+  }
+  return frame;
+}
+
+function snapUserTable(slot: number, name: string): Uint8Array[] {
+  const flags = new Uint8Array(80);
+  flags.fill(1);
+  flags[slot] = 0;
+  const names = new Uint8Array(80 * 16);
+  const label = new TextEncoder().encode(name);
+  names.set(label.subarray(0, 16), slot * 16);
+  const payload = new Uint8Array(2 + flags.length + names.length);
+  payload[0] = 0x12;
+  payload[1] = 0x24;
+  payload.set(flags, 2);
+  payload.set(names, 2 + flags.length);
+  return encodeSnapPayload(payload);
+}
+
+function isSnapTableRequest(bytes: Uint8Array): boolean {
+  const frame = parseSnapSysex(bytes);
+  return Boolean(
+    frame?.crcOk && frame.total === 1 && frame.payload[0] === 0x12 && frame.payload[1] === 0x24,
+  );
+}
+
+async function assertSnapToneUpload(): Promise<void> {
+  const file = new Uint8Array(SNAP_FILE_BYTES);
+  file.set([0x56, 0x54, 0x53, 0x49], 0);
+  let refused = false;
+  try {
+    encodeSnapImportFrames(49, "NewAmp", file);
+  } catch {
+    refused = true;
+  }
+  if (!refused) {
+    throw new Error("Factory slot 49 must be refused before any byte");
+  }
+  const preview = encodeSnapImportFrames(52, "New Amp!", file);
+  if (preview.length !== 146) {
+    throw new Error("A SnapTone file must use 146 frames");
+  }
+  const first = parseSnapSysex(preview[0] ?? new Uint8Array());
+  const last = parseSnapSysex(preview[145] ?? new Uint8Array());
+  if (
+    !first?.crcOk ||
+    first.payload.length !== 19 ||
+    first.payload[0] !== 0x11 ||
+    first.payload[1] !== 0x25 ||
+    first.payload[6] !== 0x34 ||
+    !last?.crcOk ||
+    last.payload.length !== 15 ||
+    preview.some((frame) => {
+      const parsed = parseSnapSysex(frame);
+      return !parsed?.crcOk || parsed.payload.length > 19 || (parsed.payload[0] === 0xb0 && parsed.payload[1] === 0x00);
+    }) ||
+    preview.some((frame) => frame[0] === 0xb0 && frame[1] === 0x00)
+  ) {
+    throw new Error("SnapTone frames must be checksummed 19-byte chunks without patch recall");
+  }
+
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(bleSession, bluetooth, 0);
+    const bleSnap = bleSession.getSnapshot();
+    const sentBefore = bluetooth.sent.length;
+    if (bleSnap.status !== "connected" || bleSnap.snapFileLink) {
+      throw new Error("Bluetooth must report that it cannot accept a SnapTone file");
+    }
+    const blocked = await bleSession.uploadUserSnapTone(52, "NewAmp", file);
+    if (blocked.ok || blocked.reason !== "link" || bluetooth.sent.length !== sentBefore) {
+      throw new Error("Bluetooth must not send a SnapTone file");
+    }
+  } finally {
+    await bleSession.disconnect();
+  }
+
+  const sent: Uint8Array[] = [];
+  let handler: ((bytes: Uint8Array) => void) | null = null;
+  let open = false;
+  let releaseAcks = false;
+  let held = false;
+  const usb = {
+    sent,
+    release() {
+      releaseAcks = true;
+      if (held) {
+        held = false;
+        handler?.(snapAckFrame());
+      }
+    },
+    push(bytes: Uint8Array) {
+      handler?.(bytes);
+    },
+    transport: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes: Uint8Array) => {
+        sent.push(Uint8Array.from(bytes));
+        const frame = parseSnapSysex(bytes);
+        if (!frame?.crcOk) {
+          return;
+        }
+        if (isSnapTableRequest(bytes)) {
+          for (const part of snapUserTable(52, "NewAmp")) {
+            handler?.(part);
+          }
+          return;
+        }
+        if (frame.total > 1) {
+          if (releaseAcks) {
+            handler?.(snapAckFrame());
+          } else {
+            held = true;
+          }
+        }
+      },
+      subscribe: (next: (bytes: Uint8Array) => void) => {
+        handler = next;
+        return () => {
+          if (handler === next) {
+            handler = null;
+          }
+        };
+      },
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      close: async () => {
+        open = false;
+      },
+      sysexEnabled: () => true,
+    },
+  };
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  session.setSnapPaceForTests(0, 0, 40);
+  try {
+    const connecting = session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+    await untilReady("SnapTone fixture did not ask for names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await connecting;
+    await untilReady("SnapTone fixture did not ask for current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(0));
+    await untilReady("SnapTone fixture did not become ready", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      usb.push(packet);
+    }
+    await untilReady("SnapTone fixture chain did not go idle", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    const before = usb.sent.length;
+    const patchBefore = session.getSnapshot();
+    const factory = await session.uploadUserSnapTone(10, "NewAmp", file);
+    if (factory.ok || factory.reason !== "factory" || usb.sent.length !== before) {
+      throw new Error("A factory slot must be refused before any byte");
+    }
+    const pending = session.uploadUserSnapTone(52, "New Amp!", file);
+    const during = session.getSnapshot();
+    if (
+      during.status !== "connected" ||
+      !during.snapFileSend ||
+      during.chainSync === "syncing" ||
+      during.patch !== (patchBefore.status === "connected" ? patchBefore.patch : -1)
+    ) {
+      throw new Error("A SnapTone send must not look like a chain refresh or change the patch");
+    }
+    const saved = await session.savePatch();
+    if (saved !== "busy") {
+      throw new Error("Save during a SnapTone send must return busy");
+    }
+    usb.release();
+    const result = await pending;
+    if (!result.ok || result.name !== "NewAmp") {
+      throw new Error("The refreshed slot name must match the submitted name");
+    }
+    const after = session.getSnapshot();
+    const importFrames = usb.sent.slice(before).filter((bytes) => {
+      const frame = parseSnapSysex(bytes);
+      return Boolean(frame?.crcOk && frame.total > 1);
+    });
+    const tables = usb.sent.slice(before).filter(isSnapTableRequest);
+    if (
+      after.status !== "connected" ||
+      after.chainSync === "syncing" ||
+      after.userSnapSlots[2]?.name !== "NewAmp" ||
+      after.userSnapSlots[2]?.flag !== 0 ||
+      after.patch !== (patchBefore.status === "connected" ? patchBefore.patch : -1) ||
+      importFrames.length !== 146 ||
+      tables.length !== 1 ||
+      importFrames.some((frame) => frame[0] === 0xb0 && frame[1] === 0x00)
+    ) {
+      throw new Error("A finished SnapTone write must checksum 146 frames and read the slot table once");
+    }
+    const tablesAfterWrite = tables.length;
+    void session.setPatch(1).catch(() => undefined);
+    await tick();
+    await tick();
+    if (usb.sent.filter(isSnapTableRequest).length !== tablesAfterWrite) {
+      throw new Error("A patch change must not request the SnapTone table again");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertSnapToneUpload().catch((error) => {
   console.error(error);
   throw error;
 });

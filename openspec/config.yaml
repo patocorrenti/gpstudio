@@ -45,8 +45,11 @@ context: |
   ignored; no pitch UI; patch change turns it off when it was on)
   are in scope on USB and Bluetooth. USB must not apply unsolicited live
   assignment reports or live stomp reports. Library SysEx (browse / import / reorder),
-  IR/NAM file upload (name reads for IR and SnapTone are in scope), and the
-  Editor route come in later phases.
+  IR file upload and A1 SnapTone captures (name reads for IR and SnapTone stay
+  in scope), and the Editor route come in later phases. A2 SnapTone file
+  upload is in scope: `src/snaptone/` converts the capture and the session
+  owns the USB write to protocol slots 50–79. Copied third-party SysEx stays
+  forbidden.
 
   Tech stack:
   - UI: Vite + React + TypeScript + Tailwind + shadcn (from scaffold)
@@ -218,7 +221,7 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot from either
     model are in scope; not the Library route)
-  - IR / SnapTone / NAM file upload (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope)
+  - IR file upload and A1 SnapTone captures (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). A2 SnapTone file upload is in scope via session-owned USB SysEx and `src/snaptone/` conversion. Copied third-party SysEx stays forbidden.
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
     live-module SysEx, Stomp

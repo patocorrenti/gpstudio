@@ -142,9 +142,8 @@ function concatPayloads(payloads: Uint8Array[]): Uint8Array {
 }
 
 function parseUserNsNames(payloads: Uint8Array[]): (string | null)[] | null {
-  const merged = concatPayloads(payloads);
-  const tableEnd = NAM_NAME_ORIGIN + DUMP_NAME_COUNT * NAM_NAME_STRIDE;
-  if (merged.length < tableEnd) {
+  const merged = mergedNamTable(payloads);
+  if (!merged) {
     return null;
   }
   const names = emptyUserNsNames();
@@ -155,11 +154,41 @@ function parseUserNsNames(payloads: Uint8Array[]): (string | null)[] | null {
   return names;
 }
 
+/** Protocol indices 50–79 from the same eighty-name table. Indices 56–79 stay on `userNsNames`. */
+const SNAP_PROTOCOL_FIRST = 50;
+const SNAP_PROTOCOL_COUNT = 30;
+
+function mergedNamTable(payloads: Uint8Array[]): Uint8Array | null {
+  const merged = concatPayloads(payloads);
+  const tableEnd = NAM_NAME_ORIGIN + DUMP_NAME_COUNT * NAM_NAME_STRIDE;
+  return merged.length < tableEnd ? null : merged;
+}
+
+export function emptySnapProtocolNames(): (string | null)[] {
+  return Array.from({ length: SNAP_PROTOCOL_COUNT }, () => null);
+}
+
+function parseSnapProtocolNames(payloads: Uint8Array[]): (string | null)[] | null {
+  const merged = mergedNamTable(payloads);
+  if (!merged) {
+    return null;
+  }
+  const names = emptySnapProtocolNames();
+  for (let index = 0; index < SNAP_PROTOCOL_COUNT; index += 1) {
+    const protocol = SNAP_PROTOCOL_FIRST + index;
+    names[index] = decodeNamName(merged, NAM_NAME_ORIGIN + protocol * NAM_NAME_STRIDE);
+  }
+  return names;
+}
+
 export class NamNameDecoder {
   private fragments = new Map<number, Uint8Array>();
+  /** Names for protocol indices 50–79 from the last complete dump. */
+  snapProtocolNames: (string | null)[] | null = null;
 
   reset(): void {
     this.fragments.clear();
+    this.snapProtocolNames = null;
   }
 
   push(bytes: Uint8Array): (string | null)[] | null {
@@ -174,7 +203,9 @@ export class NamNameDecoder {
     }
     const entries = [...this.fragments.entries()].sort((left, right) => left[0] - right[0]);
     this.fragments.clear();
-    return parseUserNsNames(entries.map((entry) => entry[1]));
+    const payloads = entries.map((entry) => entry[1]);
+    this.snapProtocolNames = parseSnapProtocolNames(payloads);
+    return parseUserNsNames(payloads);
   }
 }
 

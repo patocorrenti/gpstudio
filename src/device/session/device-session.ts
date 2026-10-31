@@ -27,6 +27,27 @@ import {
 import { emptyUserIrNames, IrNameDecoder } from "@/device/ir-names";
 import { emptyUserNsNames, NamNameDecoder } from "@/device/nam-names";
 import {
+  decodeUserSnapTable,
+  emptySnapSlots,
+  encodeSnapImportFrames,
+  encodeSnapTableRequest,
+  factorySnapToneLabels as factorySnapLabels,
+  parseSnapSysex,
+  sanitizeSnapToneName,
+  SNAP_FILE_BYTES,
+  SnapPayloadReassembler,
+  USER_SNAP_FIRST,
+  type SnapSlot,
+} from "@/device/snaptone-table";
+import { inspectNam as inspectNamFile, type NamInspection } from "@/snaptone/inspect";
+import { convertNamToSnapTone as convertNamFile } from "@/snaptone/convert";
+import {
+  sendSnapFrames,
+  SNAP_ACK_MS,
+  SNAP_FRAME_GAP_MS,
+  SNAP_LEAD_MS,
+} from "@/device/session/snaptone-upload";
+import {
   emptyGp50Globals,
   emptyGp5Globals,
   GlobalsDumpDecoder,
@@ -137,6 +158,15 @@ export type UploadPatchPreview =
 export type UploadPatchResult =
   | { ok: true; omissions: OmittedFactoryModel[] }
   | { ok: false; reason: "invalid" | "busy" | "disconnected" };
+export type SnapUploadResult =
+  | { ok: true; name: string }
+  | {
+      ok: false;
+      reason: "busy" | "disconnected" | "link" | "factory" | "verify" | "cancelled" | "closed" | "port";
+      /** True once any file byte was written. The slot is unknown until names are read again. */
+      sent?: boolean;
+    };
+export type { NamInspection, SnapSlot };
 export type { OmittedFactoryModel };
 
 export type SessionSnapshot =
@@ -149,6 +179,12 @@ export type SessionSnapshot =
       patchNames: (string | null)[];
       userIrNames: (string | null)[];
       userNsNames: (string | null)[];
+      /** Protocol indices 50–79. Flag 0 holds a capture, including a blank name. */
+      userSnapSlots: SnapSlot[];
+      /** A SnapTone file write is in progress. This is not a chain refresh. */
+      snapFileSend: boolean;
+      /** USB can accept a SnapTone file. Bluetooth cannot. */
+      snapFileLink: boolean;
       /** Device globals for the connected model. Null only while disconnected. */
       globals: DeviceGlobals | null;
       chain: AudioChain;
@@ -192,6 +228,15 @@ export class DeviceSession {
   private readonly chainDump = new ChainDecoder();
   private readonly irNames = new IrNameDecoder();
   private readonly namNames = new NamNameDecoder();
+  private readonly snapReassembler = new SnapPayloadReassembler();
+  private snapAck: ((accepted: boolean) => void) | null = null;
+  private snapTableWait: ((slots: SnapSlot[] | null) => void) | null = null;
+  private snapCollecting = false;
+  private snapTableReady = false;
+  private snapTableConnectSent = false;
+  private snapLeadMs = SNAP_LEAD_MS;
+  private snapGapMs = SNAP_FRAME_GAP_MS;
+  private snapAckMs = SNAP_ACK_MS;
   private readonly globalsDump = new GlobalsDumpDecoder();
   private readonly sysex = new SysexAssembler();
   private syncGeneration = 0;
@@ -280,6 +325,13 @@ export class DeviceSession {
     this.nameTimeoutMsOverride = next;
   }
 
+  /** Shortens the USB file-send pauses so the mock-link check can finish. */
+  setSnapPaceForTests(leadMs: number, gapMs: number, ackMs: number): void {
+    this.snapLeadMs = leadMs;
+    this.snapGapMs = gapMs;
+    this.snapAckMs = ackMs;
+  }
+
   getInboundLog(): InboundMidiEvent[] {
     return this.inboundLog;
   }
@@ -355,6 +407,9 @@ export class DeviceSession {
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
         userNsNames: emptyUserNsNames(),
+        userSnapSlots: emptySnapSlots(),
+        snapFileSend: false,
+        snapFileLink: false,
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         stomps: emptyStomps(model),
@@ -377,6 +432,9 @@ export class DeviceSession {
         patchNames: emptyPatchNames(),
         userIrNames: emptyUserIrNames(),
         userNsNames: emptyUserNsNames(),
+        userSnapSlots: emptySnapSlots(),
+        snapFileSend: false,
+        snapFileLink: true,
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
         chain: defaultChain(model),
         stomps: emptyStomps(model),
@@ -431,7 +489,10 @@ export class DeviceSession {
       throw new Error("Patch control is not available on this link.");
     }
     // No second app recall or dump ask while a dump or confirmation is in flight.
-    if (this.snapshot.sync === "ready" && this.snapshot.chainSync === "syncing") {
+    if (
+      this.snapshot.snapFileSend ||
+      (this.snapshot.sync === "ready" && this.snapshot.chainSync === "syncing")
+    ) {
       return;
     }
     const next = clampPatch(patch);
@@ -469,17 +530,18 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     await this.setPatch(wrapPatch(this.snapshot.patch + delta));
   }
 
-  async savePatch(): Promise<void> {
-    if (this.snapshot.status !== "connected") {
-      return;
+  async savePatch(): Promise<"saved" | "busy"> {
+    if (this.snapshot.status !== "connected" || this.writesBlocked()) {
+      return "busy";
     }
     await this.storePatch(this.snapshot.patch, this.snapshot.patchNames[this.snapshot.patch] ?? "");
+    return this.snapshot.status === "connected" ? "saved" : "busy";
   }
 
   async renamePatch(name: string): Promise<void> {
@@ -504,7 +566,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return null;
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return null;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -569,7 +631,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return { ok: false, reason: "disconnected" };
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return { ok: false, reason: "busy" };
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -619,7 +681,7 @@ export class DeviceSession {
     if (id === "exp" && this.snapshot.model !== "gp50") {
       return;
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -641,7 +703,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -669,7 +731,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -687,7 +749,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -720,7 +782,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -774,7 +836,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -819,7 +881,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -872,7 +934,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -895,7 +957,7 @@ export class DeviceSession {
     if (this.snapshot.model !== "gp50") {
       return;
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -1190,6 +1252,9 @@ export class DeviceSession {
       return;
     }
     for (const message of this.sysex.push(bytes)) {
+      if (this.noteSnapFrame(message)) {
+        continue;
+      }
       this.noteRecallAck(message);
       const liveVolume = applyLivePatchVolume(host, message);
       const liveOnOff = applyLiveModule(host, message);
@@ -1417,8 +1482,19 @@ export class DeviceSession {
     if (!names || this.snapshot.status !== "connected") {
       return;
     }
-    this.snapshot = { ...this.snapshot, userNsNames: names };
+    const snapNames = this.namNames.snapProtocolNames;
+    const userSnapSlots =
+      this.snapTableReady || !snapNames
+        ? this.snapshot.userSnapSlots
+        : snapNames.map((name) => ({
+            name,
+            flag: name === null ? null : name === "Empty" ? 1 : 0,
+          }));
+    this.snapshot = { ...this.snapshot, userNsNames: names, userSnapSlots };
     this.emitSnapshot();
+    if (this.snapshot.linkMode === "usb") {
+      void this.sendSnapTableConnectOnce();
+    }
   }
 
   private clearNamAsk(): void {
@@ -1758,6 +1834,7 @@ export class DeviceSession {
     this.releaseWaiters(this.namesWaiters);
     this.releaseWaiters(this.patchWaiters);
     this.releaseWaiters(this.chainWaiters);
+    this.failSnapWaiters();
   }
 
   private dropPatchDump(): void {
@@ -1851,7 +1928,7 @@ export class DeviceSession {
     if (this.snapshot.status !== "connected") {
       return;
     }
-    if (this.snapshot.sync !== "ready" || this.snapshot.chainSync === "syncing") {
+    if (this.writesBlocked()) {
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -1914,6 +1991,270 @@ export class DeviceSession {
       return;
     }
     this.writes.queuePatchWrite(key, value, flush);
+  }
+
+  private writesBlocked(): boolean {
+    if (this.snapshot.status !== "connected") {
+      return true;
+    }
+    return (
+      this.snapshot.sync !== "ready" ||
+      this.snapshot.chainSync === "syncing" ||
+      this.snapshot.snapFileSend
+    );
+  }
+
+  inspectNam(file: ArrayBuffer): Promise<NamInspection> {
+    return inspectNamFile(file);
+  }
+
+  convertNamToSnapTone(
+    file: ArrayBuffer,
+    onProgress?: (fraction: number) => void,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array> {
+    return convertNamFile(file, onProgress, signal);
+  }
+
+  /** Factory NS labels for protocol indices 0–49. The modal reads these from the session. */
+  factorySnapToneLabels(): string[] {
+    if (this.snapshot.status !== "connected") {
+      return [];
+    }
+    return factorySnapLabels(this.snapshot.model);
+  }
+
+  async uploadUserSnapTone(
+    slot: number,
+    name: string,
+    file: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<SnapUploadResult> {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    if (this.writesBlocked()) {
+      return { ok: false, reason: "busy" };
+    }
+    if (!this.snapshot.snapFileLink) {
+      return { ok: false, reason: "link" };
+    }
+    if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_FIRST + 29) {
+      return { ok: false, reason: "factory" };
+    }
+    if (file.length !== SNAP_FILE_BYTES) {
+      return { ok: false, reason: "verify" };
+    }
+    let frames: Uint8Array[];
+    try {
+      frames = encodeSnapImportFrames(slot, name, file);
+    } catch {
+      return { ok: false, reason: "factory" };
+    }
+    const storedName = sanitizeSnapToneName(name);
+    this.snapshot = { ...this.snapshot, snapFileSend: true };
+    this.emitSnapshot();
+    try {
+      const status = await sendSnapFrames({
+        frames,
+        send: (frame) => this.sendSnapFrame(frame),
+        waitAck: () => this.waitSnapAck(this.snapAckMs, signal),
+        delay: (ms) => this.delay(ms),
+        aborted: () => signal?.aborted === true,
+        stillOpen: () => this.linkIsOpen(),
+        leadMs: this.snapLeadMs,
+        gapMs: this.snapGapMs,
+      });
+      if (status.status !== "sent") {
+        if ((status.status === "cancelled" || status.status === "closed") && status.sent) {
+          this.forgetSnapSlot(slot);
+        }
+        return { ok: false, reason: status.status, sent: status.sent };
+      }
+      const verified = await this.verifySnapSlot(slot, storedName);
+      return verified
+        ? { ok: true, name: storedName }
+        : { ok: false, reason: "verify" };
+    } finally {
+      if (this.snapshot.status === "connected" && this.snapshot.snapFileSend) {
+        this.snapshot = { ...this.snapshot, snapFileSend: false };
+        this.emitSnapshot();
+      }
+    }
+  }
+
+  private async sendSnapFrame(bytes: Uint8Array): Promise<"ok" | "port" | "closed"> {
+    if (!this.linkIsOpen() || this.snapshot.status !== "connected" || this.snapshot.linkMode !== "usb") {
+      return "closed";
+    }
+    try {
+      await this.transport.send(bytes);
+      return "ok";
+    } catch {
+      return "port";
+    }
+  }
+
+  private waitSnapAck(timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (accepted: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        if (this.snapAck === onAck) {
+          this.snapAck = null;
+        }
+        resolve(accepted);
+      };
+      const onAbort = () => finish(false);
+      const onAck = (accepted: boolean) => finish(accepted);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      signal?.addEventListener("abort", onAbort);
+      this.snapAck = onAck;
+    });
+  }
+
+  private noteSnapFrame(message: Uint8Array): boolean {
+    const frame = parseSnapSysex(message);
+    if (!frame?.crcOk) {
+      return false;
+    }
+    const kind = frame.payload[0];
+    if (frame.total === 1 && (kind === 0x14 || kind === 0x13)) {
+      if (!this.snapAck) {
+        return false;
+      }
+      const resolve = this.snapAck;
+      this.snapAck = null;
+      resolve(frame.payload[2] === 0);
+      return true;
+    }
+    const startsTable = frame.index === 0 && kind === 0x12 && frame.payload[1] === 0x24;
+    if (!startsTable && !this.snapCollecting) {
+      return false;
+    }
+    if (startsTable) {
+      this.snapCollecting = true;
+    }
+    const payload = this.snapReassembler.push(frame);
+    if (!payload) {
+      return true;
+    }
+    this.snapCollecting = false;
+    const slots = decodeUserSnapTable(payload);
+    if (slots) {
+      this.applySnapSlots(slots);
+    }
+    return true;
+  }
+
+  private applySnapSlots(slots: SnapSlot[]): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    this.snapTableReady = true;
+    this.snapshot = { ...this.snapshot, userSnapSlots: slots };
+    this.emitSnapshot();
+    const waiting = this.snapTableWait;
+    this.snapTableWait = null;
+    waiting?.(slots);
+  }
+
+  private forgetSnapSlot(slot: number): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const index = slot - USER_SNAP_FIRST;
+    if (index < 0 || index >= this.snapshot.userSnapSlots.length) {
+      return;
+    }
+    const userSnapSlots = this.snapshot.userSnapSlots.map((entry, entryIndex) =>
+      entryIndex === index ? { name: null, flag: null } : entry,
+    );
+    this.snapshot = { ...this.snapshot, userSnapSlots };
+    this.emitSnapshot();
+  }
+
+  private failSnapWaiters(): void {
+    this.snapCollecting = false;
+    this.snapTableReady = false;
+    this.snapTableConnectSent = false;
+    this.snapReassembler.reset();
+    const ack = this.snapAck;
+    this.snapAck = null;
+    ack?.(false);
+    const table = this.snapTableWait;
+    this.snapTableWait = null;
+    table?.(null);
+  }
+
+  private async sendSnapTableConnectOnce(): Promise<void> {
+    if (
+      this.snapshot.status !== "connected" ||
+      this.snapshot.linkMode !== "usb" ||
+      this.snapTableConnectSent
+    ) {
+      return;
+    }
+    this.snapTableConnectSent = true;
+    await this.sendBytes(encodeSnapTableRequest());
+  }
+
+  private readSnapTable(): Promise<SnapSlot[] | null> {
+    if (this.snapshot.status !== "connected" || this.snapshot.linkMode !== "usb") {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (slots: SnapSlot[] | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (this.snapTableWait === onTable) {
+          this.snapTableWait = null;
+        }
+        resolve(slots);
+      };
+      const onTable = (slots: SnapSlot[] | null) => finish(slots);
+      const timer = setTimeout(() => finish(null), 2_500);
+      this.snapTableWait = onTable;
+      void this.sendBytes(encodeSnapTableRequest()).then(() => {
+        if (this.snapshot.status !== "connected") {
+          finish(null);
+        }
+      });
+    });
+  }
+
+  private async verifySnapSlot(slot: number, name: string): Promise<boolean> {
+    let read = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) {
+        await this.delay(500);
+      }
+      if (this.snapshot.status !== "connected") {
+        return false;
+      }
+      const slots = await this.readSnapTable();
+      if (!slots) {
+        continue;
+      }
+      read = true;
+      const entry = slots[slot - USER_SNAP_FIRST];
+      if (entry?.flag === 0 && entry.name === name) {
+        return true;
+      }
+    }
+    if (!read) {
+      this.forgetSnapSlot(slot);
+    }
+    return false;
   }
 
   private isCurrentGeneration(generation: number): boolean {
