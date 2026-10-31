@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -15,7 +15,7 @@ import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/
 const UNKNOWN_SLOT = "This slot is unknown until SnapTone names are read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
 
-type Phase = "ready" | "ask" | "converting" | "sending" | "done" | "error";
+type Phase = "ready" | "ask" | "converting" | "sending" | "error";
 
 type Draft = {
   slot: number;
@@ -35,6 +35,14 @@ function slotLabel(name: string | null, protocol: number): string {
   return name && name.length > 0 ? name : `SnapTone ${protocol}`;
 }
 
+function SlotIndex({ index }: { index: number }) {
+  return (
+    <span className="w-7 shrink-0 font-normal tabular-nums text-muted-foreground">
+      {String(index).padStart(2, "0")}
+    </span>
+  );
+}
+
 export function SnapToneDialog({
   open,
   onOpenChange,
@@ -48,6 +56,7 @@ export function SnapToneDialog({
   const [draft, setDraft] = useState<Draft | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const toldRef = useRef(false);
+  const finishedRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(50);
 
@@ -139,11 +148,10 @@ export function SnapToneDialog({
       );
       const result = await session.uploadUserSnapTone(slot, name, file, controller.signal);
       if (result.ok) {
-        setDraft((current) =>
-          current
-            ? { ...current, phase: "done", message: `SnapTone ${slot} is now ${result.name}.` }
-            : current,
-        );
+        finishedRef.current = true;
+        toast.success(`SnapTone ${slot} is now ${result.name}.`);
+        setDraft(null);
+        onOpenChange(false);
         return;
       }
       if (result.reason === "cancelled" || controller.signal.aborted) {
@@ -184,18 +192,19 @@ export function SnapToneDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && busy) {
+        if (!next && busy && !finishedRef.current) {
           cancelWork();
+        }
+        if (!next) {
+          finishedRef.current = false;
+          setDraft(null);
         }
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-lg">
+      <DialogContent aria-describedby={undefined} className="max-h-[85vh] overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>SnapTones</DialogTitle>
-          <DialogDescription>
-            Factory models stay on the pedal. User slots 50–79 can take a NAM capture.
-          </DialogDescription>
         </DialogHeader>
         {accepts ? null : (
           <p className="text-sm text-muted-foreground">
@@ -203,9 +212,12 @@ export function SnapToneDialog({
           </p>
         )}
         <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
-          {factory.map((label) => (
-            <div key={label} className="flex items-center justify-between gap-3 px-1 py-1 text-sm">
-              <span className="truncate">{label}</span>
+          {factory.map((row) => (
+            <div key={row.index} className="flex items-center justify-between gap-3 px-1 py-1 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <SlotIndex index={row.index} />
+                <span className="truncate">{row.label}</span>
+              </span>
               <span className="shrink-0 text-xs text-muted-foreground">Factory</span>
             </div>
           ))}
@@ -233,8 +245,9 @@ export function SnapToneDialog({
                   }
                 }}
               >
-                <span className="truncate">
-                  {protocol} · {label}
+                <span className="flex min-w-0 items-center gap-2">
+                  <SlotIndex index={protocol} />
+                  <span className="truncate">{label}</span>
                 </span>
                 <Button
                   type="button"
@@ -246,7 +259,8 @@ export function SnapToneDialog({
                     fileRef.current?.click();
                   }}
                 >
-                  Choose .nam
+                  <Upload className="size-3.5" />
+                  Upload NAM
                 </Button>
               </div>
             );

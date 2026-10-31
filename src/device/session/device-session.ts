@@ -2017,7 +2017,7 @@ export class DeviceSession {
   }
 
   /** Factory NS labels for protocol indices 0–49. The modal reads these from the session. */
-  factorySnapToneLabels(): string[] {
+  factorySnapToneLabels(): { index: number; label: string }[] {
     if (this.snapshot.status !== "connected") {
       return [];
     }

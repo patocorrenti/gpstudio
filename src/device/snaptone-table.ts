@@ -26,10 +26,10 @@ export function snapSlotHoldsCapture(slot: SnapSlot | undefined): boolean {
   return slot?.flag === 0;
 }
 
-export function factorySnapToneLabels(pedal: DeviceModel): string[] {
+export function factorySnapToneLabels(pedal: DeviceModel): { index: number; label: string }[] {
   return modelsForKind("ns", pedal)
     .filter((model) => model.wire[0] < USER_SNAP_FIRST)
-    .map((model) => model.label);
+    .map((model) => ({ index: model.wire[0], label: model.label }));
 }
 
 /** Letters and digits, at most 10. Empty becomes `X`, matching the pedal's stored form. */
