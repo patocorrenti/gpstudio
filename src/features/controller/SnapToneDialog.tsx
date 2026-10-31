@@ -15,10 +15,11 @@ import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/
 const UNKNOWN_SLOT = "This slot is unknown until SnapTone names are read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
 
-type Phase = "ready" | "ask" | "converting" | "sending" | "error";
+type Phase = "ready" | "converting" | "sending" | "error";
 
 type Draft = {
   slot: number;
+  fileName: string;
   file: ArrayBuffer;
   inspection: NamInspection;
   name: string;
@@ -57,6 +58,7 @@ export function SnapToneDialog({
   const abortRef = useRef<AbortController | null>(null);
   const toldRef = useRef(false);
   const finishedRef = useRef(false);
+  const previewRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(50);
 
@@ -103,6 +105,7 @@ export function SnapToneDialog({
     const fromFile = inspection.name ?? file.name.replace(/\.nam$/i, "");
     setDraft({
       slot,
+      fileName: file.name,
       file: bytes,
       inspection,
       name: fromFile.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10),
@@ -112,26 +115,22 @@ export function SnapToneDialog({
     toldRef.current = false;
   }
 
-  function cancelWork() {
-    const phase = draft?.phase;
-    abortRef.current?.abort();
-    if (phase === "sending") {
+  function leavePreview() {
+    previewRef.current += 1;
+    if (draft?.phase === "sending") {
+      abortRef.current?.abort();
       tellUnknown();
-      setDraft((current) => (current ? { ...current, phase: "error", message: UNKNOWN_SLOT } : current));
-      return;
+    } else if (draft?.phase === "converting") {
+      abortRef.current?.abort();
     }
-    setDraft((current) => (current ? { ...current, phase: "ready", message: "" } : current));
+    setDraft(null);
   }
 
   async function startSend() {
-    if (!draft || draft.inspection.kind !== "A2" || !accepts) {
+    if (!draft || draft.inspection.kind !== "A2" || !accepts || busy) {
       return;
     }
-    const entry = snapshot.status === "connected" ? snapshot.userSnapSlots[draft.slot - 50] : undefined;
-    if (draft.phase !== "ask" && entry?.flag === 0) {
-      setDraft({ ...draft, phase: "ask", message: "" });
-      return;
-    }
+    const generation = previewRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     toldRef.current = false;
@@ -140,13 +139,16 @@ export function SnapToneDialog({
     setDraft({ ...draft, name, phase: "converting", message: "Converting…" });
     try {
       const file = await session.convertNamToSnapTone(draft.file, undefined, controller.signal);
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || previewRef.current !== generation) {
         return;
       }
       setDraft((current) =>
         current ? { ...current, phase: "sending", message: "Sending to the multi-effects…" } : current,
       );
       const result = await session.uploadUserSnapTone(slot, name, file, controller.signal);
+      if (previewRef.current !== generation) {
+        return;
+      }
       if (result.ok) {
         finishedRef.current = true;
         toast.success(`SnapTone ${slot} is now ${result.name}.`);
@@ -176,8 +178,7 @@ export function SnapToneDialog({
           : "The SnapTone was not stored under the submitted name.";
       setDraft((current) => (current ? { ...current, phase: "error", message } : current));
     } catch (error) {
-      if (controller.signal.aborted) {
-        setDraft((current) => (current?.phase === "converting" ? { ...current, phase: "ready", message: "" } : current));
+      if (controller.signal.aborted || previewRef.current !== generation) {
         return;
       }
       const message = error instanceof Error ? error.message : "The SnapTone converter stopped.";
@@ -185,18 +186,22 @@ export function SnapToneDialog({
     }
   }
 
-  const asking = draft?.phase === "ask";
-  const asked = asking ? snapshot.userSnapSlots[draft.slot - 50] : undefined;
+  const preview = draft !== null;
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next && busy && !finishedRef.current) {
-          cancelWork();
+          previewRef.current += 1;
+          abortRef.current?.abort();
+          if (draft?.phase === "sending") {
+            tellUnknown();
+          }
         }
         if (!next) {
           finishedRef.current = false;
+          previewRef.current += 1;
           setDraft(null);
         }
         onOpenChange(next);
@@ -206,11 +211,39 @@ export function SnapToneDialog({
         <DialogHeader>
           <DialogTitle>SnapTones</DialogTitle>
         </DialogHeader>
-        {accepts ? null : (
+        {accepts || preview ? null : (
           <p className="text-sm text-muted-foreground">
             Bluetooth cannot send a SnapTone file. Connect with USB.
           </p>
         )}
+        {preview && draft ? (
+          <div className="flex flex-col gap-3 py-1">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
+              <span className="text-sm text-muted-foreground">Upload</span>
+              <span className="truncate text-sm">{draft.fileName}</span>
+              <span className="text-sm text-muted-foreground">In Slot</span>
+              <span className="text-sm tabular-nums">
+                {String(draft.slot).padStart(2, "0")}
+              </span>
+              <span className="text-sm text-muted-foreground">As</span>
+              <Input
+                aria-label="SnapTone name"
+                value={draft.name}
+                maxLength={10}
+                disabled={busy || draft.inspection.kind !== "A2"}
+                onChange={(event) => {
+                  const name = event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
+                  setDraft((current) => (current ? { ...current, name } : current));
+                }}
+              />
+            </div>
+            {draft.inspection.kind === "A2" ? null : (
+              <p className="text-sm">{draft.inspection.reason}</p>
+            )}
+            {draft.message ? <p className="text-sm">{draft.message}</p> : null}
+          </div>
+        ) : null}
+        {preview ? null : (
         <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
           {factory.map((row) => (
             <div key={row.index} className="flex items-center justify-between gap-3 px-1 py-1 text-sm">
@@ -266,6 +299,7 @@ export function SnapToneDialog({
             );
           })}
         </div>
+        )}
         <input
           ref={fileRef}
           type="file"
@@ -281,47 +315,20 @@ export function SnapToneDialog({
             }
           }}
         />
-        {draft ? (
-          <div className="space-y-2 border-t pt-3">
-            <p className="text-sm">
-              {draft.inspection.kind === "A2"
-                ? `A2${draft.inspection.version ? ` · ${draft.inspection.version}` : ""}${draft.inspection.name ? ` · ${draft.inspection.name}` : ""}`
-                : draft.inspection.reason}
-            </p>
-            {draft.inspection.kind === "A2" ? (
-              <Input
-                aria-label="SnapTone name"
-                value={draft.name}
-                maxLength={10}
-                disabled={busy}
-                onChange={(event) => {
-                  const name = event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
-                  setDraft((current) => (current ? { ...current, name } : current));
-                }}
-              />
-            ) : null}
-            {draft.message ? <p className="text-sm">{draft.message}</p> : null}
-          </div>
-        ) : null}
-        {asking && draft ? (
-          <p className="text-sm">
-            {asked?.name
-              ? `Replace SnapTone ${draft.slot}, ${asked.name}?`
-              : `Replace SnapTone ${draft.slot}?`}
-          </p>
-        ) : null}
-        <DialogFooter>
-          {busy ? (
-            <Button type="button" variant="outline" onClick={cancelWork}>
+        {preview ? (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={leavePreview}>
               Cancel
             </Button>
-          ) : null}
-          {draft?.inspection.kind === "A2" && !busy ? (
-            <Button type="button" onClick={() => void startSend()} disabled={!accepts}>
-              {asking ? "Replace" : "Send"}
+            <Button
+              type="button"
+              onClick={() => void startSend()}
+              disabled={!accepts || busy || draft?.inspection.kind !== "A2"}
+            >
+              Confirm
             </Button>
-          ) : null}
-        </DialogFooter>
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
