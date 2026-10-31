@@ -139,7 +139,7 @@ export function SlotStompMark({
             aria-label={aria}
             aria-pressed={filled}
             className={cn(
-              "absolute top-1 right-1 z-20 flex size-4 cursor-pointer items-center justify-center rounded-full border text-[0.8rem] font-bold leading-none transition-colors",
+              "absolute top-1 right-1 z-20 flex size-4 cursor-pointer items-center justify-center rounded-full border text-[0.8rem] font-bold leading-none transition-colors max-md:size-5 max-md:text-[0.85rem]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               filled
                 ? "border-primary bg-primary text-primary-foreground opacity-70"

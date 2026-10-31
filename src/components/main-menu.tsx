@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const menuItemClass =
-  "h-8 w-full justify-start gap-2 px-2 font-normal";
+  "h-9 w-full justify-start gap-2 px-2 text-base font-normal";
 
 function MenuLink({
   to,
@@ -98,9 +98,9 @@ function MobileThemeItem({ onToggle }: { onToggle: () => void }) {
       }}
     >
       {mounted && isDark ? (
-        <Sun className="size-3 text-muted-foreground" />
+        <Sun className="size-4 text-muted-foreground" />
       ) : (
-        <Moon className="size-3 text-muted-foreground" />
+        <Moon className="size-4 text-muted-foreground" />
       )}
       {mounted && isDark ? "Light mode" : "Dark mode"}
     </Button>
@@ -117,15 +117,15 @@ export default function MainMenu() {
           <Button
             type="button"
             variant="outline"
-            size="icon-sm"
+            size="icon"
             className="md:hidden"
             aria-label="Menu"
             aria-expanded={open}
           >
-            <Menu className="size-4" />
+            <Menu className="size-5" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-44 gap-0.5 p-1">
+        <PopoverContent align="end" className="w-48 gap-0.5 p-1">
           <MobileNavLink to="/" end onNavigate={() => setOpen(false)}>
             Pedal
           </MobileNavLink>

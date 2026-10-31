@@ -175,6 +175,26 @@ export class WebBluetoothLink implements BluetoothLink {
     }
 
     let selectedId: string | undefined;
+    let pickerError: unknown;
+    // requestDevice must run before any other await or Chrome drops the user gesture.
+    if (options.interactive !== false) {
+      try {
+        const picked = await bluetooth.requestDevice({
+          // Require BLE-MIDI so Chrome opens the LE/GATT identity, not dual-mode audio.
+          filters: NAME_PREFIXES.map((namePrefix) => ({
+            namePrefix,
+            services: [CONTROL_SERVICE_UUID],
+          })),
+          optionalServices: [CONTROL_SERVICE_UUID],
+        });
+        undismissBluetooth(picked.id);
+        this.remember(picked);
+        selectedId = picked.id;
+      } catch (error) {
+        pickerError = error;
+      }
+    }
+
     try {
       if (typeof bluetooth.getDevices === "function") {
         const granted = await bluetooth.getDevices();
@@ -187,25 +207,19 @@ export class WebBluetoothLink implements BluetoothLink {
           this.remember(device);
         }
       }
-      if (options.interactive !== false) {
-        const picked = await bluetooth.requestDevice({
-          // Require BLE-MIDI so Chrome opens the LE/GATT identity, not dual-mode audio.
-          filters: NAME_PREFIXES.map((namePrefix) => ({
-            namePrefix,
-            services: [CONTROL_SERVICE_UUID],
-          })),
-          optionalServices: [CONTROL_SERVICE_UUID],
-        });
-        undismissBluetooth(picked.id);
-        this.remember(picked);
-        selectedId = picked.id;
-      }
     } catch (error) {
-      const cancelled =
-        error instanceof DOMException &&
-        (error.name === "NotFoundError" || error.name === "AbortError");
-      if (!cancelled && this.devicesById.size === 0) {
+      if (!selectedId && this.devicesById.size === 0 && !pickerError) {
         throw bluetoothError(error);
+      }
+    }
+
+    if (pickerError) {
+      const cancelled =
+        pickerError instanceof DOMException &&
+        (pickerError.name === "NotFoundError" ||
+          pickerError.name === "AbortError");
+      if (!cancelled && this.devicesById.size === 0) {
+        throw bluetoothError(pickerError);
       }
     }
 

@@ -87,7 +87,7 @@ export function PatchLevels({
 }) {
   const session = useDeviceSession();
   return (
-    <div className="ml-2 flex flex-wrap items-center justify-center gap-3">
+    <div className="ml-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:ml-2 md:gap-3">
       <LevelSlider
         label="P-Vol"
         ariaLabel="Patch volume"

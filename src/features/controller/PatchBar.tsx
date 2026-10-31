@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Save, Settings2, TriangleAlert, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Save, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,10 +39,24 @@ import {
   PATCH_COUNT,
   type OmittedFactoryModel,
 } from "@/device/session";
+import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
+import { useAbCycleClaim } from "@/features/controller/AbCycleClaim";
+import { AbSideLabel } from "@/features/controller/AbSideLabel";
+import {
+  AB_SECONDS_DEFAULT,
+  AbSecondsField,
+  resolveAbSeconds,
+} from "@/features/controller/AbSecondsField";
 import { PatchLevels } from "@/features/controller/PatchLevels";
 import { PatchSelect } from "@/features/controller/PatchSelect";
-import { useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactElement,
+} from "react";
 import { toast } from "sonner";
 
 /** Custom IR / SnapTone slots referenced by the working chain (slot only; no file bytes). */
@@ -82,11 +96,26 @@ function customAssetsForDownload(session: DeviceSession): CustomAssetWarning | n
 const patchOptions = Array.from({ length: PATCH_COUNT }, (_, index) => index);
 
 const patchChipClass =
-  "rounded-[4px] bg-background hover:bg-background/90 dark:bg-muted/40 dark:hover:bg-muted/50";
+  "rounded-[4px] border-transparent bg-background hover:bg-[oklch(0.965_0.008_255)]! active:translate-y-0.5! dark:bg-muted/40 dark:hover:bg-[oklch(0.305_0.045_255)]!";
 const patchActionClass = `${patchChipClass} px-3`;
+const abPlayReadyClass =
+  "rounded-[4px] border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100";
+const patchClusterEnterClass =
+  "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-4 motion-safe:duration-300";
 const patchActionIconClass = "size-3 text-muted-foreground";
 
 const unsavedPatchHint = "Unsaved changes will be lost";
+
+type AbCycle = {
+  a: number;
+  b: number;
+  dwellMs: number;
+  next: "a" | "b";
+};
+
+function nextComparisonPatch(patch: number): number {
+  return (patch + 1) % PATCH_COUNT;
+}
 
 function toastError(fallback: string) {
   return (cause: unknown) => (cause instanceof Error ? cause.message : fallback);
@@ -198,6 +227,7 @@ export function PatchBar({
   patchBpm: number | null;
 }) {
   const session = useDeviceSession();
+  const { moduleOpen, registerStop, stopOther } = useAbCycleClaim();
   const currentName = patchNames[patch];
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -212,6 +242,17 @@ export function PatchBar({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [abOpen, setAbOpen] = useState(false);
+  const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
+  const [abSideA, setAbSideA] = useState(0);
+  const [abCompare, setAbCompare] = useState(0);
+  const [abPlaying, setAbPlaying] = useState(false);
+  const [abActive, setAbActive] = useState<"a" | "b" | null>(null);
+  const [abCountdown, setAbCountdown] = useState<number | null>(null);
+  const [dwellEpoch, setDwellEpoch] = useState(0);
+  const cycleRef = useRef<AbCycle | null>(null);
+  const playingRef = useRef(false);
+  const mountedRef = useRef(true);
   const destIndex = Number.parseInt(duplicateDest, 10);
   const destName =
     Number.isInteger(destIndex) && destIndex !== patch ? patchNames[destIndex] : null;
@@ -315,6 +356,292 @@ export function PatchBar({
     uploadPatchBytes(bytes);
   }
 
+  function resolvedAbSeconds(): number {
+    return resolveAbSeconds(abSecondsText);
+  }
+
+  function openAbSetup() {
+    abOpenRef.current = true;
+    setOptionsOpen(false);
+    setAbSecondsText(String(AB_SECONDS_DEFAULT));
+    setAbSideA(patch);
+    setAbCompare(nextComparisonPatch(patch));
+    playingRef.current = false;
+    cycleRef.current = null;
+    setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
+    setAbOpen(true);
+  }
+
+  function closeAbSetup() {
+    stopRecallRef.current += 1;
+    abOpenRef.current = false;
+    playingRef.current = false;
+    cycleRef.current = null;
+    setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
+    setAbOpen(false);
+  }
+
+  function stopAbCycle(recallA = true) {
+    const slotA = cycleRef.current?.a;
+    playingRef.current = false;
+    cycleRef.current = null;
+    setAbPlaying(false);
+    setAbActive(null);
+    setAbCountdown(null);
+    if (!recallA || slotA === undefined) {
+      return;
+    }
+    const ticket = stopRecallRef.current + 1;
+    stopRecallRef.current = ticket;
+    void (async () => {
+      const snapshot = session.getSnapshot();
+      if (snapshot.status !== "connected") {
+        return;
+      }
+      if (snapshot.chainSync === "syncing") {
+        try {
+          await waitUntilChainIdle(session);
+        } catch {
+          return;
+        }
+      }
+      if (
+        stopRecallRef.current !== ticket ||
+        playingRef.current ||
+        !abOpenRef.current
+      ) {
+        return;
+      }
+      const after = session.getSnapshot();
+      if (after.status === "connected" && after.patch !== slotA) {
+        await recallPatch(slotA);
+      }
+    })();
+  }
+
+  function startAbCycle() {
+    if (abCompare === abSideA) {
+      return;
+    }
+    stopOther("patch");
+    const seconds = resolvedAbSeconds();
+    setAbSecondsText(String(seconds));
+    cycleRef.current = {
+      a: abSideA,
+      b: abCompare,
+      dwellMs: seconds * 1000,
+      next: "b",
+    };
+    playingRef.current = true;
+    setAbActive("a");
+    setAbCountdown(seconds);
+    setAbPlaying(true);
+    if (patch !== abSideA) {
+      void recallPatch(abSideA);
+    }
+  }
+
+  const stopAbRef = useRef(stopAbCycle);
+  const closeAbRef = useRef(closeAbSetup);
+  const abOpenRef = useRef(abOpen);
+  const followedPatchRef = useRef(patch);
+  const appRecallRef = useRef<number | null>(null);
+  const stopRecallRef = useRef(0);
+  stopAbRef.current = stopAbCycle;
+  closeAbRef.current = closeAbSetup;
+  abOpenRef.current = abOpen;
+
+  function recallPatch(slot: number): Promise<void> {
+    appRecallRef.current = slot;
+    const before = session.getSnapshot();
+    const pending = session.setPatch(slot);
+    const after = session.getSnapshot();
+    if (
+      before.status !== "connected" ||
+      after.status !== "connected" ||
+      after.patch === before.patch
+    ) {
+      if (appRecallRef.current === slot) {
+        appRecallRef.current = null;
+      }
+    }
+    return pending;
+  }
+
+  useEffect(() => {
+    if (!abOpen) {
+      followedPatchRef.current = patch;
+      appRecallRef.current = null;
+      return;
+    }
+    if (patch === followedPatchRef.current || patch === appRecallRef.current) {
+      followedPatchRef.current = patch;
+      appRecallRef.current = null;
+      return;
+    }
+    closeAbRef.current();
+  }, [abOpen, patch]);
+
+  useEffect(() => {
+    registerStop("patch", () => {
+      stopAbRef.current(false);
+    });
+    return () => {
+      registerStop("patch", null);
+    };
+  }, [registerStop]);
+
+  useEffect(() => {
+    if (!abOpen || moduleOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.code !== "Space" && event.key !== " ") {
+        return;
+      }
+      if (event.repeat) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            "input, textarea, button, [role='combobox'], [role='dialog']",
+          ))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (playingRef.current) {
+        stopAbCycle();
+        return;
+      }
+      startAbCycle();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [abOpen, moduleOpen, abCompare, abSideA, patch, abSecondsText]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!abPlaying || busy) {
+      return;
+    }
+    const cycle = cycleRef.current;
+    if (!cycle) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const current = cycleRef.current;
+        if (!playingRef.current || !current) {
+          return;
+        }
+        const before = session.getSnapshot();
+        if (before.status !== "connected") {
+          playingRef.current = false;
+          cycleRef.current = null;
+          if (mountedRef.current) {
+            setAbPlaying(false);
+            setAbActive(null);
+            setAbCountdown(null);
+          }
+          return;
+        }
+        if (before.chainSync === "syncing") {
+          return;
+        }
+        const target = current.next === "b" ? current.b : current.a;
+        const previousNext = current.next;
+        current.next = current.next === "b" ? "a" : "b";
+        let enteredSyncing = false;
+        const unsubscribe = session.subscribe(() => {
+          const next = session.getSnapshot();
+          if (next.status === "connected" && next.chainSync === "syncing") {
+            enteredSyncing = true;
+          }
+        });
+        try {
+          await recallPatch(target);
+        } catch {
+          unsubscribe();
+          current.next = previousNext;
+          if (playingRef.current) {
+            playingRef.current = false;
+            cycleRef.current = null;
+            if (mountedRef.current) {
+              setAbPlaying(false);
+              setAbActive(null);
+              setAbCountdown(null);
+            }
+          }
+          return;
+        }
+        unsubscribe();
+        if (!playingRef.current || !mountedRef.current) {
+          return;
+        }
+        const after = session.getSnapshot();
+        if (after.status !== "connected") {
+          playingRef.current = false;
+          cycleRef.current = null;
+          setAbPlaying(false);
+          setAbActive(null);
+          setAbCountdown(null);
+          return;
+        }
+        const tookEffect = enteredSyncing || after.patch === target;
+        if (!tookEffect) {
+          current.next = previousNext;
+          return;
+        }
+        setAbActive(previousNext);
+        if (!enteredSyncing) {
+          setDwellEpoch((epoch) => epoch + 1);
+        }
+      })();
+    }, cycle.dwellMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [abPlaying, busy, dwellEpoch, session]);
+
+  useEffect(() => {
+    if (!abPlaying || busy) {
+      return;
+    }
+    const cycle = cycleRef.current;
+    if (!cycle) {
+      return;
+    }
+    const totalSec = Math.max(1, Math.round(cycle.dwellMs / 1000));
+    setAbCountdown(totalSec);
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const left = Math.max(
+        0,
+        totalSec - Math.floor((Date.now() - started) / 1000),
+      );
+      setAbCountdown(left);
+    }, 100);
+    return () => {
+      window.clearInterval(tick);
+    };
+  }, [abPlaying, busy, dwellEpoch]);
+
   function uploadPatchBytes(bytes: Uint8Array) {
     void toast.promise(
       (async () => {
@@ -350,62 +677,328 @@ export function PatchBar({
 
   return (
     <div className="-mx-6 -mt-6 w-[calc(100%+3rem)] border-b border-border bg-muted dark:bg-black/35">
-      <div className="flex flex-wrap items-center justify-center gap-1 px-6 pt-7 pb-3">
       <TooltipProvider delayDuration={0}>
-        <PatchNavTooltip enabled={modified}>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Previous patch"
-              disabled={busy}
-              className={patchChipClass}
-              onClick={() => void session.stepPatch(-1)}
-            >
-              <ChevronLeft />
-            </Button>
-          </span>
-        </PatchNavTooltip>
-        <PatchSelect
-          patch={patch}
-          patchNames={patchNames}
-          disabled={busy}
-          triggerClassName={`${patchChipClass} h-8 w-56 min-w-56 justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums dark:border-transparent`}
-          wrapTrigger={(trigger) => (
-            <PatchNavTooltip enabled={modified}>{trigger}</PatchNavTooltip>
+      <div className={`flex flex-wrap items-center justify-center gap-x-1 gap-y-5 px-6 pb-3 md:gap-1 md:pt-7 ${abOpen ? "pt-3 md:pt-7" : "pt-3"}`}>
+      <div
+        className={`order-1 flex w-full md:contents ${
+          abOpen
+            ? "flex-col gap-3"
+            : "flex-wrap items-center justify-center gap-1"
+        }`}
+      >
+        <AbSideLabel
+          label="A"
+          show={abOpen}
+          lit={abActive === "a"}
+          railOnMobile={abOpen}
+          className="w-full md:order-2 md:w-auto"
+        >
+          {abOpen ? (
+            <PatchSelect
+              patch={abSideA}
+              patchNames={patchNames}
+              disabled={abPlaying}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+              onSelect={(next) => {
+                if (abPlaying) {
+                  return;
+                }
+                setAbSideA(next);
+              }}
+            />
+          ) : (
+            <div className="flex w-full items-center gap-1">
+              <PatchNavTooltip enabled={modified && !abPlaying}>
+                <span className="inline-flex shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Previous patch"
+                    disabled={busy || abPlaying}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
+                    onClick={() => void session.stepPatch(-1)}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                </span>
+              </PatchNavTooltip>
+              <div className="min-w-0 flex-1 md:w-auto md:flex-none">
+                <PatchSelect
+                  patch={patch}
+                  patchNames={patchNames}
+                  disabled={busy || abPlaying}
+                  triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "a" ? " disabled:opacity-100" : ""}`}
+                  wrapTrigger={(trigger) => (
+                    <PatchNavTooltip enabled={modified && !abPlaying}>
+                      {trigger}
+                    </PatchNavTooltip>
+                  )}
+                  onSelect={(next) => {
+                    if (busy || abPlaying) {
+                      return;
+                    }
+                    void session.setPatch(next);
+                  }}
+                />
+              </div>
+              <PatchNavTooltip enabled={modified && !abPlaying}>
+                <span className="inline-flex shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Next patch"
+                    disabled={busy || abPlaying}
+                    className={`${patchChipClass} size-10 md:size-8 [&_svg:not([class*='size-'])]:size-5 md:[&_svg:not([class*='size-'])]:size-4`}
+                    onClick={() => void session.stepPatch(1)}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </span>
+              </PatchNavTooltip>
+            </div>
           )}
-          onSelect={(next) => {
-            if (busy) {
-              return;
-            }
-            void session.setPatch(next);
-          }}
-        />
-        <PatchNavTooltip enabled={modified}>
-          <span className="inline-flex">
+        </AbSideLabel>
+      {abOpen ? (
+        <div
+          className={`flex w-full flex-col gap-3 md:order-3 md:w-auto md:flex-row md:items-center md:gap-1 ${patchClusterEnterClass}`}
+        >
+          <div className="relative flex w-full items-center md:w-auto md:justify-center">
+            {/* Mobile seconds row + actions */}
+            <div className="flex w-full items-center gap-2 md:hidden">
+              <div className="flex min-w-0 items-center gap-2">
+                {abPlaying ? (
+                  <>
+                    <div
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <div className="relative min-h-10 w-0.5 self-stretch overflow-hidden rounded-full bg-border">
+                        {busy ? null : (
+                          <div
+                            key={`mobile-${dwellEpoch}-${abActive ?? "a"}`}
+                            className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell-y ${
+                              abActive === "b" ? "origin-bottom" : "origin-top"
+                            }`}
+                            style={{
+                              animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                            }}
+                          />
+                        )}
+                      </div>
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
+                    </div>
+                    <div
+                      aria-live="polite"
+                      aria-label="Seconds remaining"
+                      className="flex h-10 w-16 shrink-0 items-center justify-center px-2 text-sm tabular-nums"
+                    >
+                      {abCountdown ?? resolvedAbSeconds()}
+                    </div>
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      aria-hidden
+                      className="flex shrink-0 items-center gap-1.5 self-stretch"
+                    >
+                      <span className="invisible min-h-10 w-0.5 self-stretch" />
+                      <span className="invisible shrink-0 text-xs font-normal tracking-wide">
+                        A
+                      </span>
+                    </div>
+                    <AbSecondsField
+                      value={abSecondsText}
+                      onValueChange={setAbSecondsText}
+                      className={`${patchChipClass} h-10 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                    />
+                    <span className="text-xs font-normal tracking-wide text-muted-foreground">
+                      Seconds
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Close A/B test"
+                  className={`${patchChipClass} px-2.5`}
+                  onClick={closeAbSetup}
+                >
+                  <X className="size-3" />
+                  Close
+                </Button>
+                {abPlaying ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${patchChipClass} px-2.5`}
+                    aria-label="Stop"
+                    onClick={() => stopAbCycle()}
+                  >
+                    <Square className="size-3 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={`${
+                      abCompare === abSideA ? patchChipClass : abPlayReadyClass
+                    } px-2.5`}
+                    aria-label="Play"
+                    disabled={abCompare === abSideA}
+                    onClick={startAbCycle}
+                  >
+                    <Play className="size-3 fill-current" />
+                    Play
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Desktop seconds control */}
+            <div className="relative hidden md:block">
+              {abPlaying ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-[13px] flex items-center"
+                >
+                  <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-border">
+                    {busy ? null : (
+                      <div
+                        key={`${dwellEpoch}-${abActive ?? "a"}`}
+                        className={`h-full w-full rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-400 animate-ab-dwell ${
+                          abActive === "b" ? "origin-right" : "origin-left"
+                        }`}
+                        style={{
+                          animationDuration: `${cycleRef.current?.dwellMs ?? resolvedAbSeconds() * 1000}ms`,
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-5 text-center text-xs font-normal tracking-wide text-muted-foreground"
+                >
+                  Seconds
+                </span>
+              )}
+              {abPlaying ? (
+                <div
+                  aria-live="polite"
+                  aria-label="Seconds remaining"
+                  className="flex h-8 w-16 items-center justify-center px-2 text-sm tabular-nums"
+                >
+                  {abCountdown ?? resolvedAbSeconds()}
+                </div>
+              ) : (
+                <AbSecondsField
+                  value={abSecondsText}
+                  onValueChange={setAbSecondsText}
+                  className={`${patchChipClass} h-8 w-16 border-transparent px-2 text-center tabular-nums dark:border-transparent`}
+                />
+              )}
+            </div>
+          </div>
+          <AbSideLabel
+            label="B"
+            show
+            lit={abActive === "b"}
+            railOnMobile
+            className="w-full md:w-auto"
+          >
+            <PatchSelect
+              patch={abCompare}
+              patchNames={patchNames}
+              disabled={abPlaying}
+              triggerClassName={`${patchChipClass} h-10 w-full justify-center gap-1.5 border-transparent px-2.5 py-0 text-lg font-semibold tabular-nums md:h-8 md:w-56 md:min-w-56 dark:border-transparent${abActive === "b" ? " disabled:opacity-100" : ""}`}
+              onSelect={(next) => {
+                setAbCompare(next);
+              }}
+            />
+          </AbSideLabel>
+          {abPlaying ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Next patch"
-              disabled={busy}
-              className={patchChipClass}
-              onClick={() => void session.stepPatch(1)}
+              className={`hidden md:inline-flex ${patchChipClass}`}
+              aria-label="Stop"
+              onClick={() => stopAbCycle()}
             >
-              <ChevronRight />
+              <Square className="size-3 fill-current" />
             </Button>
-          </span>
-        </PatchNavTooltip>
-      </TooltipProvider>
-      <div className="ml-2 flex items-center gap-1">
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`hidden md:inline-flex ${
+                abCompare === abSideA ? patchChipClass : abPlayReadyClass
+              }`}
+              aria-label="Play"
+              disabled={abCompare === abSideA}
+              onClick={startAbCycle}
+            >
+              <Play className="size-3 fill-current" />
+            </Button>
+          )}
+        </div>
+      ) : null}
+      </div>
+      <div
+        className={`order-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-4 md:contents ${
+          abOpen ? "max-md:hidden" : ""
+        }`}
+      >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+            className={`md:order-1 ${patchChipClass}`}
+            onClick={abOpen ? closeAbSetup : openAbSetup}
+          >
+            {abOpen ? (
+              <X />
+            ) : (
+              <img
+                src={abCompareIcon}
+                alt=""
+                aria-hidden
+                className="size-3.5 dark:invert"
+              />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {abOpen ? "Close A/B test" : "A/B Test - Compare Patches"}
+        </TooltipContent>
+      </Tooltip>
+      {abOpen ? null : (
+      <div className={`contents md:order-4 md:flex md:flex-wrap md:items-center md:gap-1 ${patchClusterEnterClass}`}>
+      <div className="contents md:flex md:items-center md:gap-1">
         <Button
           type="button"
           variant="ghost"
           disabled={busy || !modified}
           className={
             modified && !busy
-              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
+              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
               : patchActionClass
           }
           aria-label="Save patch"
@@ -507,6 +1100,10 @@ export function PatchBar({
       </div>
       <PatchLevels model={model} volume={patchVolume} bpm={patchBpm} disabled={busy} />
       </div>
+      )}
+      </div>
+      </div>
+      </TooltipProvider>
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {
