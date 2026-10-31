@@ -213,7 +213,7 @@ export function SnapToneDialog({
       }
       if (result.ok) {
         finishedRef.current = true;
-        toast.success(`SnapTone ${slot} is now ${result.name}.`);
+        toast.success(`${result.name} uploaded into the slot ${String(slot).padStart(2, "0")}.`);
         setDraft(null);
         onOpenChange(false);
         return;
