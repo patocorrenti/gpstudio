@@ -13,6 +13,8 @@ import {
   encodeSnapImportFrames,
   encodeSnapPayload,
   encodeUserSnapDelete,
+  encodeUserSnapRename,
+  encodeUserSnapRenameCommit,
   parseSnapSysex,
 } from "@/device/snaptone-table";
 import type { MidiTransport } from "@/midi/types";
@@ -2160,6 +2162,8 @@ async function assertSnapToneDelete(): Promise<void> {
   let open = false;
   let ackDeletes = false;
   let tableHolds = true;
+  let deleteNotified = false;
+  let tablesBeforeDeleteNotify = 0;
   const usb = {
     sent,
     push(bytes: Uint8Array) {
@@ -2173,7 +2177,11 @@ async function assertSnapToneDelete(): Promise<void> {
       send: async (bytes: Uint8Array) => {
         sent.push(Uint8Array.from(bytes));
         if (isSnapTableRequest(bytes)) {
-          const parts = tableHolds ? snapUserTable(77, "Keep") : snapUserTable(77, "Empty", false);
+          if (ackDeletes && !deleteNotified) {
+            tablesBeforeDeleteNotify += 1;
+          }
+          const cleared = deleteNotified && !tableHolds;
+          const parts = cleared ? snapUserTable(77, "Empty", false) : snapUserTable(77, "Keep");
           for (const part of parts) {
             handler?.(part);
           }
@@ -2181,6 +2189,10 @@ async function assertSnapToneDelete(): Promise<void> {
         }
         if (ackDeletes && packetsEqual(bytes, encodeUserSnapDelete(77))) {
           handler?.(commandReceivedAckFixture());
+          setTimeout(() => {
+            deleteNotified = true;
+            handler?.(SNAP_DELETE_NOTIFY);
+          }, 20);
         }
       },
       subscribe: (next: (bytes: Uint8Array) => void) => {
@@ -2289,6 +2301,8 @@ async function assertSnapToneDelete(): Promise<void> {
 
     ackDeletes = true;
     tableHolds = false;
+    deleteNotified = false;
+    tablesBeforeDeleteNotify = 0;
     const beforeHit = usb.sent.length;
     const cleared = await session.deleteUserSnapTone(77);
     const after = session.getSnapshot();
@@ -2304,6 +2318,7 @@ async function assertSnapToneDelete(): Promise<void> {
       after.userSnapSlots[27]?.flag === 0 ||
       after.userSnapSlots[27]?.flag == null ||
       hitDeletes.length !== 1 ||
+      tablesBeforeDeleteNotify !== 0 ||
       hitTables.length !== 1 ||
       hitSent.some((bytes) => packedHas(packedBody(bytes), 0x11, 0x26)) ||
       hitSent.some((bytes) => packetsEqual(bytes, SNAP_DELETE_NOTIFY))
@@ -2316,6 +2331,274 @@ async function assertSnapToneDelete(): Promise<void> {
 }
 
 void assertSnapToneDelete().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+const SNAP_RENAME_79 = bytesFromHex(
+  "f00b0f00020000010301010206040f00000000000f0504060507030704030703090000000000000000000000000000f7",
+);
+
+function assertSnapRenameWires(): void {
+  for (const slot of [49, 80, 49.5]) {
+    let refused = false;
+    try {
+      encodeUserSnapRename(slot, "Test79");
+    } catch {
+      refused = true;
+    }
+    if (!refused) {
+      throw new Error(`SnapTone rename must refuse slot ${slot} before any byte`);
+    }
+  }
+  const captured = encodeUserSnapRename(79, "Test79");
+  const lead = encodeUserSnapRename(79, "Lead Ch$");
+  const empty = encodeUserSnapRename(52, "$$$");
+  const leadFrame = parseSnapSysex(lead);
+  const emptyFrame = parseSnapSysex(empty);
+  const leadName = leadFrame?.payload.subarray(6, 19);
+  const emptyName = emptyFrame?.payload.subarray(6, 19);
+  if (
+    !packetsEqual(captured, SNAP_RENAME_79) ||
+    !leadFrame?.crcOk ||
+    leadFrame.payload.length !== 19 ||
+    leadFrame.payload[0] !== 0x11 ||
+    leadFrame.payload[1] !== 0x26 ||
+    leadFrame.payload[2] !== 0x4f ||
+    leadName?.[0] !== 0x4c ||
+    leadName?.[1] !== 0x65 ||
+    leadName?.[2] !== 0x61 ||
+    leadName?.[3] !== 0x64 ||
+    leadName?.[4] !== 0x43 ||
+    leadName?.[5] !== 0x68 ||
+    leadName?.[6] !== 0x00 ||
+    !emptyFrame?.crcOk ||
+    emptyName?.[0] !== 0x58 ||
+    emptyName?.[1] !== 0x00 ||
+    packedHas(packedBody(captured), 0x11, 0x27) ||
+    packedHas(packedBody(captured), 0x12, 0x1b) ||
+    captured.length > 80 ||
+    !packetsEqual(encodeUserSnapRenameCommit(), bytesFromHex("f0000a000200010003000000000000f7"))
+  ) {
+    throw new Error("SnapTone rename must be the captured 11 26 SET with a 13-byte name");
+  }
+}
+
+assertSnapRenameWires();
+
+function snapRenameTable(slot79: string): Uint8Array[] {
+  const flags = new Uint8Array(80);
+  flags.fill(1);
+  flags[79] = 0;
+  const names = new Uint8Array(80 * 16);
+  const encoder = new TextEncoder();
+  names.set(encoder.encode("Empty"), 50 * 16);
+  names.set(encoder.encode(slot79), 79 * 16);
+  const payload = new Uint8Array(2 + flags.length + names.length);
+  payload[0] = 0x12;
+  payload[1] = 0x24;
+  payload.set(flags, 2);
+  payload.set(names, 2 + flags.length);
+  return encodeSnapPayload(payload);
+}
+
+async function assertSnapToneRename(): Promise<void> {
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(bleSession, bluetooth, 0);
+    const sentBefore = bluetooth.sent.length;
+    const blocked = await bleSession.renameUserSnapTone(79, "Test79");
+    if (blocked.ok || blocked.reason !== "link" || bluetooth.sent.length !== sentBefore) {
+      throw new Error("Bluetooth must not send a SnapTone rename");
+    }
+  } finally {
+    await bleSession.disconnect();
+  }
+
+  const sent: Uint8Array[] = [];
+  let handler: ((bytes: Uint8Array) => void) | null = null;
+  let open = false;
+  let ackRenames = false;
+  let notified = false;
+  let tablesBeforeNotify = 0;
+  let tableName = "JVMOD1Gree";
+  const renamed = () => encodeUserSnapRename(79, "Lead Ch$");
+  const commit = encodeUserSnapRenameCommit();
+  const usb = {
+    sent,
+    push(bytes: Uint8Array) {
+      handler?.(bytes);
+    },
+    transport: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes: Uint8Array) => {
+        sent.push(Uint8Array.from(bytes));
+        if (isSnapTableRequest(bytes)) {
+          if (!notified) {
+            tablesBeforeNotify += 1;
+          }
+          for (const part of snapRenameTable(notified ? tableName : "JVMOD1Gree")) {
+            handler?.(part);
+          }
+          return;
+        }
+        if (ackRenames && packetsEqual(bytes, renamed())) {
+          handler?.(commandReceivedAckFixture());
+          return;
+        }
+        if (ackRenames && packetsEqual(bytes, commit)) {
+          handler?.(commandReceivedAckFixture());
+          notified = true;
+          handler?.(SNAP_DELETE_NOTIFY);
+        }
+      },
+      subscribe: (next: (bytes: Uint8Array) => void) => {
+        handler = next;
+        return () => {
+          if (handler === next) {
+            handler = null;
+          }
+        };
+      },
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      close: async () => {
+        open = false;
+      },
+      sysexEnabled: () => true,
+    },
+  };
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  session.setSnapPaceForTests(0, 0, 40);
+  try {
+    const connecting = session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+    await untilReady("SnapTone rename fixture did not ask for names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await connecting;
+    await untilReady("SnapTone rename fixture did not ask for current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(0));
+    await untilReady("SnapTone rename fixture did not become ready", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x01, 0x00, 0x00, 0x0a]), 50)) {
+      usb.push(packet);
+    }
+    await untilReady("SnapTone rename fixture chain did not go idle", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    for (const part of snapRenameTable("JVMOD1Gree")) {
+      usb.push(part);
+    }
+    const seeded = session.getSnapshot();
+    if (
+      seeded.status !== "connected" ||
+      seeded.userSnapSlots[29]?.name !== "JVMOD1Gree" ||
+      seeded.userSnapSlots[29]?.flag !== 0 ||
+      seeded.userSnapSlots[0]?.name !== "Empty" ||
+      seeded.userSnapSlots[0]?.flag === 0
+    ) {
+      throw new Error("SnapTone rename fixture did not seed slot 79");
+    }
+    const patchBefore = seeded.patch;
+    const beforeFactory = usb.sent.length;
+    const factory = await session.renameUserSnapTone(10, "LeadCh");
+    const beforeEmpty = usb.sent.length;
+    const emptySlot = await session.renameUserSnapTone(50, "LeadCh");
+    if (
+      factory.ok ||
+      factory.reason !== "factory" ||
+      emptySlot.ok ||
+      emptySlot.reason !== "empty" ||
+      usb.sent.length !== beforeFactory ||
+      usb.sent.length !== beforeEmpty
+    ) {
+      throw new Error("Factory and empty SnapTone slots must be refused before any rename byte");
+    }
+
+    const beforeMiss = usb.sent.length;
+    const missed = session.renameUserSnapTone(79, "Lead Ch$");
+    const during = session.getSnapshot();
+    const nested = await session.renameUserSnapTone(79, "Other");
+    const saved = await session.savePatch();
+    if (
+      during.status !== "connected" ||
+      !during.snapFileSend ||
+      during.chainSync !== "idle" ||
+      during.patch !== patchBefore ||
+      nested.ok ||
+      nested.reason !== "busy" ||
+      saved !== "busy"
+    ) {
+      throw new Error("A SnapTone rename must busy other writes without a chain refresh");
+    }
+    const missedResult = await missed;
+    const unknown = session.getSnapshot();
+    const missSent = usb.sent.slice(beforeMiss);
+    const missRenames = missSent.filter((bytes) => packetsEqual(bytes, renamed()));
+    if (
+      missedResult.ok ||
+      missedResult.reason !== "verify" ||
+      unknown.status !== "connected" ||
+      unknown.userSnapSlots[29]?.name !== null ||
+      unknown.userSnapSlots[29]?.flag !== null ||
+      unknown.chainSync !== "idle" ||
+      missRenames.length !== 1 ||
+      missSent.some(isSnapTableRequest) ||
+      missSent.some((bytes) => packedHas(packedBody(bytes), 0x11, 0x27)) ||
+      missSent.some((bytes) => packedHas(packedBody(bytes), 0x12, 0x1b)) ||
+      missSent.some((bytes) => packedHas(packedBody(bytes), 0x12, 0x1c)) ||
+      missSent.some((bytes) => packedHas(packedBody(bytes), 0x02, 0x01)) ||
+      missSent.some((bytes) => bytes[0] === 0xb0 && bytes[1] === 0x00)
+    ) {
+      throw new Error("A missing rename ACK must leave the slot unknown and send only the SET");
+    }
+    for (const part of snapRenameTable("JVMOD1Gree")) {
+      usb.push(part);
+    }
+
+    ackRenames = true;
+    tableName = "LeadCh";
+    notified = false;
+    tablesBeforeNotify = 0;
+    const beforeHit = usb.sent.length;
+    const renamedSlot = await session.renameUserSnapTone(79, "Lead Ch$");
+    const after = session.getSnapshot();
+    const hitSent = usb.sent.slice(beforeHit);
+    const hitRenames = hitSent.filter((bytes) => packetsEqual(bytes, renamed()));
+    const hitTables = hitSent.filter(isSnapTableRequest);
+    if (
+      !renamedSlot.ok ||
+      renamedSlot.name !== "LeadCh" ||
+      after.status !== "connected" ||
+      after.chainSync !== "idle" ||
+      after.patch !== patchBefore ||
+      after.userSnapSlots[29]?.name !== "LeadCh" ||
+      after.userSnapSlots[29]?.flag !== 0 ||
+      hitRenames.length !== 1 ||
+      hitSent.filter((bytes) => packetsEqual(bytes, commit)).length !== 1 ||
+      tablesBeforeNotify !== 0 ||
+      hitTables.length !== 1 ||
+      hitSent.some((bytes) => packedHas(packedBody(bytes), 0x11, 0x27)) ||
+      hitSent.some((bytes) => packedHas(packedBody(bytes), 0x12, 0x1b)) ||
+      hitSent.some((bytes) => packedHas(packedBody(bytes), 0x12, 0x1c)) ||
+      hitSent.some((bytes) => bytes[0] === 0xb0 && bytes[1] === 0x00)
+    ) {
+      throw new Error("A renamed SnapTone must refresh to the sanitized name from the slot table");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertSnapToneRename().catch((error) => {
   console.error(error);
   throw error;
 });

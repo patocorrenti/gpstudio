@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SearchIcon, Trash2, Upload } from "lucide-react";
+import { Pencil, SearchIcon, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,13 @@ type DeleteAsk = {
   slot: number;
   name: string;
   phase: "confirm" | "deleting" | "error";
+  message: string;
+};
+
+type RenameAsk = {
+  slot: number;
+  name: string;
+  phase: "edit" | "renaming" | "error";
   message: string;
 };
 
@@ -86,8 +93,10 @@ export function SnapToneDialog({
   const realProgress = useRef(0);
   const [query, setQuery] = useState("");
   const [deleteAsk, setDeleteAsk] = useState<DeleteAsk | null>(null);
+  const [renameAsk, setRenameAsk] = useState<RenameAsk | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const deletingRef = useRef(false);
+  const renamingRef = useRef(false);
   const toldRef = useRef(false);
   const finishedRef = useRef(false);
   const previewRef = useRef(0);
@@ -127,14 +136,14 @@ export function SnapToneDialog({
     if (snapshot.status === "connected") {
       return;
     }
-    if (draft?.phase === "sending" || deleteAsk?.phase === "deleting") {
+    if (draft?.phase === "sending" || deleteAsk?.phase === "deleting" || renameAsk?.phase === "renaming") {
       if (!toldRef.current) {
         toldRef.current = true;
         toast(UNKNOWN_SLOT);
       }
     }
     onOpenChange(false);
-  }, [deleteAsk?.phase, draft?.phase, onOpenChange, open, snapshot.status]);
+  }, [deleteAsk?.phase, draft?.phase, onOpenChange, open, renameAsk?.phase, snapshot.status]);
 
   if (snapshot.status !== "connected") {
     return null;
@@ -142,7 +151,8 @@ export function SnapToneDialog({
 
   const accepts = snapshot.snapFileLink;
   const deleting = deleteAsk?.phase === "deleting";
-  const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting;
+  const renaming = renameAsk?.phase === "renaming";
+  const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting || renaming;
   const factory = session.factorySnapToneLabels();
 
   function tellUnknown() {
@@ -234,6 +244,54 @@ export function SnapToneDialog({
     }
   }
 
+  function cancelRename() {
+    if (renameAsk?.phase === "renaming") {
+      return;
+    }
+    renamingRef.current = false;
+    setRenameAsk(null);
+  }
+
+  async function startRename() {
+    if (renamingRef.current || !renameAsk || renameAsk.phase !== "edit" || busy) {
+      return;
+    }
+    renamingRef.current = true;
+    toldRef.current = false;
+    const slot = renameAsk.slot;
+    const name = storedName(renameAsk.name);
+    setRenameAsk({ slot, name, phase: "renaming", message: "Renaming SnapTone…" });
+    try {
+      const result = await session.renameUserSnapTone(slot, name);
+      if (result.ok) {
+        toast.success(`SnapTone ${String(slot).padStart(2, "0")} renamed to ${result.name}.`);
+        setRenameAsk(null);
+        return;
+      }
+      const now = session.getSnapshot();
+      const entry = now.status === "connected" ? now.userSnapSlots[slot - 50] : undefined;
+      const unknown = now.status !== "connected" || entry?.flag == null;
+      const message =
+        result.reason === "link"
+          ? "Bluetooth cannot send a SnapTone file. Connect with USB."
+          : result.reason === "port"
+            ? PORT_ERROR
+            : result.reason === "busy"
+              ? "The pedal is busy."
+              : unknown
+                ? UNKNOWN_SLOT
+                : "The SnapTone was not renamed.";
+      if (unknown && result.reason !== "link" && result.reason !== "port" && result.reason !== "busy") {
+        tellUnknown();
+      }
+      setRenameAsk({ slot, name, phase: "error", message });
+    } catch {
+      setRenameAsk({ slot, name, phase: "error", message: "The SnapTone was not renamed." });
+    } finally {
+      renamingRef.current = false;
+    }
+  }
+
   async function startSend() {
     if (!draft || draft.inspection.kind !== "A2" || !accepts || busy) {
       return;
@@ -315,7 +373,7 @@ export function SnapToneDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && (draft?.phase === "sending" || deleteAsk?.phase === "deleting")) {
+        if (!next && (draft?.phase === "sending" || deleteAsk?.phase === "deleting" || renameAsk?.phase === "renaming")) {
           return;
         }
         if (!next && busy && !finishedRef.current) {
@@ -331,26 +389,54 @@ export function SnapToneDialog({
           setQuery("");
           setDraft(null);
           setDeleteAsk(null);
+          setRenameAsk(null);
           deletingRef.current = false;
+          renamingRef.current = false;
         }
         onOpenChange(next);
       }}
     >
       <DialogContent
         aria-describedby={undefined}
-        showCloseButton={draft?.phase !== "sending" && deleteAsk?.phase !== "deleting"}
+        showCloseButton={draft?.phase !== "sending" && deleteAsk?.phase !== "deleting" && renameAsk?.phase !== "renaming"}
         className="max-h-[85vh] overflow-hidden sm:max-w-lg"
       >
         <DialogHeader>
           <DialogTitle>SnapTones</DialogTitle>
         </DialogHeader>
-        {accepts || preview || deleteAsk ? null : (
+        {accepts || preview || deleteAsk || renameAsk ? null : (
           <p className="text-sm text-muted-foreground">
             Bluetooth cannot send a SnapTone file. Connect with USB.
           </p>
         )}
         {deleteAsk?.phase === "deleting" ? (
           <p className="px-4 py-14 text-center text-sm">{deleteAsk.message}</p>
+        ) : null}
+        {renameAsk?.phase === "renaming" ? (
+          <p className="px-4 py-14 text-center text-sm">{renameAsk.message}</p>
+        ) : null}
+        {renameAsk && renameAsk.phase !== "renaming" ? (
+          <div className="flex flex-col gap-3 py-1">
+            {renameAsk.phase === "edit" ? (
+              <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
+                <span className="text-sm text-muted-foreground">Slot</span>
+                <span className="text-sm tabular-nums">{String(renameAsk.slot).padStart(2, "0")}</span>
+                <span className="text-sm text-muted-foreground">Name</span>
+                <Input
+                  aria-label="SnapTone name"
+                  value={renameAsk.name}
+                  maxLength={10}
+                  className="rounded-sm"
+                  onChange={(event) => {
+                    const name = event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
+                    setRenameAsk((current) => (current ? { ...current, name } : current));
+                  }}
+                />
+              </div>
+            ) : (
+              <p className="text-sm">{renameAsk.message}</p>
+            )}
+          </div>
         ) : null}
         {deleteAsk && deleteAsk.phase !== "deleting" ? (
           <div className="flex flex-col gap-3 py-1">
@@ -412,7 +498,7 @@ export function SnapToneDialog({
             {draft.message ? <p className="text-sm">{draft.message}</p> : null}
           </div>
         ) : null}
-        {preview || deleteAsk ? null : (
+        {preview || deleteAsk || renameAsk ? null : (
         <TooltipProvider delayDuration={300}>
         <div className="flex flex-col gap-2">
           <div className="relative">
@@ -473,6 +559,30 @@ export function SnapToneDialog({
                   <span className="truncate">{label}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
+                  {entry.flag === 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Rename SnapTone ${protocol}`}
+                          disabled={!accepts || busy}
+                          onClick={() => {
+                            setRenameAsk({
+                              slot: protocol,
+                              name: storedName(entry.name && entry.name.length > 0 ? entry.name : label),
+                              phase: "edit",
+                              message: "",
+                            });
+                          }}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Rename</TooltipContent>
+                    </Tooltip>
+                  ) : null}
                   {entry.flag === 0 ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -560,6 +670,18 @@ export function SnapToneDialog({
             {deleteAsk.phase === "confirm" ? (
               <Button type="button" variant="destructive" onClick={() => void startDelete()}>
                 Delete
+              </Button>
+            ) : null}
+          </DialogFooter>
+        ) : null}
+        {renameAsk && renameAsk.phase !== "renaming" ? (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={cancelRename}>
+              {renameAsk.phase === "error" ? "Back" : "Cancel"}
+            </Button>
+            {renameAsk.phase === "edit" ? (
+              <Button type="button" onClick={() => void startRename()}>
+                Rename
               </Button>
             ) : null}
           </DialogFooter>

@@ -48,8 +48,8 @@ context: |
   IR file upload and A1 SnapTone captures (name reads for IR and SnapTone stay
   in scope), and the Editor route come in later phases. A2 SnapTone file
   upload is in scope: `src/snaptone/` converts the capture and the session
-  owns the USB write to protocol slots 50–79. USB delete of a user SnapTone
-  on those slots is in scope on that same session path. Copied third-party SysEx stays
+  owns the USB write to protocol slots 50–79. USB delete and USB rename of a
+  user SnapTone on those slots are in scope on that same session path. Copied third-party SysEx stays
   forbidden.
 
   Tech stack:
@@ -222,7 +222,7 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot from either
     model are in scope; not the Library route)
-  - IR file upload and A1 SnapTone captures (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). A2 SnapTone file upload and USB delete of a user slot are in scope via session-owned USB SysEx and `src/snaptone/` conversion. Copied third-party SysEx stays forbidden.
+  - IR file upload and A1 SnapTone captures (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). A2 SnapTone file upload, USB delete, and USB rename of a user slot are in scope via session-owned USB SysEx and `src/snaptone/` conversion. Copied third-party SysEx stays forbidden.
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
     live-module SysEx, Stomp

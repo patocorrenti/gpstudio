@@ -1,0 +1,16 @@
+## 1. Capture
+
+- [x] 1.1 Transcribe the Windows USBPcap capture into `src/snaptone/RESEARCH.md` before any encoder or button exists. Record the model, the protocol slot, the name before, the typed name, the name Suite showed after, the bulk OUT endpoint, and for each of `RenameMe1`, `Lead Ch$`, and `Abcdefghijkl` the host packed body and the `F0`…`F7` wire, plus the ACK and whether Suite then requests `12 24`. If that capture is not in the workspace, stop and ask. Do not encode the Android `0x27` body. Verify the note contains those three host wires. If a send contains the 2696-byte file, takes more than one SET, carries a model-specific field, or is the Android file command, stop and amend the delta specs or ask. Do not start section 2.
+
+## 2. Session write
+
+- [x] 2.1 Add the rename encoder next to `encodeUserSnapDelete` in `src/device/snaptone-table.ts`, matching the transcribed wires and `sanitizeSnapToneName` (`Lead Ch$` → `LeadCh`, `$$$` → `X`). Add the session method next to `deleteUserSnapTone`: USB only, user slots 50–79 that hold a capture, `snapFileSend` for the duration, no patch recall, no `chainSync`, no 2696-byte file, no Android `0x27`. After the captured ACK, refresh the user-slot table and succeed only when that slot's name is the sanitized name with flag 0. A missing ACK or refresh leaves the slot unnamed. Factory slots, empty slots, and Bluetooth send nothing. A mock-link self-check in `src/device/session/checks.ts` asserts the transcribed frame, the stripped name, the refused cases, busy on save during the rename, and no patch recall. Verify that check is reached from `@/device/session` and `npx tsc -b --pretty false` exits 0. Web MIDI and Tauri midir share this TypeScript path.
+
+## 3. Modal
+
+- [x] 3.1 On an occupied user row (flag 0) in `SnapToneDialog`, add an English Rename control beside Delete. It starts from the current name, keeps ASCII letters and digits, and stops at 10 characters. Cancel sends nothing. Factory rows and `Empty` with a flag other than 0 do not offer it. Bluetooth keeps the existing explanation and does not send. While the rename is in progress, the controls that already wait during a SnapTone delete stay unusable, and the chain-sync overlay stays hidden. Success follows the refreshed name. A failed refresh says the slot is unknown until SnapTone names are read again. A port that cannot be written uses `The MIDI port cannot be written. Close Valeton Suite and try again.` The modal imports `@/device/session` only. Verify `npx tsc -b --pretty false` exits 0. Do not add an in-browser pass.
+
+## 4. Docs
+
+- [x] 4.1 Update `docs/architecture.md` and the `context` in `openspec/config.yaml` so USB rename of a user SnapTone is in scope beside USB delete, and copied third-party SysEx stays forbidden. Add a rename line to `src/snaptone/HARDWARE_TEST.md`: one occupied slot, the sanitized name comes back on the table, the selected patch does not change, and the chain label that points at that slot updates. Verify those lines exist. Pato runs the checklist on the pedal used for the capture, and on the other model only as that check. Do not add an in-browser pass.
+- [x] 4.2 Run `npm run build` and verify it exits 0.

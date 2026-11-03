@@ -78,6 +78,54 @@ export function encodeSnapTableRequest(): Uint8Array {
  * CRC-8 ATM, nibble-expand, `F0`…`F7`. Not the Android `0x26` file command
  * and not the pedal's `12 1B` notify.
  */
+const SNAP_RENAME_NAME_BYTES = 13;
+
+/**
+ * One USB parameter-write SET that renames a user SnapTone.
+ * Packed `02 00 13 11 26` plus fxId `0x0F000000 + slot` and a 13-byte
+ * zero-padded name. CRC-8 ATM, nibble-expand, `F0`…`F7`.
+ * Not the Android `0x27` file command.
+ */
+export function encodeUserSnapRename(slot: number, name: string): Uint8Array {
+  if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
+    throw new RangeError("SnapTone renames go to user slots 50–79.");
+  }
+  const label = sanitizeSnapToneName(name);
+  const packed = new Uint8Array(3 + 2 + 4 + SNAP_RENAME_NAME_BYTES);
+  packed[0] = 0x02;
+  packed[1] = 0x00;
+  packed[2] = 0x13;
+  packed[3] = 0x11;
+  packed[4] = 0x26;
+  const fxId = 0x0f000000 + slot;
+  packed[5] = fxId & 0xff;
+  packed[6] = (fxId >>> 8) & 0xff;
+  packed[7] = (fxId >>> 16) & 0xff;
+  packed[8] = (fxId >>> 24) & 0xff;
+  for (let index = 0; index < label.length; index += 1) {
+    packed[9 + index] = label.charCodeAt(index);
+  }
+  const framed = Uint8Array.from([crc8Atm(packed), ...packed]);
+  const body = nibbleExpand(framed);
+  const midi = new Uint8Array(body.length + 2);
+  midi[0] = 0xf0;
+  midi.set(body, 1);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
+/** Captured Suite follow-up after the rename ACK. No slot and no name. */
+export function encodeUserSnapRenameCommit(): Uint8Array {
+  const packed = Uint8Array.from([0x02, 0x01, 0x03, 0x00, 0x00, 0x00]);
+  const framed = Uint8Array.from([crc8Atm(packed), ...packed]);
+  const body = nibbleExpand(framed);
+  const midi = new Uint8Array(body.length + 2);
+  midi[0] = 0xf0;
+  midi.set(body, 1);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
 export function encodeUserSnapDelete(slot: number): Uint8Array {
   if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
     throw new RangeError("SnapTone deletes go to user slots 50–79.");

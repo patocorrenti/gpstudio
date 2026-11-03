@@ -26,6 +26,7 @@ export {
   type SessionSnapshot,
   type SessionSync,
   type SnapDeleteResult,
+  type SnapRenameResult,
   type SnapSlot,
   type SnapUploadResult,
   type UploadPatchPreview,

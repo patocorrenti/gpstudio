@@ -32,6 +32,8 @@ import {
   encodeSnapImportFrames,
   encodeSnapTableRequest,
   encodeUserSnapDelete,
+  encodeUserSnapRename,
+  encodeUserSnapRenameCommit,
   factorySnapToneLabels as factorySnapLabels,
   parseSnapSysex,
   sanitizeSnapToneName,
@@ -174,6 +176,12 @@ export type SnapDeleteResult =
       ok: false;
       reason: "busy" | "disconnected" | "link" | "factory" | "verify" | "closed" | "port";
     };
+export type SnapRenameResult =
+  | { ok: true; name: string }
+  | {
+      ok: false;
+      reason: "busy" | "disconnected" | "link" | "factory" | "empty" | "verify" | "closed" | "port";
+    };
 export type { NamInspection, SnapSlot };
 export type { OmittedFactoryModel };
 
@@ -239,6 +247,8 @@ export class DeviceSession {
   private readonly snapReassembler = new SnapPayloadReassembler();
   private snapAck: ((accepted: boolean) => void) | null = null;
   private snapDeleteAck: ((accepted: boolean) => void) | null = null;
+  private snapRenameNotify: ((arrived: boolean) => void) | null = null;
+  private snapRenameNotifyMs = 4_000;
   private snapTableWait: ((slots: SnapSlot[] | null) => void) | null = null;
   private snapCollecting = false;
   private snapTableReady = false;
@@ -2117,6 +2127,60 @@ export class DeviceSession {
       if (!this.linkIsOpen() || this.snapshot.linkMode !== "usb") {
         return { ok: false, reason: "closed" };
       }
+      const notify = this.waitRenameNotify(this.snapRenameNotifyMs);
+      const acked = this.waitDeleteAck(this.snapAckMs);
+      const wrote = await this.sendSnapFrame(frame);
+      if (wrote !== "ok") {
+        this.cancelDeleteAck();
+        this.cancelRenameNotify();
+        return { ok: false, reason: wrote };
+      }
+      if (!(await acked)) {
+        this.cancelRenameNotify();
+        this.forgetSnapSlot(slot);
+        return { ok: false, reason: "verify" };
+      }
+      await notify;
+      const cleared = await this.verifySnapSlotCleared(slot);
+      return cleared ? { ok: true } : { ok: false, reason: "verify" };
+    } finally {
+      if (this.snapshot.status === "connected" && this.snapshot.snapFileSend) {
+        this.snapshot = { ...this.snapshot, snapFileSend: false };
+        this.emitSnapshot();
+      }
+    }
+  }
+
+  async renameUserSnapTone(slot: number, name: string): Promise<SnapRenameResult> {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    if (this.writesBlocked()) {
+      return { ok: false, reason: "busy" };
+    }
+    if (!this.snapshot.snapFileLink) {
+      return { ok: false, reason: "link" };
+    }
+    if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
+      return { ok: false, reason: "factory" };
+    }
+    const entry = this.snapshot.userSnapSlots[slot - USER_SNAP_FIRST];
+    if (entry?.flag !== 0) {
+      return { ok: false, reason: "empty" };
+    }
+    let frame: Uint8Array;
+    try {
+      frame = encodeUserSnapRename(slot, name);
+    } catch {
+      return { ok: false, reason: "factory" };
+    }
+    const storedName = sanitizeSnapToneName(name);
+    this.snapshot = { ...this.snapshot, snapFileSend: true };
+    this.emitSnapshot();
+    try {
+      if (!this.linkIsOpen() || this.snapshot.linkMode !== "usb") {
+        return { ok: false, reason: "closed" };
+      }
       const acked = this.waitDeleteAck(this.snapAckMs);
       const wrote = await this.sendSnapFrame(frame);
       if (wrote !== "ok") {
@@ -2127,8 +2191,23 @@ export class DeviceSession {
         this.forgetSnapSlot(slot);
         return { ok: false, reason: "verify" };
       }
-      const cleared = await this.verifySnapSlotCleared(slot);
-      return cleared ? { ok: true } : { ok: false, reason: "verify" };
+      const notify = this.waitRenameNotify(this.snapRenameNotifyMs);
+      const commitAck = this.waitDeleteAck(this.snapAckMs);
+      const committed = await this.sendSnapFrame(encodeUserSnapRenameCommit());
+      if (committed !== "ok") {
+        this.cancelDeleteAck();
+        this.cancelRenameNotify();
+        this.forgetSnapSlot(slot);
+        return { ok: false, reason: committed };
+      }
+      if (!(await commitAck)) {
+        this.cancelRenameNotify();
+        this.forgetSnapSlot(slot);
+        return { ok: false, reason: "verify" };
+      }
+      await notify;
+      const verified = await this.verifySnapSlot(slot, storedName);
+      return verified ? { ok: true, name: storedName } : { ok: false, reason: "verify" };
     } finally {
       if (this.snapshot.status === "connected" && this.snapshot.snapFileSend) {
         this.snapshot = { ...this.snapshot, snapFileSend: false };
@@ -2198,6 +2277,32 @@ export class DeviceSession {
     ack?.(false);
   }
 
+  private waitRenameNotify(timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (arrived: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (this.snapRenameNotify === onNotify) {
+          this.snapRenameNotify = null;
+        }
+        resolve(arrived);
+      };
+      const onNotify = (arrived: boolean) => finish(arrived);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      this.snapRenameNotify = onNotify;
+    });
+  }
+
+  private cancelRenameNotify(): void {
+    const notify = this.snapRenameNotify;
+    this.snapRenameNotify = null;
+    notify?.(false);
+  }
+
   /** Command-received ACK: 16 bytes, tail nibble 00. Not a slot-table frame. */
   private noteDeleteAck(message: Uint8Array): boolean {
     if (!this.snapDeleteAck || !isCommandReceivedAck(message)) {
@@ -2218,8 +2323,11 @@ export class DeviceSession {
       return false;
     }
     const kind = frame.payload[0];
-    // Pedal notify after a delete. The trailing byte does not name the slot.
+    // Pedal notify after a delete or a rename. The trailing byte does not name the slot.
     if (kind === 0x12 && frame.payload[1] === 0x1b) {
+      const waiting = this.snapRenameNotify;
+      this.snapRenameNotify = null;
+      waiting?.(true);
       return true;
     }
     if (frame.total === 1 && (kind === 0x14 || kind === 0x13)) {
@@ -2286,6 +2394,7 @@ export class DeviceSession {
     this.snapAck = null;
     ack?.(false);
     this.cancelDeleteAck();
+    this.cancelRenameNotify();
     const table = this.snapTableWait;
     this.snapTableWait = null;
     table?.(null);

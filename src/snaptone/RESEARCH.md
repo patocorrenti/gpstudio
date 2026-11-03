@@ -168,7 +168,7 @@ After each SET the pedal sends, and Suite then asks for the lists:
 
 1. Command-received ACK, 16 bytes, tail nibble `00`: `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`. Packed `01 00 03 14 08 00`.
 2. One notify, packed `01 00 06 12 1B 03 00 00 00`. Wire `F0 0C 0E 00 01 00 00 00 06 01 02 01 0B 00 03 00 00 00 00 00 00 F7`. The byte `03` is the same for slots 77, 78, and 79. It is the pedal's reply, not the delete.
-3. Suite requests the Nam catalog, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. The cleared name is `Empty`.
+3. Suite requests the Nam catalog after that notify, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. The cleared name is `Empty`. On the rename capture the same notify arrived 2.0 s after the command ACK. A table read before it still shows the old slot, so GP Studio waits for `12 1B` before this read on delete as well.
 4. Suite requests globals, packed `01 00 02 12 1C`, wire `F0 09 0D 00 01 00 00 00 02 01 02 01 0C F7`. The pedal answers with command `00 05`.
 
 Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal once.
@@ -176,6 +176,28 @@ Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal onc
 Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x1127`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
 
 USB only, for the same reason as section 7: this send is the USB SysEx path.
+
+## 10. Renaming a user SnapTone
+
+Windows Suite on USB writes one parameter-write SET. The capture is a GP pedal whose slot 79 was `JVMOD1Gree` and became `Test79`. USBPcap bulk OUT endpoint `0x03`, the same OUT as the delete capture. Host bytes are the unwrapped SysEx below (USB-MIDI CIN wrapping removed). CRC-8 ATM (poly `0x07`, init 0) matches.
+
+Packed body, then nibble-expand, `F0`…`F7`. The first two bytes are `02 00`, not the delete header `01 00`. Length byte `0x13`. Family `0x1126`. The next four bytes are the fxId, little-endian: `0x0F000000 + protocol slot`. The name is 13 bytes, zero-padded. `Test79` uses 6 of them. There is no 2696-byte file and no model byte. This is not the Android file command `0x27`.
+
+| Slot | Typed name | fxId | Packed (CRC + body) |
+| --- | --- | --- | --- |
+| 79 | `Test79` | `0x0F00004F` | `BF 02 00 13 11 26 4F 00 00 0F 54 65 73 74 37 39 00 00 00 00 00 00 00` |
+
+Wire: `F0 0B 0F 00 02 00 00 01 03 01 01 02 06 04 0F 00 00 00 00 00 0F 05 04 06 05 07 03 07 04 03 07 03 09 00 00 00 00 00 00 00 00 00 00 00 00 00 00 F7`.
+
+After that SET:
+
+1. Command-received ACK, the same 16-byte tail as delete. Packed `01 00 03 14 08 00`. Wire `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`.
+2. Suite sends a second host SysEx 1.7 ms later, packed `02 01 03 00 00 00` (CRC `0A`). Wire `F0 00 0A 00 02 00 01 00 03 00 00 00 00 00 00 F7`. The pedal ACKs it the same way. GP Studio sends this follow-up. It carries no slot and no name.
+3. The pedal notify arrives 2.0 s after that ACK, packed `01 00 06 12 1B 03 00 00 00`. Same as delete. Do not send it. The name is not in the slot table before this notify.
+4. Suite then requests the Nam catalog, packed `01 00 02 12 24`. The reassembled table names protocol slot 79 `Test79` with occupancy flag 0. Slots 50–60 and 77 still hold their previous names.
+5. Suite requests globals, packed `01 00 02 12 1C`. Do not send it. The table read is the refresh, and it waits for the notify.
+
+The capture is one letters-and-digits rename. It does not show punctuation or a name longer than 10 characters. The stored field is 13 bytes, so a 10-character name still fits with three zero bytes. Keep the upload sanitize (letters and digits, at most 10, empty becomes `X`) and pad that result to 13.
 
 ## Decision 1
 
@@ -193,6 +215,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
 - The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
 - Windows Suite deletes a user SnapTone with the USB SET in section 9 (family `0x1127`, fxId `0x0F000000 + slot`). GP Studio sends that SET on USB. Do not send `0x26` or `12 1B`.
+- Windows Suite renames a user SnapTone with the USB SET in section 10 (family `0x1126`, 13-byte name). GP Studio sends that SET on USB. Do not send Android `0x27`.
 
 ## Golden compare
 
