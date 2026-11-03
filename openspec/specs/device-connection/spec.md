@@ -1434,7 +1434,7 @@ After a write completes, the session MUST read the user-slot table again on that
 
 A connected USB session SHALL delete one user SnapTone at protocol indices 50–79 with the captured parameter-write for that slot (family `1127`, fxId `0x0F000000` plus the protocol slot). Factory NS models (protocol indices 0–49) MUST NOT be deleted, and that request MUST send nothing. Bluetooth MUST send nothing and MUST report that the open link cannot accept a SnapTone file. The delete MUST NOT send patch recall and MUST NOT mark the chain as syncing. It MUST NOT send the Android SnapTone file-delete command (`0x26`) or the pedal notify `12 1B`. UI MUST NOT send raw MIDI.
 
-While that delete is in progress, other app writes that already wait during a SnapTone file send MUST wait, and the session MUST reject them as busy. After the pedal acknowledges the command, the session MUST read the user-slot table again (protocol indices 50–79, including the occupancy flag) and replace the in-memory snapshot with that table. Success MUST be that refreshed slot named `Empty` with an occupancy flag other than 0. The session MUST NOT invent that name. If the acknowledgement or the refresh fails, that slot MUST stay unnamed until the next table read. The same delete MUST be used for GP-5 and GP-50. The SysEx MUST be GP Studio-owned.
+While that delete is in progress, other app writes that already wait during a SnapTone file send MUST wait, and the session MUST reject them as busy. After the pedal acknowledges the command, the session MUST read the user-slot table again (protocol indices 50–79, including the occupancy flag) and replace the in-memory snapshot with that table. Success MUST be that refreshed slot with an occupancy flag other than 0. The session stores the name from that table and MUST NOT invent one. A GP-5 cleared slot is named `Empty`. A GP-50 cleared slot keeps a numbered label with that flag, such as `Empty 28` for protocol index 77. A flag of 0 is not success. If the acknowledgement or the refresh fails, that slot MUST stay unnamed until the next table read. The same delete MUST be used for GP-5 and GP-50. The SysEx MUST be GP Studio-owned.
 
 #### Scenario: Factory slot is not deleted
 
@@ -1454,12 +1454,13 @@ While that delete is in progress, other app writes that already wait during a Sn
 - **THEN** the session rejects that save as busy
 - **AND** the chain is not marked syncing solely because of the delete
 
-#### Scenario: Acknowledged delete refreshes to Empty
+#### Scenario: Acknowledged delete refreshes the slot
 
 - **WHEN** a USB session deletes protocol index 77 and the pedal acknowledges the command
 - **THEN** the session reads the user-slot table again
-- **AND** success requires that table to name index 77 `Empty` with an occupancy flag other than 0
-- **AND** the session does not write `Empty` into the snapshot before that table arrives
+- **AND** success requires that table to show index 77 with an occupancy flag other than 0
+- **AND** the session keeps the name from that table
+- **AND** the session does not write a name into the snapshot before that table arrives
 
 #### Scenario: Missing acknowledgement leaves the slot unnamed
 

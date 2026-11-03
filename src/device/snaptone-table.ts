@@ -26,6 +26,15 @@ export function snapSlotHoldsCapture(slot: SnapSlot | undefined): boolean {
   return slot?.flag === 0;
 }
 
+/**
+ * Vacant label before the slot table arrives.
+ * GP-5 stores `Empty`. GP-50 stores `Empty 10` … `Empty 30`.
+ * A blank name is not vacant: flag 0 can still hold a capture.
+ */
+export function snapNameLooksVacant(name: string): boolean {
+  return name === "Empty" || /^Empty \d+$/.test(name);
+}
+
 export function factorySnapToneLabels(pedal: DeviceModel): { index: number; label: string }[] {
   return modelsForKind("ns", pedal)
     .filter((model) => model.wire[0] < USER_SNAP_FIRST)

@@ -2181,7 +2181,7 @@ async function assertSnapToneDelete(): Promise<void> {
             tablesBeforeDeleteNotify += 1;
           }
           const cleared = deleteNotified && !tableHolds;
-          const parts = cleared ? snapUserTable(77, "Empty", false) : snapUserTable(77, "Keep");
+          const parts = cleared ? snapUserTable(77, "Empty 28", false) : snapUserTable(77, "Keep");
           for (const part of parts) {
             handler?.(part);
           }
@@ -2314,7 +2314,7 @@ async function assertSnapToneDelete(): Promise<void> {
       after.status !== "connected" ||
       after.chainSync !== "idle" ||
       after.patch !== patchBefore ||
-      after.userSnapSlots[27]?.name !== "Empty" ||
+      after.userSnapSlots[27]?.name !== "Empty 28" ||
       after.userSnapSlots[27]?.flag === 0 ||
       after.userSnapSlots[27]?.flag == null ||
       hitDeletes.length !== 1 ||
@@ -2323,7 +2323,7 @@ async function assertSnapToneDelete(): Promise<void> {
       hitSent.some((bytes) => packedHas(packedBody(bytes), 0x11, 0x26)) ||
       hitSent.some((bytes) => packetsEqual(bytes, SNAP_DELETE_NOTIFY))
     ) {
-      throw new Error("A deleted SnapTone must refresh to Empty from the slot table");
+      throw new Error("A deleted SnapTone must refresh from the slot table");
     }
   } finally {
     await session.disconnect();

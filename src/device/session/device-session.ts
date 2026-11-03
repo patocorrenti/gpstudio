@@ -29,6 +29,7 @@ import { emptyUserNsNames, NamNameDecoder } from "@/device/nam-names";
 import {
   decodeUserSnapTable,
   emptySnapSlots,
+  snapNameLooksVacant,
   encodeSnapImportFrames,
   encodeSnapTableRequest,
   encodeUserSnapDelete,
@@ -1507,7 +1508,7 @@ export class DeviceSession {
         ? this.snapshot.userSnapSlots
         : snapNames.map((name) => ({
             name,
-            flag: name === null ? null : name === "Empty" ? 1 : 0,
+            flag: name === null ? null : snapNameLooksVacant(name) ? 1 : 0,
           }));
     this.snapshot = { ...this.snapshot, userNsNames: names, userSnapSlots };
     this.emitSnapshot();
@@ -2480,7 +2481,9 @@ export class DeviceSession {
       }
       read = true;
       const entry = slots[slot - USER_SNAP_FIRST];
-      if (entry && entry.name === "Empty" && entry.flag !== 0 && entry.flag !== null) {
+      // GP-5 names a cleared slot `Empty`. GP-50 names it `Empty 28` and so on.
+      // The occupancy flag is the cleared check. The table keeps its own name.
+      if (entry && entry.flag !== 0 && entry.flag !== null) {
         return true;
       }
     }

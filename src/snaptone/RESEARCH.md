@@ -168,7 +168,9 @@ After each SET the pedal sends, and Suite then asks for the lists:
 
 1. Command-received ACK, 16 bytes, tail nibble `00`: `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`. Packed `01 00 03 14 08 00`.
 2. One notify, packed `01 00 06 12 1B 03 00 00 00`. Wire `F0 0C 0E 00 01 00 00 00 06 01 02 01 0B 00 03 00 00 00 00 00 00 F7`. The byte `03` is the same for slots 77, 78, and 79. It is the pedal's reply, not the delete.
-3. Suite requests the Nam catalog after that notify, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. The cleared name is `Empty`. On the rename capture the same notify arrived 2.0 s after the command ACK. A table read before it still shows the old slot, so GP Studio waits for `12 1B` before this read on delete as well.
+3. Suite requests the Nam catalog after that notify, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. On the GP-5 the cleared name is `Empty` with a flag other than 0. On the rename capture the same notify arrived 2.0 s after the command ACK. A table read before it still shows the old slot, so GP Studio waits for `12 1B` before this read on delete as well.
+
+A GP-50 USB capture of deleting protocol slot 77 uses the same SET, the same ACK, and the same `12 1B`. That notify arrived 125 ms after the ACK. The following `12 24` table names slot 77 `Empty 28` with flag 1. Vacant user slots in that table are `Empty 10` through `Empty 30` (protocol 59–79), each with flag 1. Success is the flag. The name is whatever that table stored. Do not require it to be exactly `Empty`. GP Studio still does not send `12 1C`.
 4. Suite requests globals, packed `01 00 02 12 1C`, wire `F0 09 0D 00 01 00 00 00 02 01 02 01 0C F7`. The pedal answers with command `00 05`.
 
 Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal once.
