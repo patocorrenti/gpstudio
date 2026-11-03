@@ -1,0 +1,25 @@
+## 1. TONE3000 client
+
+- [ ] 1.1 Add `src/features/tone3000/` with the publishable-key read (`VITE_TONE3000_CLIENT_ID`), PKCE (`S256`), and the authorize URL builder. Header sign-in omits `prompt`. Catalog uses `prompt=select_tone`, `format=nam`, `architecture=2`, `gears=amp_amp-cab`, and `menubar=true`. The redirect URI is the page origin root. No client secret, no `/tones/search`, and no import of `DeviceSession` or a MIDI transport. A self-check on import asserts the catalog query, rejects a missing `client_id`, and rejects a `state` that does not match the stored one. Verify that check runs when the module loads and `npx tsc -b --pretty false` exits 0.
+
+- [ ] 1.2 Persist access token, refresh token, and access expiry in `localStorage`. Keep the in-flight PKCE verifier and `state` in `sessionStorage`. Refresh with `POST /api/v1/oauth/token` and `grant_type=refresh_token`, then replace both stored tokens. One refresh at a time per tab, re-reading `localStorage` first. `invalid_grant` after that re-read clears the three token keys. Disconnect clears only those keys. Pedal disconnect and section changes do not. The self-check covers rotation (the previous refresh token is not what gets stored), a sibling-tab token already replaced before refresh, and Disconnect leaving the pedal session untouched (no session import). Verify the self-check and `npx tsc -b --pretty false` exits 0.
+
+- [ ] 1.3 After a token, `GET /api/v1/user` supplies the username. After a `tone_id`, `GET /api/v1/tones/{id}?architecture=2` and `GET /api/v1/models?tone_id={id}&architecture=2&page_size=300` run with the bearer. Download uses that model's `model_url` with the bearer. An empty A2 list is an English "no A2 model" result and does not call inspect. Verify a self-check that a fixture tone with only A1 models yields that result and does not build a file payload.
+
+## 2. OAuth return
+
+- [ ] 2.1 Before the hash router mounts, read `code`, `state`, and `tone_id` from `location.search`. In a frame, post those three to the parent and render nothing else. On the top window, verify `state`, exchange the code, store the tokens, strip the query, and replace the URL with `/#/`. A mismatched `state` stores nothing. Verify the self-check for a framed payload, a matching top-level return, and a mismatched `state`. `npx tsc -b --pretty false` exits 0.
+
+## 3. Shell control
+
+- [ ] 3.1 Show the TONE3000 control from `AppShell`, immediately before `MainMenu`, from the desktop breakpoint up. It is not inside the narrow-screen menu. It renders only when the snapshot is connected over USB, the publishable key is non-empty, and `isTauriRuntime()` is false. Signed out: muted dot, label `TONE3000`, opens the partnership modal (English, names GP Studio and TONE3000) and then TONE3000 sign-in inside that modal. Cancel stays signed out. Success closes the modal and shows a lime dot plus the username. Signed in: the status modal shows the username and Disconnect, and does not open the catalog. Activating the control does not change the route and does not send MIDI. Verify the visibility function's self-check for USB, Bluetooth, disconnected, Tauri, and an empty key, and `npx tsc -b --pretty false` exits 0.
+
+## 4. SnapTone catalog
+
+- [ ] 4.1 On a user row (protocol 50–79), beside disk upload, add TONE3000 when the shell control would be visible. Factory rows and the native window do not offer it. Bluetooth keeps the existing English explanation and does not offer it. The action opens one modal for that protocol index, with TONE3000's catalog iframed using the select URL from 1.1. A returned `tone_id` lists A2 models with title, gear, NAM, and the creator username. Choosing a model downloads it and uses the existing inspect, 10-character name, replace ask, `Converting…` / `Sending to the multi-effects…`, and success rules for that slot. A1 or an unsupported file shows the session reason and does not send. Cancel before confirm sends nothing. Disconnect closes the modal. The modal imports `@/device/session` only for inspect, convert, and upload. Verify `npx tsc -b --pretty false` exits 0 and that the feature module does not import a MIDI transport.
+
+## 5. Docs and build
+
+- [ ] 5.1 Update `docs/architecture.md` and the `context` in `openspec/config.yaml` so a web USB client may call TONE3000 with the publishable key and the user's token, and a GP Studio server stays out of scope. Pass `VITE_TONE3000_CLIENT_ID` into `npm run build` from the deploy workflow when the repository variable is set. An unset variable still builds, with the control hidden. Verify both docs mention the publishable key and the static site, and `npm run build` exits 0 with the variable unset.
+
+- [ ] 5.2 Add a short English note to `src/snaptone/HARDWARE_TEST.md`: on the production or staging web app, with the publishable key set and a USB pedal, sign in once, reopen and confirm the lime dot without the email code, open TONE3000 from a user slot, and confirm one A2 model takes the existing upload path. Bluetooth and the native window do not show the control. Pato runs that note. Do not add an in-browser pass.
