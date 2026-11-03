@@ -17,6 +17,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
+import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
+import { publishableKey } from "@/features/tone3000/oauth";
+import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 
 const UNKNOWN_SLOT = "This slot is unknown until SnapTone names are read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
@@ -102,6 +105,7 @@ export function SnapToneDialog({
   const previewRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(50);
+  const [toneSlot, setToneSlot] = useState<number | null>(null);
 
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
 
@@ -142,6 +146,7 @@ export function SnapToneDialog({
         toast(UNKNOWN_SLOT);
       }
     }
+    setToneSlot(null);
     onOpenChange(false);
   }, [deleteAsk?.phase, draft?.phase, onOpenChange, open, renameAsk?.phase, snapshot.status]);
 
@@ -150,6 +155,12 @@ export function SnapToneDialog({
   }
 
   const accepts = snapshot.snapFileLink;
+  const offerTone3000 = isTone3000ControlVisible({
+    connected: true,
+    usb: snapshot.linkMode === "usb",
+    publishableKey: publishableKey(),
+    tauri: isNativeDesktop(),
+  });
   const deleting = deleteAsk?.phase === "deleting";
   const renaming = renameAsk?.phase === "renaming";
   const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting || renaming;
@@ -369,7 +380,16 @@ export function SnapToneDialog({
   const overwriteName =
     draft && occupied?.flag === 0 ? slotLabel(occupied.name, draft.slot) : null;
 
+  const toneEntry = toneSlot === null ? undefined : snapshot.userSnapSlots[toneSlot - 50];
+  const existingName =
+    toneSlot !== null && toneEntry?.flag === 0
+      ? toneEntry.name && toneEntry.name.length > 0
+        ? toneEntry.name
+        : `SnapTone ${String(toneSlot)}`
+      : null;
+
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(next) => {
@@ -390,6 +410,7 @@ export function SnapToneDialog({
           setDraft(null);
           setDeleteAsk(null);
           setRenameAsk(null);
+          setToneSlot(null);
           deletingRef.current = false;
           renamingRef.current = false;
         }
@@ -625,6 +646,24 @@ export function SnapToneDialog({
                     </TooltipTrigger>
                     <TooltipContent side="right">Upload NAM</TooltipContent>
                   </Tooltip>
+                  {offerTone3000 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          aria-label={`TONE3000 SnapTone ${protocol}`}
+                          disabled={!accepts || busy}
+                          onClick={() => setToneSlot(protocol)}
+                        >
+                          TONE3000
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">TONE3000</TooltipContent>
+                    </Tooltip>
+                  ) : null}
                 </span>
               </div>
             );
@@ -688,5 +727,21 @@ export function SnapToneDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+    <Tone3000Catalog
+      open={toneSlot !== null}
+      onOpenChange={(next) => {
+        if (!next) {
+          setToneSlot(null);
+        }
+      }}
+      slot={toneSlot}
+      existingName={existingName}
+      session={session}
+      onUploaded={() => {
+        setToneSlot(null);
+        onOpenChange(false);
+      }}
+    />
+    </>
   );
 }
