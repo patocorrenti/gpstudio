@@ -16,6 +16,7 @@ import {
   subscribeTone3000Account,
 } from "@/features/tone3000/account";
 import { acceptOAuthState, publishableKey } from "@/features/tone3000/oauth";
+import { closeTone3000Popup, navigateTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
 import { setOAuthReturnHandler, type OAuthReturnFields } from "@/features/tone3000/return";
 import { STATE_KEY, beginAuthorize, exchangeAuthorizationCode } from "@/features/tone3000/tokens";
 import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
@@ -33,8 +34,9 @@ export function Tone3000Control() {
   const openRef = useRef(open);
   openRef.current = open;
   const [step, setStep] = useState<SignInStep>("partnership");
-  const [frameUrl, setFrameUrl] = useState("");
   const [error, setError] = useState("");
+  const popupRef = useRef<Window | null>(null);
+  const finishingRef = useRef(false);
   const visible = isTone3000ControlVisible({
     connected: snapshot.status === "connected",
     usb: snapshot.status === "connected" && snapshot.linkMode === "usb",
@@ -57,41 +59,58 @@ export function Tone3000Control() {
   }, [open, step]);
 
   async function finishSignIn(payload: OAuthReturnFields): Promise<void> {
+    if (finishingRef.current) {
+      return;
+    }
     if (!acceptOAuthState(payload.state, sessionStorage.getItem(STATE_KEY)) || !payload.code) {
       return;
     }
+    finishingRef.current = true;
     const exchanged = await exchangeAuthorizationCode(payload.code);
     if (!exchanged) {
+      finishingRef.current = false;
       setError("TONE3000 sign-in did not finish.");
       return;
     }
     const username = await completeTone3000SignIn();
     if (!username) {
+      finishingRef.current = false;
       setError("TONE3000 sign-in did not finish.");
       return;
     }
     setOpen(false);
   }
 
-  async function continueSignIn(): Promise<void> {
+  function continueSignIn(): void {
     setError("");
-    try {
-      const url = await beginAuthorize("sign-in");
-      if (!openRef.current) {
-        return;
-      }
-      setFrameUrl(url);
-      setStep("signin");
-    } catch {
-      setError("TONE3000 sign-in did not finish.");
+    const popup = openTone3000Popup();
+    if (!popup) {
+      setError("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      return;
     }
+    popupRef.current = popup;
+    setStep("signin");
+    void beginAuthorize("sign-in")
+      .then((url) => {
+        if (!openRef.current || popup.closed) {
+          closeTone3000Popup(popup);
+          return;
+        }
+        navigateTone3000Popup(popup, url);
+      })
+      .catch(() => {
+        closeTone3000Popup(popup);
+        setError("TONE3000 sign-in did not finish.");
+      });
   }
 
   function close(): void {
     openRef.current = false;
+    finishingRef.current = false;
+    closeTone3000Popup(popupRef.current);
+    popupRef.current = null;
     setOpen(false);
     setStep("partnership");
-    setFrameUrl("");
     setError("");
   }
 
@@ -117,7 +136,6 @@ export function Tone3000Control() {
             return;
           }
           setStep("partnership");
-          setFrameUrl("");
           setError("");
           openRef.current = true;
           setOpen(true);
@@ -145,7 +163,7 @@ export function Tone3000Control() {
       >
         <DialogContent
           aria-describedby={undefined}
-          className={step === "signin" && !signedIn ? "sm:max-w-3xl" : "sm:max-w-md"}
+          className="sm:max-w-md"
         >
           {signedIn ? (
             <>
@@ -192,13 +210,9 @@ export function Tone3000Control() {
               <DialogHeader>
                 <DialogTitle>TONE3000</DialogTitle>
               </DialogHeader>
-              {frameUrl ? (
-                <iframe
-                  title="TONE3000 sign-in"
-                  src={frameUrl}
-                  className="h-[70vh] w-full rounded-md border"
-                />
-              ) : null}
+              <p className="text-sm text-muted-foreground">
+                Finish signing in in the TONE3000 window. This page stays open.
+              </p>
               {error ? <p className="text-sm">{error}</p> : null}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={close}>

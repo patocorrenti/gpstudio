@@ -19,6 +19,14 @@ import {
 } from "@/features/tone3000/api";
 import { completeTone3000SignIn } from "@/features/tone3000/account";
 import { acceptOAuthState } from "@/features/tone3000/oauth";
+import {
+  closeTone3000Popup,
+  holdTone3000Popup,
+  navigateTone3000Popup,
+  openTone3000Popup,
+  peekTone3000Popup,
+  takeTone3000Popup,
+} from "@/features/tone3000/popup";
 import { setOAuthReturnHandler, type OAuthReturnFields } from "@/features/tone3000/return";
 import {
   STATE_KEY,
@@ -61,7 +69,7 @@ export function Tone3000Catalog({
   session: DeviceSession;
   onUploaded: () => void;
 }) {
-  const [url, setUrl] = useState("");
+  const [waiting, setWaiting] = useState(false);
   const [tone, setTone] = useState<ListedTone | null>(null);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -71,6 +79,7 @@ export function Tone3000Catalog({
   const abortRef = useRef<AbortController | null>(null);
   const previewRef = useRef(0);
   const handledRef = useRef(false);
+  const popupRef = useRef<Window | null>(null);
   const acceptRef = useRef<(payload: OAuthReturnFields) => void>(() => {});
 
   useEffect(() => {
@@ -106,15 +115,29 @@ export function Tone3000Catalog({
     setTone(null);
     setNotice("");
     setDraft(null);
-    setUrl("");
+    setWaiting(false);
+    const popup = peekTone3000Popup();
+    if (!popup) {
+      setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      return;
+    }
     void beginAuthorize("catalog")
       .then((next) => {
-        if (!cancelled) {
-          setUrl(next);
+        if (cancelled) {
+          return;
         }
+        const current = takeTone3000Popup() ?? popup;
+        if (current.closed) {
+          setNotice("The TONE3000 window was closed.");
+          return;
+        }
+        navigateTone3000Popup(current, next);
+        popupRef.current = current;
+        setWaiting(true);
       })
       .catch(() => {
         if (!cancelled) {
+          closeTone3000Popup(takeTone3000Popup() ?? popup);
           setNotice("TONE3000 is not configured.");
         }
       });
@@ -137,13 +160,13 @@ export function Tone3000Catalog({
     if (!open || slot === null || handledRef.current) {
       return;
     }
-    if (!acceptOAuthState(payload.state, sessionStorage.getItem(STATE_KEY)) || !payload.code || !payload.tone_id) {
+    if (!acceptOAuthState(payload.state, sessionStorage.getItem(STATE_KEY)) || !payload.code) {
       return;
     }
     handledRef.current = true;
     const toneId = payload.tone_id;
     setNotice("");
-    setUrl("");
+    setWaiting(false);
     void (async () => {
       const exchanged = await exchangeAuthorizationCode(payload.code ?? "");
       if (!exchanged) {
@@ -151,6 +174,11 @@ export function Tone3000Catalog({
         return;
       }
       await completeTone3000SignIn();
+      if (!toneId) {
+        handledRef.current = false;
+        setNotice("Signed in. Open TONE3000 again to choose a tone.");
+        return;
+      }
       const access = await ensureAccessToken();
       if (!access) {
         setNotice("TONE3000 sign-in did not finish.");
@@ -280,8 +308,32 @@ export function Tone3000Catalog({
   }
 
   const busy = draft?.phase === "converting" || draft?.phase === "sending";
-  const showCatalog = draft === null && !tone && !notice && url;
   const showModels = draft === null && tone !== null;
+
+  function openCatalogAgain(): void {
+    const popup = openTone3000Popup();
+    if (!popup) {
+      setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      return;
+    }
+    holdTone3000Popup(popup);
+    setNotice("");
+    setWaiting(false);
+    void beginAuthorize("catalog")
+      .then((next) => {
+        if (popup.closed) {
+          setNotice("The TONE3000 window was closed.");
+          return;
+        }
+        navigateTone3000Popup(popup, next);
+        popupRef.current = popup;
+        setWaiting(true);
+      })
+      .catch(() => {
+        closeTone3000Popup(popup);
+        setNotice("TONE3000 is not configured.");
+      });
+  }
 
   return (
     <Dialog
@@ -296,7 +348,10 @@ export function Tone3000Catalog({
           setDraft(null);
           setTone(null);
           setNotice("");
-          setUrl("");
+          setWaiting(false);
+          closeTone3000Popup(popupRef.current);
+          popupRef.current = null;
+          closeTone3000Popup(takeTone3000Popup());
         }
         onOpenChange(next);
       }}
@@ -305,7 +360,7 @@ export function Tone3000Catalog({
         aria-describedby={undefined}
         showCloseButton={draft?.phase !== "sending"}
         className={
-          showCatalog || showModels
+          showModels
             ? "flex h-[min(85vh,52rem)] max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl"
             : "max-h-[85vh] overflow-hidden sm:max-w-lg"
         }
@@ -313,11 +368,13 @@ export function Tone3000Catalog({
         <DialogHeader>
           <DialogTitle>{slot === null ? "TONE3000" : `TONE3000 · ${String(slot).padStart(2, "0")}`}</DialogTitle>
         </DialogHeader>
-        {draft === null && !tone && !notice && !url ? (
+        {draft === null && !tone && !notice && !waiting ? (
           <p className="text-sm text-muted-foreground">Opening TONE3000…</p>
         ) : null}
-        {showCatalog ? (
-          <iframe title="TONE3000" src={url} className="min-h-0 w-full flex-1 rounded-md border" />
+        {draft === null && !tone && waiting ? (
+          <p className="text-sm text-muted-foreground">
+            Choose a tone in the TONE3000 window. This page stays open.
+          </p>
         ) : null}
         {showModels && tone ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -405,8 +462,13 @@ export function Tone3000Catalog({
               Confirm
             </Button>
           </DialogFooter>
-        ) : notice ? (
+        ) : waiting || notice ? (
           <DialogFooter>
+            {notice === "Signed in. Open TONE3000 again to choose a tone." ? (
+              <Button type="button" onClick={openCatalogAgain}>
+                Open TONE3000
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

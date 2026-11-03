@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
 import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
+import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
 import { publishableKey } from "@/features/tone3000/oauth";
 import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 
@@ -656,7 +657,15 @@ export function SnapToneDialog({
                           className="h-7 px-2 text-xs"
                           aria-label={`TONE3000 SnapTone ${protocol}`}
                           disabled={!accepts || busy}
-                          onClick={() => setToneSlot(protocol)}
+                          onClick={() => {
+                            const popup = openTone3000Popup();
+                            if (!popup) {
+                              toast("Allow popups for GP Studio and try again.");
+                              return;
+                            }
+                            holdTone3000Popup(popup);
+                            setToneSlot(protocol);
+                          }}
                         >
                           TONE3000
                         </Button>

@@ -1,10 +1,13 @@
 import { acceptOAuthState } from "@/features/tone3000/oauth";
+import { TONE3000_WINDOW_NAME } from "@/features/tone3000/popup";
 import {
   STATE_KEY,
   exchangeAuthorizationCode,
   memoryStore,
   type KeyValueStore,
 } from "@/features/tone3000/tokens";
+
+const RETURN_CHANNEL = "gpstudio-tone3000";
 
 export type OAuthReturnFields = {
   code: string | null;
@@ -46,16 +49,21 @@ function nullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
 }
 
+export function isOAuthHelper(input: { framed: boolean; windowName: string; hasOpener: boolean }): boolean {
+  return input.framed || input.windowName === TONE3000_WINDOW_NAME || input.hasOpener;
+}
+
 export function planOAuthReturn(input: {
   search: string;
   framed: boolean;
   storedState: string | null;
+  helper?: boolean;
 }): OAuthReturnPlan {
   const payload = readOAuthReturn(input.search);
   if (!payload) {
     return { kind: "none" };
   }
-  if (input.framed) {
+  if (input.framed || input.helper) {
     return { kind: "frame", payload };
   }
   if (!payload.code || !acceptOAuthState(payload.state, input.storedState)) {
@@ -92,6 +100,25 @@ type ReturnHandler = (payload: OAuthReturnFields) => void;
 let returnHandler: ReturnHandler | null = null;
 let listening = false;
 
+function publishReturn(payload: OAuthReturnFields): void {
+  if (window.opener && window.opener !== window) {
+    try {
+      window.opener.postMessage(payload, window.location.origin);
+    } catch {
+      // A cross-origin opener cannot receive the payload. The channel still can.
+    }
+  }
+  if (window.parent !== window) {
+    window.parent.postMessage(payload, window.location.origin);
+  }
+  if (typeof BroadcastChannel === "undefined") {
+    return;
+  }
+  const channel = new BroadcastChannel(RETURN_CHANNEL);
+  channel.postMessage(payload);
+  channel.close();
+}
+
 export function setOAuthReturnHandler(handler: ReturnHandler | null): void {
   returnHandler = handler;
   if (handler && !listening && typeof window !== "undefined") {
@@ -102,6 +129,14 @@ export function setOAuthReturnHandler(handler: ReturnHandler | null): void {
       }
       returnHandler?.(event.data);
     });
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(RETURN_CHANNEL);
+      channel.onmessage = (event: MessageEvent) => {
+        if (isOAuthReturnMessage(event.data)) {
+          returnHandler?.(event.data);
+        }
+      };
+    }
   }
 }
 
@@ -109,17 +144,27 @@ export function bootTone3000Return(): "blank" | "ready" | Promise<void> {
   if (typeof window === "undefined") {
     return "ready";
   }
+  const payload = readOAuthReturn(window.location.search);
+  const popup = window.name === TONE3000_WINDOW_NAME;
+  const framed = window.parent !== window;
+  if (popup) {
+    if (payload) {
+      publishReturn(payload);
+    }
+    window.close();
+    return "blank";
+  }
+  if (framed && payload) {
+    publishReturn(payload);
+    return "blank";
+  }
   const plan = planOAuthReturn({
     search: window.location.search,
-    framed: window.parent !== window,
+    framed: false,
     storedState: window.sessionStorage.getItem(STATE_KEY),
   });
   if (plan.kind === "none" || plan.kind === "mismatch") {
     return "ready";
-  }
-  if (plan.kind === "frame") {
-    window.parent.postMessage(plan.payload, window.location.origin);
-    return "blank";
   }
   return exchangeAuthorizationCode(plan.payload.code ?? "").then((ok) => {
     if (ok) {
@@ -146,6 +191,15 @@ async function assertOAuthReturn(): Promise<void> {
     framed.payload.tone_id !== "42"
   ) {
     throw new Error("A framed return must post code, state, and tone_id");
+  }
+  const popup = planOAuthReturn({
+    search: "?code=abc&state=match&tone_id=42",
+    framed: false,
+    storedState: null,
+    helper: true,
+  });
+  if (popup.kind !== "frame" || popup.payload.tone_id !== "42" || !isOAuthHelper({ framed: false, windowName: TONE3000_WINDOW_NAME, hasOpener: false })) {
+    throw new Error("A TONE3000 popup must post the return and must not store tokens itself");
   }
 
   const tokens: KeyValueStore = memoryStore();
