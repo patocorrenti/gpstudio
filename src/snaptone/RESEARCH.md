@@ -114,7 +114,7 @@ Same SnapTone file and same upload command.
 
 ## 9. Deleting a user SnapTone
 
-VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. Suite 1.1.2 does send one. The sizes below come from that binary. They are not a pedal capture, and they are not a guess to put on the wire.
+VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. The Android binary below has a `0x26` sender. A Windows Suite session on a GP-5 did not send `0x26`. Do not put either layout on the wire.
 
 Binary: Valeton Suite 1.1.2 for Android, `lib/arm64-v8a/libapp.so`. Addresses are file offsets.
 
@@ -148,18 +148,26 @@ Not on the wire:
 - `movz x2, #0x8` and `bl 0x94e43c` at `0x6914a4` copy 8 bytes into the builder object. There is no third descriptor for that copy.
 - `movz x1, #0xa` at `0x6912ec` is stored on a model object and then taken down the UI path (`bl 0x5c1a04`, branch to `0x39725c`). It is not a chunk length. Ten is also `NAME_MAX`; that does not make it a payload byte.
 
-Still open, until a MIDI capture of Suite deleting one user slot:
+### Windows capture (GP-5, USB)
 
-- The integer in the 4 bytes. Import addresses a SnapTone as `fxId = 0x0f000000 + slot` and sends `nId` 0. Delete preset addresses a preset as the raw slot u32. Either integer fits this descriptor.
-- The 16 bytes. The width and the runtime source say the name field. They may be the slot's current name, or 16 zeros.
+Suite on Windows, pedal on USB, MIDI bridged with loopMIDI (`scripts/snaptone-delete-capture.py`). The bridge reads the GP-5 input and the virtual-port input. Every saved burst starts on the GP-5 input. The virtual-port line that follows is the same bytes, because the bridge writes the pedal reply into the virtual port and that write comes back. No SysEx in these logs starts on the virtual port. Suite's own output was not in the capture. Windows lets a second program open the pedal's MIDI out, so Suite can still have been sending straight to the GP-5.
 
-Do not send `0x26` until those two are read off the wire. A wrong body already wedged a pedal once.
+What the pedal did send, once per deleted row:
+
+1. Command-received ACK, 16 bytes, tail nibble `00`: `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`.
+2. One SET, packed `01 00 06 12 1B 03 00 00 00`, CRC-8 ATM, nibble-expanded. On the wire: `F0 0C 0E 00 01 00 00 00 06 01 02 01 0B 00 03 00 00 00 00 00 00 F7`. The byte `03` is the same for protocol slots 77, 78, and 79. This arrived on the pedal input, so it is not established as Suite's command.
+3. The USB Nam catalog, command `04 08`, 72 fragments. The cleared slot's name in that catalog is `Empty`.
+4. Another ACK with tail nibble `01`, then the GP-5 globals dump, command `00 05`.
+
+Two deleted rows produce two of those replies, then one catalog. `0x26` does not appear. The bottom row of that Suite list is protocol slot 79. `JVMOD1Gree`, two rows above the bottom, was protocol slot 77 (`164 + 77 * 32` in the merged name table). The penultimate row was protocol slot 78. Tapping a row produced no log line.
+
+Do not send `0x26`, and do not send `12 1B` from GP Studio. The command that names the slot was not captured. A wrong body already wedged a pedal once.
 
 Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x26`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
 
 USB only, for the same reason as section 7: this send is the USB SysEx path.
 
-When the two fields are known, a delete matches the upload gate. USB, user slots 50–79 only, the same ACK and resend limits, then read `0x24` again. The slot is clear only when its flag is not 0. The name the pedal leaves behind is not specified; do not assume it becomes `"Empty"`.
+The cleared slot's name in the Nam catalog is `Empty`. A GP Studio delete still needs the host command that names the slot. This capture does not have it.
 
 ## Decision 1
 
@@ -176,7 +184,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - VLTN's `isEmptySlot` (`app/src/shared/tone3000.ts` lines 167–184) treats `""` as empty, which disagrees with the flag and with the GP-5 model picker. The flag is the one marked verified on hardware. Follow the flag.
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
 - The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
-- SnapTone delete is command `0x26` with a 4-byte field and then 16 bytes (section 9). Which integer is in the 4 bytes, and whether the 16 bytes are the current name or zeros, needs a capture of Suite deleting one user slot. Until then the command is not sent.
+- The Windows delete capture logged the pedal's reply, not Suite's output (section 9). The host command that names the slot is still missing. Do not send `0x26` or `12 1B`.
 
 ## Golden compare
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Capture Valeton Suite's SnapTone delete without guessing the payload.
 
-Suite opens the pedal's USB MIDI port exclusively, so this process sits in
-the middle. loopMIDI (https://www.tobias-erichsen.de/software/loopmidi.html)
-provides one virtual port. Suite uses that port. This script owns the pedal
-and forwards both directions, logging every SysEx.
+Windows MIDI has no tap on another program's writes to the pedal. Suite's
+MIDI out has to be the virtual port, and this process forwards that to the
+GP-5. loopMIDI (https://www.tobias-erichsen.de/software/loopmidi.html)
+provides that port. Bytes this process just wrote are dropped when they
+loop back, so a "suite->pedal" line is Suite's output and a "pedal->suite"
+line is the pedal.
 
 Windows setup:
 
@@ -105,6 +107,27 @@ def parse_frame(packed: bytes) -> tuple[bool, int, int, bytes] | None:
 
 def hex_bytes(data: bytes) -> str:
     return " ".join(f"{byte:02X}" for byte in data)
+
+
+class EchoGate:
+    """Drop a message that is the copy of bytes this process just sent."""
+
+    def __init__(self, window_s: float = 0.5) -> None:
+        self._window_s = window_s
+        self._sent: list[tuple[float, bytes]] = []
+
+    def remember(self, message: bytes, now: float | None = None) -> None:
+        stamp = time.monotonic() if now is None else now
+        self._sent.append((stamp, message))
+        self._sent = [(sent_at, body) for sent_at, body in self._sent if stamp - sent_at < self._window_s]
+
+    def take(self, message: bytes, now: float | None = None) -> bool:
+        stamp = time.monotonic() if now is None else now
+        for index, (sent_at, body) in enumerate(self._sent):
+            if stamp - sent_at < self._window_s and body == message:
+                del self._sent[index]
+                return True
+        return False
 
 
 class Assembler:
@@ -316,18 +339,25 @@ def bridge(virtual: str, pedal: str | None, log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = log_path.open("a", encoding="utf-8")
     assemblers: dict[str, Assembler] = {}
+    to_suite = EchoGate()
+    to_pedal = EchoGate()
     print(f"Pedal in:  {inputs[pedal_in]}")
     print(f"Pedal out: {outputs[pedal_out]}")
     print(f"Suite port: {inputs[virtual_in]}")
     print(f"Log: {log_path}")
-    print("In Suite, select this virtual port for MIDI in and MIDI out.")
-    print("Then delete one user SnapTone. Note the slot number and the name.")
-    print("Ctrl+C stops the bridge. The pedal hears Suite, including the delete.")
+    print("Suite MIDI out must be this virtual port, not the GP-5.")
+    print("Bytes written straight to the pedal are invisible here.")
+    print("suite->pedal is Suite. pedal->suite is the pedal.")
+    print("Ctrl+C stops the bridge.")
     try:
         while True:
             try:
                 direction, message = events.get(timeout=0.5)
             except queue.Empty:
+                continue
+            if direction == "pedal->suite" and to_pedal.take(message):
+                continue
+            if direction == "suite->pedal" and to_suite.take(message):
                 continue
             stamp = time.strftime("%H:%M:%S")
             text = f"{stamp} {direction} {hex_bytes(message)}"
@@ -340,8 +370,10 @@ def bridge(virtual: str, pedal: str | None, log_path: Path) -> None:
             log_file.flush()
             if direction == "suite->pedal":
                 pedal_midi_out.send_message(message)
+                to_pedal.remember(message)
             else:
                 suite_out.send_message(message)
+                to_suite.remember(message)
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
@@ -391,6 +423,15 @@ def self_test() -> None:
     again = iter_logged_sysex(logged + "\n")
     if len(again) != 1 or again[0][0] != "suite->pedal":
         raise SystemExit("log parser failed")
+    gate = EchoGate(window_s=0.5)
+    gate.remember(b"\xf0\x00\xf7", now=10.0)
+    if not gate.take(b"\xf0\x00\xf7", now=10.2):
+        raise SystemExit("echo gate missed its own write")
+    if gate.take(b"\xf0\x00\xf7", now=10.3):
+        raise SystemExit("echo gate dropped a second copy")
+    gate.remember(b"\xf0\x01\xf7", now=10.0)
+    if gate.take(b"\xf0\x01\xf7", now=10.6):
+        raise SystemExit("echo gate kept a stale write")
     print("self-test ok")
 
 
