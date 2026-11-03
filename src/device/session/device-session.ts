@@ -31,12 +31,14 @@ import {
   emptySnapSlots,
   encodeSnapImportFrames,
   encodeSnapTableRequest,
+  encodeUserSnapDelete,
   factorySnapToneLabels as factorySnapLabels,
   parseSnapSysex,
   sanitizeSnapToneName,
   SNAP_FILE_BYTES,
   SnapPayloadReassembler,
   USER_SNAP_FIRST,
+  USER_SNAP_LAST,
   type SnapSlot,
 } from "@/device/snaptone-table";
 import { inspectNam as inspectNamFile, type NamInspection } from "@/snaptone/inspect";
@@ -166,6 +168,12 @@ export type SnapUploadResult =
       /** True once any file byte was written. The slot is unknown until names are read again. */
       sent?: boolean;
     };
+export type SnapDeleteResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "busy" | "disconnected" | "link" | "factory" | "verify" | "closed" | "port";
+    };
 export type { NamInspection, SnapSlot };
 export type { OmittedFactoryModel };
 
@@ -181,7 +189,7 @@ export type SessionSnapshot =
       userNsNames: (string | null)[];
       /** Protocol indices 50–79. Flag 0 holds a capture, including a blank name. */
       userSnapSlots: SnapSlot[];
-      /** A SnapTone file write is in progress. This is not a chain refresh. */
+      /** A SnapTone file write or user-slot delete is in progress. This is not a chain refresh. */
       snapFileSend: boolean;
       /** USB can accept a SnapTone file. Bluetooth cannot. */
       snapFileLink: boolean;
@@ -230,6 +238,7 @@ export class DeviceSession {
   private readonly namNames = new NamNameDecoder();
   private readonly snapReassembler = new SnapPayloadReassembler();
   private snapAck: ((accepted: boolean) => void) | null = null;
+  private snapDeleteAck: ((accepted: boolean) => void) | null = null;
   private snapTableWait: ((slots: SnapSlot[] | null) => void) | null = null;
   private snapCollecting = false;
   private snapTableReady = false;
@@ -1252,7 +1261,7 @@ export class DeviceSession {
       return;
     }
     for (const message of this.sysex.push(bytes)) {
-      if (this.noteSnapFrame(message)) {
+      if (this.noteDeleteAck(message) || this.noteSnapFrame(message)) {
         continue;
       }
       this.noteRecallAck(message);
@@ -2083,6 +2092,51 @@ export class DeviceSession {
     }
   }
 
+  async deleteUserSnapTone(slot: number): Promise<SnapDeleteResult> {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    if (this.writesBlocked()) {
+      return { ok: false, reason: "busy" };
+    }
+    if (!this.snapshot.snapFileLink) {
+      return { ok: false, reason: "link" };
+    }
+    if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
+      return { ok: false, reason: "factory" };
+    }
+    let frame: Uint8Array;
+    try {
+      frame = encodeUserSnapDelete(slot);
+    } catch {
+      return { ok: false, reason: "factory" };
+    }
+    this.snapshot = { ...this.snapshot, snapFileSend: true };
+    this.emitSnapshot();
+    try {
+      if (!this.linkIsOpen() || this.snapshot.linkMode !== "usb") {
+        return { ok: false, reason: "closed" };
+      }
+      const acked = this.waitDeleteAck(this.snapAckMs);
+      const wrote = await this.sendSnapFrame(frame);
+      if (wrote !== "ok") {
+        this.cancelDeleteAck();
+        return { ok: false, reason: wrote };
+      }
+      if (!(await acked)) {
+        this.forgetSnapSlot(slot);
+        return { ok: false, reason: "verify" };
+      }
+      const cleared = await this.verifySnapSlotCleared(slot);
+      return cleared ? { ok: true } : { ok: false, reason: "verify" };
+    } finally {
+      if (this.snapshot.status === "connected" && this.snapshot.snapFileSend) {
+        this.snapshot = { ...this.snapshot, snapFileSend: false };
+        this.emitSnapshot();
+      }
+    }
+  }
+
   private async sendSnapFrame(bytes: Uint8Array): Promise<"ok" | "port" | "closed"> {
     if (!this.linkIsOpen() || this.snapshot.status !== "connected" || this.snapshot.linkMode !== "usb") {
       return "closed";
@@ -2118,12 +2172,56 @@ export class DeviceSession {
     });
   }
 
+  private waitDeleteAck(timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (accepted: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (this.snapDeleteAck === onAck) {
+          this.snapDeleteAck = null;
+        }
+        resolve(accepted);
+      };
+      const onAck = (accepted: boolean) => finish(accepted);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      this.snapDeleteAck = onAck;
+    });
+  }
+
+  private cancelDeleteAck(): void {
+    const ack = this.snapDeleteAck;
+    this.snapDeleteAck = null;
+    ack?.(false);
+  }
+
+  /** Command-received ACK: 16 bytes, tail nibble 00. Not a slot-table frame. */
+  private noteDeleteAck(message: Uint8Array): boolean {
+    if (!this.snapDeleteAck || !isCommandReceivedAck(message)) {
+      return false;
+    }
+    if (message[13] !== 0x00 || message[14] !== 0x00) {
+      return false;
+    }
+    const resolve = this.snapDeleteAck;
+    this.snapDeleteAck = null;
+    resolve(true);
+    return true;
+  }
+
   private noteSnapFrame(message: Uint8Array): boolean {
     const frame = parseSnapSysex(message);
     if (!frame?.crcOk) {
       return false;
     }
     const kind = frame.payload[0];
+    // Pedal notify after a delete. The trailing byte does not name the slot.
+    if (kind === 0x12 && frame.payload[1] === 0x1b) {
+      return true;
+    }
     if (frame.total === 1 && (kind === 0x14 || kind === 0x13)) {
       if (!this.snapAck) {
         return false;
@@ -2187,6 +2285,7 @@ export class DeviceSession {
     const ack = this.snapAck;
     this.snapAck = null;
     ack?.(false);
+    this.cancelDeleteAck();
     const table = this.snapTableWait;
     this.snapTableWait = null;
     table?.(null);
@@ -2248,6 +2347,31 @@ export class DeviceSession {
       read = true;
       const entry = slots[slot - USER_SNAP_FIRST];
       if (entry?.flag === 0 && entry.name === name) {
+        return true;
+      }
+    }
+    if (!read) {
+      this.forgetSnapSlot(slot);
+    }
+    return false;
+  }
+
+  private async verifySnapSlotCleared(slot: number): Promise<boolean> {
+    let read = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) {
+        await this.delay(500);
+      }
+      if (this.snapshot.status !== "connected") {
+        return false;
+      }
+      const slots = await this.readSnapTable();
+      if (!slots) {
+        continue;
+      }
+      read = true;
+      const entry = slots[slot - USER_SNAP_FIRST];
+      if (entry && entry.name === "Empty" && entry.flag !== 0 && entry.flag !== null) {
         return true;
       }
     }

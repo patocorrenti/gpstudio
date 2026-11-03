@@ -72,6 +72,37 @@ export function encodeSnapTableRequest(): Uint8Array {
   return frameSysex(1, 0, Uint8Array.from([0x12, 0x24]));
 }
 
+/**
+ * One USB parameter-write SET that deletes a user SnapTone.
+ * Packed `01 00 06 11 27` plus fxId `0x0F000000 + slot` (little-endian),
+ * CRC-8 ATM, nibble-expand, `F0`…`F7`. Not the Android `0x26` file command
+ * and not the pedal's `12 1B` notify.
+ */
+export function encodeUserSnapDelete(slot: number): Uint8Array {
+  if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
+    throw new RangeError("SnapTone deletes go to user slots 50–79.");
+  }
+  const fxId = 0x0f000000 + slot;
+  const packed = Uint8Array.from([
+    0x01,
+    0x00,
+    0x06,
+    0x11,
+    0x27,
+    fxId & 0xff,
+    (fxId >>> 8) & 0xff,
+    (fxId >>> 16) & 0xff,
+    (fxId >>> 24) & 0xff,
+  ]);
+  const framed = Uint8Array.from([crc8Atm(packed), ...packed]);
+  const body = nibbleExpand(framed);
+  const midi = new Uint8Array(body.length + 2);
+  midi[0] = 0xf0;
+  midi.set(body, 1);
+  midi[midi.length - 1] = 0xf7;
+  return midi;
+}
+
 export function encodeSnapImportFrames(slot: number, name: string, file: Uint8Array): Uint8Array[] {
   if (!Number.isInteger(slot) || slot < USER_SNAP_FIRST || slot > USER_SNAP_LAST) {
     throw new RangeError("SnapTone uploads go to user slots 50–79.");

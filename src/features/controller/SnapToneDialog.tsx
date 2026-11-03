@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SearchIcon, Upload } from "lucide-react";
+import { SearchIcon, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,13 @@ type Draft = {
   inspection: NamInspection;
   name: string;
   phase: Phase;
+  message: string;
+};
+
+type DeleteAsk = {
+  slot: number;
+  name: string;
+  phase: "confirm" | "deleting" | "error";
   message: string;
 };
 
@@ -78,7 +85,9 @@ export function SnapToneDialog({
   const [shownProgress, setShownProgress] = useState(0);
   const realProgress = useRef(0);
   const [query, setQuery] = useState("");
+  const [deleteAsk, setDeleteAsk] = useState<DeleteAsk | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const deletingRef = useRef(false);
   const toldRef = useRef(false);
   const finishedRef = useRef(false);
   const previewRef = useRef(0);
@@ -118,21 +127,22 @@ export function SnapToneDialog({
     if (snapshot.status === "connected") {
       return;
     }
-    if (draft?.phase === "sending") {
+    if (draft?.phase === "sending" || deleteAsk?.phase === "deleting") {
       if (!toldRef.current) {
         toldRef.current = true;
         toast(UNKNOWN_SLOT);
       }
     }
     onOpenChange(false);
-  }, [draft?.phase, onOpenChange, open, snapshot.status]);
+  }, [deleteAsk?.phase, draft?.phase, onOpenChange, open, snapshot.status]);
 
   if (snapshot.status !== "connected") {
     return null;
   }
 
   const accepts = snapshot.snapFileLink;
-  const busy = draft?.phase === "converting" || draft?.phase === "sending";
+  const deleting = deleteAsk?.phase === "deleting";
+  const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting;
   const factory = session.factorySnapToneLabels();
 
   function tellUnknown() {
@@ -174,6 +184,54 @@ export function SnapToneDialog({
     setConvertProgress(0);
     setShownProgress(0);
     setDraft(null);
+  }
+
+  function cancelDelete() {
+    if (deleteAsk?.phase === "deleting") {
+      return;
+    }
+    deletingRef.current = false;
+    setDeleteAsk(null);
+  }
+
+  async function startDelete() {
+    if (deletingRef.current || !deleteAsk || deleteAsk.phase !== "confirm" || busy) {
+      return;
+    }
+    deletingRef.current = true;
+    toldRef.current = false;
+    const slot = deleteAsk.slot;
+    const name = deleteAsk.name;
+    setDeleteAsk({ slot, name, phase: "deleting", message: "Deleting SnapTone…" });
+    try {
+      const result = await session.deleteUserSnapTone(slot);
+      if (result.ok) {
+        toast.success(`SnapTone ${String(slot).padStart(2, "0")} deleted.`);
+        setDeleteAsk(null);
+        return;
+      }
+      const now = session.getSnapshot();
+      const entry = now.status === "connected" ? now.userSnapSlots[slot - 50] : undefined;
+      const unknown = now.status !== "connected" || entry?.flag == null;
+      const message =
+        result.reason === "link"
+          ? "Bluetooth cannot send a SnapTone file. Connect with USB."
+          : result.reason === "port"
+            ? PORT_ERROR
+            : result.reason === "busy"
+              ? "The pedal is busy."
+              : unknown
+                ? UNKNOWN_SLOT
+                : "The SnapTone was not deleted.";
+      if (unknown && result.reason !== "link" && result.reason !== "port" && result.reason !== "busy") {
+        tellUnknown();
+      }
+      setDeleteAsk({ slot, name, phase: "error", message });
+    } catch {
+      setDeleteAsk({ slot, name, phase: "error", message: "The SnapTone was not deleted." });
+    } finally {
+      deletingRef.current = false;
+    }
   }
 
   async function startSend() {
@@ -257,7 +315,7 @@ export function SnapToneDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && draft?.phase === "sending") {
+        if (!next && (draft?.phase === "sending" || deleteAsk?.phase === "deleting")) {
           return;
         }
         if (!next && busy && !finishedRef.current) {
@@ -272,23 +330,37 @@ export function SnapToneDialog({
           setShownProgress(0);
           setQuery("");
           setDraft(null);
+          setDeleteAsk(null);
+          deletingRef.current = false;
         }
         onOpenChange(next);
       }}
     >
       <DialogContent
         aria-describedby={undefined}
-        showCloseButton={draft?.phase !== "sending"}
+        showCloseButton={draft?.phase !== "sending" && deleteAsk?.phase !== "deleting"}
         className="max-h-[85vh] overflow-hidden sm:max-w-lg"
       >
         <DialogHeader>
           <DialogTitle>SnapTones</DialogTitle>
         </DialogHeader>
-        {accepts || preview ? null : (
+        {accepts || preview || deleteAsk ? null : (
           <p className="text-sm text-muted-foreground">
             Bluetooth cannot send a SnapTone file. Connect with USB.
           </p>
         )}
+        {deleteAsk?.phase === "deleting" ? (
+          <p className="px-4 py-14 text-center text-sm">{deleteAsk.message}</p>
+        ) : null}
+        {deleteAsk && deleteAsk.phase !== "deleting" ? (
+          <div className="flex flex-col gap-3 py-1">
+            {deleteAsk.phase === "confirm" ? (
+              <p className="text-sm">{`Delete SnapTone ${String(deleteAsk.slot).padStart(2, "0")} (${deleteAsk.name})?`}</p>
+            ) : (
+              <p className="text-sm">{deleteAsk.message}</p>
+            )}
+          </div>
+        ) : null}
         {preview && draft && busy ? (
           <div className="flex flex-col items-center gap-5 px-4 py-14 text-center">
             <p className="text-sm">{draft.message}</p>
@@ -340,7 +412,7 @@ export function SnapToneDialog({
             {draft.message ? <p className="text-sm">{draft.message}</p> : null}
           </div>
         ) : null}
-        {preview ? null : (
+        {preview || deleteAsk ? null : (
         <TooltipProvider delayDuration={300}>
         <div className="flex flex-col gap-2">
           <div className="relative">
@@ -400,24 +472,50 @@ export function SnapToneDialog({
                   <SlotIndex index={protocol} />
                   <span className="truncate">{label}</span>
                 </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label="Upload NAM"
-                      disabled={!accepts || busy}
-                      onClick={() => {
-                        slotRef.current = protocol;
-                        fileRef.current?.click();
-                      }}
-                    >
-                      <Upload />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Upload NAM</TooltipContent>
-                </Tooltip>
+                <span className="flex shrink-0 items-center gap-1">
+                  {entry.flag === 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Delete SnapTone ${protocol}`}
+                          disabled={!accepts || busy}
+                          onClick={() => {
+                            setDeleteAsk({
+                              slot: protocol,
+                              name: entry.name && entry.name.length > 0 ? entry.name : label,
+                              phase: "confirm",
+                              message: "",
+                            });
+                          }}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Delete</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Upload NAM"
+                        disabled={!accepts || busy}
+                        onClick={() => {
+                          slotRef.current = protocol;
+                          fileRef.current?.click();
+                        }}
+                      >
+                        <Upload />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Upload NAM</TooltipContent>
+                  </Tooltip>
+                </span>
               </div>
             );
           })}
@@ -452,6 +550,18 @@ export function SnapToneDialog({
             >
               Confirm
             </Button>
+          </DialogFooter>
+        ) : null}
+        {deleteAsk && deleteAsk.phase !== "deleting" ? (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={cancelDelete}>
+              {deleteAsk.phase === "error" ? "Back" : "Cancel"}
+            </Button>
+            {deleteAsk.phase === "confirm" ? (
+              <Button type="button" variant="destructive" onClick={() => void startDelete()}>
+                Delete
+              </Button>
+            ) : null}
           </DialogFooter>
         ) : null}
       </DialogContent>

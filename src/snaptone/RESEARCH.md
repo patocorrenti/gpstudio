@@ -114,7 +114,7 @@ Same SnapTone file and same upload command.
 
 ## 9. Deleting a user SnapTone
 
-VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. Windows Suite on a GP-5 does not send Android's `0x26` file command. The locked command is the USB SET in "Windows capture" below. This change does not send it.
+VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. Windows Suite on a GP-5 does not send Android's `0x26` file command. The locked command is the USB SET in "Windows capture" below. GP Studio sends that SET on USB when the user deletes a slot.
 
 ### Android file command (not the Windows wire)
 
@@ -171,7 +171,7 @@ After each SET the pedal sends, and Suite then asks for the lists:
 3. Suite requests the Nam catalog, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. The cleared name is `Empty`.
 4. Suite requests globals, packed `01 00 02 12 1C`, wire `F0 09 0D 00 01 00 00 00 02 01 02 01 0C F7`. The pedal answers with command `00 05`.
 
-Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal once. GP Studio does not send `11 27` in this change.
+Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal once.
 
 Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x1127`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
 
@@ -192,7 +192,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - VLTN's `isEmptySlot` (`app/src/shared/tone3000.ts` lines 167–184) treats `""` as empty, which disagrees with the flag and with the GP-5 model picker. The flag is the one marked verified on hardware. Follow the flag.
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
 - The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
-- Windows Suite deletes a user SnapTone with the USB SET in section 9 (family `0x1127`, fxId `0x0F000000 + slot`). This change does not send it. Do not send `0x26` or `12 1B`.
+- Windows Suite deletes a user SnapTone with the USB SET in section 9 (family `0x1127`, fxId `0x0F000000 + slot`). GP Studio sends that SET on USB. Do not send `0x26` or `12 1B`.
 
 ## Golden compare
 

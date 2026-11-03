@@ -8,3 +8,4 @@ Pato runs this on a pedal. There is no in-browser pass.
 - Cancel mid-upload and confirm the pedal still works.
 - Unplug USB mid-upload.
 - Repeat on GP-5 and GP-50.
+- Delete a user slot over USB and confirm its name becomes Empty.

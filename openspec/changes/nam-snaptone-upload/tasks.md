@@ -24,6 +24,6 @@
 - [x] 5.1 Update `docs/architecture.md` and the `context` in `openspec/config.yaml` so A2 SnapTone file upload is in scope for this change and copied third-party SysEx stays forbidden. Verify both files mention the session-owned upload and `src/snaptone/` conversion.
 - [x] 5.2 Run `npm run build` and verify it exits 0. Web and desktop share that Vite bundle (worker and wasm included), so there is no separate MIDI-backend build.
 
-## 6. Delete command (documented only)
+## 6. Delete a user SnapTone
 
-- [x] 6.1 Record the GP-5 Windows Suite delete in `src/snaptone/RESEARCH.md` section 9 and design Decision 6: packed `01 00 06 11 27` plus fxId `0x0F000000 + slot`, CRC-8 ATM, nibble-expand. Slots 77, 78, and 79 match that fxId. Do not add a session writer, a modal action, or a send of `0x26` or `12 1B`.
+- [x] 6.1 Send the captured GP-5 USB SET from the session for user slots 50–79: packed `01 00 06 11 27` plus fxId `0x0F000000 + slot`, CRC-8 ATM, nibble-expand. Slots 77, 78, and 79 match the captured wires. After the command-received ACK, refresh the slot table. The modal confirms with the protocol index and the current name before a slot that holds a capture is deleted. Factory slots are not deleted. Bluetooth sends nothing. Do not send `0x26` or `12 1B`.

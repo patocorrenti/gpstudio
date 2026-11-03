@@ -25,6 +25,7 @@ export {
   type OmittedFactoryModel,
   type SessionSnapshot,
   type SessionSync,
+  type SnapDeleteResult,
   type SnapSlot,
   type SnapUploadResult,
   type UploadPatchPreview,

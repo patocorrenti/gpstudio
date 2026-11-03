@@ -25,7 +25,6 @@ GP Studio can select an onboard user SnapTone and show its name, but it cannot p
 ## Non-goals
 
 - NAM A1, distilling A2 to A1, cabinet IR upload, TONE3000 search, and audio preview.
-- Deleting a user SnapTone. The Windows USB command is locked in `src/snaptone/RESEARCH.md` section 9 and design Decision 6 (family `0x1127`, fxId `0x0F000000 + slot`). This change does not send it.
 - A new route, a menu item, or a disk cache of slot names.
 - Listing which patches use a slot.
 - Resolving the GPL-3 question for VLTN. The port stays isolated so it can be replaced. No merge to main and no production deploy in this change.
