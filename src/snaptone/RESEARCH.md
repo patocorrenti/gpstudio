@@ -114,9 +114,11 @@ Same SnapTone file and same upload command.
 
 ## 9. Deleting a user SnapTone
 
-VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. The Android binary below has a `0x26` sender. A Windows Suite session on a GP-5 did not send `0x26`. Do not put either layout on the wire.
+VLTN does not encode this. Its GP-5 command table has `IMPORT_SNAPTONE` (`0x25`) and `DELETE_PRESET` (`0x46`) and no SnapTone delete. Windows Suite on a GP-5 does not send Android's `0x26` file command. The locked command is the USB SET in "Windows capture" below. This change does not send it.
 
-Binary: Valeton Suite 1.1.2 for Android, `lib/arm64-v8a/libapp.so`. Addresses are file offsets.
+### Android file command (not the Windows wire)
+
+Binary: Valeton Suite 1.1.2 for Android, `lib/arm64-v8a/libapp.so`. Addresses are file offsets. A Windows USB capture did not contain this layout. Do not send it.
 
 The send epilogue is the same call as import: `movz x2, #cmd`, then `bl 0x620900`. `x2` is only the function code. The set kind `0x11` is added by that sender, as it is for `0x25`. Sites in this binary:
 
@@ -150,24 +152,30 @@ Not on the wire:
 
 ### Windows capture (GP-5, USB)
 
-Suite on Windows, pedal on USB, MIDI bridged with loopMIDI (`scripts/snaptone-delete-capture.py`). The bridge reads the GP-5 input and the virtual-port input. Every saved burst starts on the GP-5 input. The virtual-port line that follows is the same bytes, because the bridge writes the pedal reply into the virtual port and that write comes back. No SysEx in these logs starts on the virtual port. Suite's own output was not in the capture. Windows lets a second program open the pedal's MIDI out, so Suite can still have been sending straight to the GP-5.
+Suite on Windows writes this straight to the GP-5 USB MIDI OUT. A loopMIDI bridge only saw the pedal's replies, because Windows lets a second program open the pedal OUT. The host bytes below are from USBPcap on that OUT endpoint (bulk `0x03`). One SET per deleted row. Slots 77, 78, and 79 were deleted in that order; each catalog afterward showed that slot's name as `Empty`.
 
-What the pedal did send, once per deleted row:
+Packed body, CRC-8 ATM (poly `0x07`, init 0) over these bytes, then nibble-expand, `F0`…`F7`. Same framing as the other parameter-write SETs. Length byte `0x06`. Family `0x1127`. The next four bytes are the fxId, little-endian: `0x0F000000 + protocol slot`.
 
-1. Command-received ACK, 16 bytes, tail nibble `00`: `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`.
-2. One SET, packed `01 00 06 12 1B 03 00 00 00`, CRC-8 ATM, nibble-expanded. On the wire: `F0 0C 0E 00 01 00 00 00 06 01 02 01 0B 00 03 00 00 00 00 00 00 F7`. The byte `03` is the same for protocol slots 77, 78, and 79. This arrived on the pedal input, so it is not established as Suite's command.
-3. The USB Nam catalog, command `04 08`, 72 fragments. The cleared slot's name in that catalog is `Empty`.
-4. Another ACK with tail nibble `01`, then the GP-5 globals dump, command `00 05`.
+| Slot | fxId | Packed (CRC + body) | Wire |
+| --- | --- | --- | --- |
+| 77 | `0x0F00004D` | `07 01 00 06 11 27 4D 00 00 0F` | `F0 00 07 00 01 00 00 00 06 01 01 02 07 04 0D 00 00 00 00 00 0F F7` |
+| 78 | `0x0F00004E` | `3D 01 00 06 11 27 4E 00 00 0F` | `F0 03 0D 00 01 00 00 00 06 01 01 02 07 04 0E 00 00 00 00 00 0F F7` |
+| 79 | `0x0F00004F` | `2B 01 00 06 11 27 4F 00 00 0F` | `F0 02 0B 00 01 00 00 00 06 01 01 02 07 04 0F 00 00 00 00 00 0F F7` |
 
-Two deleted rows produce two of those replies, then one catalog. `0x26` does not appear. The bottom row of that Suite list is protocol slot 79. `JVMOD1Gree`, two rows above the bottom, was protocol slot 77 (`164 + 77 * 32` in the merged name table). The penultimate row was protocol slot 78. Tapping a row produced no log line.
+There is no 16-byte name and no `0x26`. The bottom row of that Suite list is protocol slot 79. `JVMOD1Gree`, two rows above the bottom, was protocol slot 77 (`164 + 77 * 32` in the merged name table). The penultimate row was protocol slot 78. Tapping a row produced no SysEx.
 
-Do not send `0x26`, and do not send `12 1B` from GP Studio. The command that names the slot was not captured. A wrong body already wedged a pedal once.
+After each SET the pedal sends, and Suite then asks for the lists:
 
-Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x26`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
+1. Command-received ACK, 16 bytes, tail nibble `00`: `F0 0B 02 00 01 00 00 00 03 01 04 00 08 00 00 F7`. Packed `01 00 03 14 08 00`.
+2. One notify, packed `01 00 06 12 1B 03 00 00 00`. Wire `F0 0C 0E 00 01 00 00 00 06 01 02 01 0B 00 03 00 00 00 00 00 00 F7`. The byte `03` is the same for slots 77, 78, and 79. It is the pedal's reply, not the delete.
+3. Suite requests the Nam catalog, packed `01 00 02 12 24`, wire `F0 03 05 00 01 00 00 00 02 01 02 02 04 F7`. The pedal answers with command `04 08`, 72 fragments. The cleared name is `Empty`.
+4. Suite requests globals, packed `01 00 02 12 1C`, wire `F0 09 0D 00 01 00 00 00 02 01 02 01 0C F7`. The pedal answers with command `00 05`.
+
+Do not send `0x26`. Do not send `12 1B`. A wrong body already wedged a pedal once. GP Studio does not send `11 27` in this change.
+
+Other families are different commands. `CloneDeleteStruct` and `ir_delete_struct.dart` live under `package:gp_5/model150`. That is the GP-150 model, and its SnapTone commands are not `0x1127`. GP-200's destructive global id `0x29` is the other family's delete; VLTN refuses to send it. Neither layout is this one.
 
 USB only, for the same reason as section 7: this send is the USB SysEx path.
-
-The cleared slot's name in the Nam catalog is `Empty`. A GP Studio delete still needs the host command that names the slot. This capture does not have it.
 
 ## Decision 1
 
@@ -184,7 +192,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - VLTN's `isEmptySlot` (`app/src/shared/tone3000.ts` lines 167–184) treats `""` as empty, which disagrees with the flag and with the GP-5 model picker. The flag is the one marked verified on hardware. Follow the flag.
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
 - The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
-- The Windows delete capture logged the pedal's reply, not Suite's output (section 9). The host command that names the slot is still missing. Do not send `0x26` or `12 1B`.
+- Windows Suite deletes a user SnapTone with the USB SET in section 9 (family `0x1127`, fxId `0x0F000000 + slot`). This change does not send it. Do not send `0x26` or `12 1B`.
 
 ## Golden compare
 

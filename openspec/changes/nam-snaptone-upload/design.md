@@ -63,6 +63,14 @@ After the write completes, call the existing Nam request once and replace `userN
 
 **Choice:** Parser fixtures (A2, an A1 that fails, an invalid file). A golden convert test against VLTN bytes when a fixture's license allows committing it; otherwise a local fixture and a documented diff. A mock link test for sequence, chunking, and checksums once RESEARCH records them. `src/snaptone/HARDWARE_TEST.md` is the checklist Pato runs. No in-browser verification task.
 
+### 6. Delete wire is captured and not sent
+
+**Choice:** A GP-5 Windows Suite delete is one USB parameter-write SET. Packed `01 00 06 11 27` plus the fxId as a little-endian u32 (`0x0F000000 + protocol slot`), CRC-8 ATM, nibble-expand, `F0`…`F7`. Slots 77, 78, and 79 were captured (`4D`, `4E`, `4F`). The full wires are in `src/snaptone/RESEARCH.md` section 9. This change does not add a writer, a modal action, or a send.
+
+**Why:** The Android `0x26` file command (4 bytes then 16) never appeared on the GP-5 USB OUT. The pedal's `12 1B` notify uses the same trailing byte for 77, 78, and 79, so it does not name the slot. A guessed body already wedged a pedal once.
+
+**Alternative:** Send `0x26` or `12 1B`. Rejected: neither is the host command in the capture.
+
 ## Risks / Trade-offs
 
 - [GPL code linked from the session] → Keep the call behind the two functions. Do not move SysEx into `src/snaptone/`. Do not merge or deploy this branch while the license is open.
@@ -77,4 +85,4 @@ No stored data migrates. Applying the change updates `docs/architecture.md` and 
 
 ## Open Questions
 
-None that can be answered without Phase 0. The gates in Decision 1 are the list.
+None for the upload. The delete SET in Decision 6 is captured and stays unsent in this change.
