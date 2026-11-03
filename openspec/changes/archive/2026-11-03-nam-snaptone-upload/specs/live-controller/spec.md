@@ -70,3 +70,52 @@ The modal MUST show two English progress stages for a send that starts: `Convert
 
 - **WHEN** the user disconnects while the SnapTone modal is open
 - **THEN** the modal closes
+
+### Requirement: Controller confirms before deleting a user SnapTone
+
+In the SnapTone modal, a user slot (protocol indices 50–79) that holds a capture MUST ask in English before delete. The ask MUST show that protocol index and the current name. Cancel MUST send nothing. Factory rows (protocol indices 0–49) MUST NOT offer delete. A user slot that does not hold a capture MUST NOT offer delete. When the session reports that the open link cannot accept a SnapTone file, the modal MUST explain that in English with the same message used for a SnapTone file and MUST NOT send a delete. While a delete is in progress, Reload, Save, rename, duplicate, download, patch upload, previous, next, and slot edits MUST NOT be usable, the same as while a SnapTone file send is in progress, and the chain-sync overlay MUST NOT be shown solely because of the delete. Controller MUST NOT send raw MIDI.
+
+Success MUST be shown only after the refreshed snapshot names that slot `Empty` with an occupancy flag other than 0. If the delete fails and the slot is left unnamed, the modal MUST tell the user, in English, that the slot is unknown until SnapTone names are read again.
+
+#### Scenario: Occupied user slot asks before delete
+
+- **WHEN** protocol index 77 holds a capture named `MyAmp` and the user starts a delete for that slot
+- **THEN** the modal asks to delete index 77, `MyAmp`
+- **AND** no delete is sent until the user confirms
+
+#### Scenario: Cancel sends nothing
+
+- **WHEN** the modal is asking to delete protocol index 77 and the user cancels
+- **THEN** no delete is sent
+
+#### Scenario: Factory row is not deleted
+
+- **WHEN** the modal lists factory index 10
+- **THEN** that row does not offer delete
+
+#### Scenario: Empty user slot is not deleted
+
+- **WHEN** protocol index 50 is named `Empty` with an occupancy flag other than 0
+- **THEN** that row does not offer delete
+
+#### Scenario: Bluetooth explains and does not send
+
+- **WHEN** the session reports that the open link cannot accept a SnapTone file and the user opens the modal
+- **THEN** the modal explains that in English
+- **AND** no delete is sent
+
+#### Scenario: Delete does not show the chain overlay
+
+- **WHEN** a user SnapTone delete is in progress
+- **THEN** Save is not usable
+- **AND** the chain-sync overlay is not shown solely because of the delete
+
+#### Scenario: Success follows the refreshed Empty name
+
+- **WHEN** the user confirms a delete of protocol index 77 and the refreshed snapshot names that slot `Empty` with an occupancy flag other than 0
+- **THEN** the modal shows success for index 77
+
+#### Scenario: Failed delete leaves the slot unknown
+
+- **WHEN** the user confirms a delete and the session leaves that slot unnamed
+- **THEN** the modal tells the user that the slot is unknown until SnapTone names are read again

@@ -55,3 +55,47 @@ After a write completes, the session MUST read the user-slot table again on that
 - **WHEN** a SnapTone file write completes and the Nam refresh does not arrive
 - **THEN** that user slot stays unnamed in the snapshot
 - **AND** the session does not store the submitted name as if the pedal had confirmed it
+
+### Requirement: Connected session deletes a user SnapTone
+
+A connected USB session SHALL delete one user SnapTone at protocol indices 50–79 with the captured parameter-write for that slot (family `1127`, fxId `0x0F000000` plus the protocol slot). Factory NS models (protocol indices 0–49) MUST NOT be deleted, and that request MUST send nothing. Bluetooth MUST send nothing and MUST report that the open link cannot accept a SnapTone file. The delete MUST NOT send patch recall and MUST NOT mark the chain as syncing. It MUST NOT send the Android SnapTone file-delete command (`0x26`) or the pedal notify `12 1B`. UI MUST NOT send raw MIDI.
+
+While that delete is in progress, other app writes that already wait during a SnapTone file send MUST wait, and the session MUST reject them as busy. After the pedal acknowledges the command, the session MUST read the user-slot table again (protocol indices 50–79, including the occupancy flag) and replace the in-memory snapshot with that table. Success MUST be that refreshed slot named `Empty` with an occupancy flag other than 0. The session MUST NOT invent that name. If the acknowledgement or the refresh fails, that slot MUST stay unnamed until the next table read. The same delete MUST be used for GP-5 and GP-50. The SysEx MUST be GP Studio-owned.
+
+#### Scenario: Factory slot is not deleted
+
+- **WHEN** a USB session is asked to delete protocol index 10
+- **THEN** the session refuses
+- **AND** no delete is sent
+
+#### Scenario: Bluetooth sends nothing
+
+- **WHEN** a Bluetooth session is asked to delete protocol index 77
+- **THEN** the session reports that the open link cannot accept a SnapTone file
+- **AND** no delete is sent
+
+#### Scenario: Other writes wait during the delete
+
+- **WHEN** a user SnapTone delete is in progress and the user saves the current patch
+- **THEN** the session rejects that save as busy
+- **AND** the chain is not marked syncing solely because of the delete
+
+#### Scenario: Acknowledged delete refreshes to Empty
+
+- **WHEN** a USB session deletes protocol index 77 and the pedal acknowledges the command
+- **THEN** the session reads the user-slot table again
+- **AND** success requires that table to name index 77 `Empty` with an occupancy flag other than 0
+- **AND** the session does not write `Empty` into the snapshot before that table arrives
+
+#### Scenario: Missing acknowledgement leaves the slot unnamed
+
+- **WHEN** a USB session sends the delete for protocol index 77 and the command acknowledgement does not arrive
+- **THEN** that slot stays unnamed in the snapshot
+- **AND** the session does not store `Empty` as if the pedal had confirmed it
+
+#### Scenario: Wrong commands are not sent
+
+- **WHEN** a USB session deletes a user SnapTone
+- **THEN** the send is the captured parameter-write for that slot
+- **AND** the Android file-delete command `0x26` is not sent
+- **AND** the pedal notify `12 1B` is not sent
