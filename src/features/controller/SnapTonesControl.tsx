@@ -11,7 +11,7 @@ import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { requestOpenSnapTones } from "@/features/controller/snap-tones-bridge";
 
 const headerChipClass =
-  "h-8 gap-2 px-2.5 text-xs md:h-7 md:px-2 md:text-[0.72rem]";
+  "size-8 gap-0 px-0 text-xs md:h-7 md:w-auto md:gap-2 md:px-2 md:text-[0.72rem]";
 
 /** Header controls: SnapTones (+ placeholder IR) when USB is connected. */
 export function SnapTonesControl() {
@@ -43,7 +43,7 @@ export function SnapTonesControl() {
               }}
             >
               <AudioLines className="size-3.5 text-muted-foreground" aria-hidden />
-              <span>SnapTones</span>
+              <span className="hidden md:inline">SnapTones</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">SnapTones</TooltipContent>
@@ -62,7 +62,7 @@ export function SnapTonesControl() {
               }}
             >
               <AudioWaveform className="size-3.5 text-muted-foreground" aria-hidden />
-              <span>IR</span>
+              <span className="hidden md:inline">IR</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">IR</TooltipContent>
