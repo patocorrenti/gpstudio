@@ -123,7 +123,6 @@ gpstudio/
     components/
       ui/                # shadcn primitives (Button, Dialog, Tabs, …)
       main-menu.tsx      # shell chrome; not pedal domain
-      theme-toggle.tsx
     features/
       connect/           # global state + modal (not a page); Connect UI lives here
       controller/        # home / phase 1; Controller UI lives here
