@@ -3,18 +3,23 @@
  * Upstream: app/src/renderer/src/snaptone/worker.ts at 9591679ea3c41ec56938ff5af937af6c3ba2bdef.
  */
 
-import wasmUrl from "./a2kernel.wasm?url";
-import { namTextToSnapToneFile, type ClonePhase } from "./pipeline";
-import { readSignalWav } from "./signal";
+// One job per message. convert.ts owns the assets (wasm bytes, test signal, excitations) and sends what each
+// job needs, so a worker never fetches anything.
+import { loadHtkpaKernel } from "./htkpa-kernel";
+import { cloneToSnapToneFile } from "./file";
+import type { HtkpaKernel } from "./htkpa";
+import { buildExcitation, cloneRendered, renderChunk, type ClonePhase, type RenderChunk } from "./pipeline";
 
-// Valeton's test signal is not in the repo or the build: the server serves one shared copy
-// (public/snaptone/ in local dev). See README.md.
-const signalUrl = `${import.meta.env.BASE_URL}snaptone/nam_input_wav.wav`;
+export type WorkerRequest =
+  | { type: "excitation"; signal: Int16Array; rate: number }
+  | { type: "render"; json: string; wasm: ArrayBuffer; input: Float32Array; chunk: RenderChunk }
+  | { type: "clone"; input: Float32Array; rendered: Float32Array; rate: number; kernel: ArrayBuffer | null };
 
-export type WorkerRequest = { namText: string };
 export type WorkerReply =
   | { type: "progress"; phase: ClonePhase; fraction: number }
-  | { type: "done"; file: ArrayBuffer }
+  | { type: "excitation"; input: Float32Array }
+  | { type: "render"; output: Float32Array }
+  | { type: "clone"; file: Uint8Array; usedKernel: boolean }
   | { type: "error"; message: string };
 
 const scope = globalThis as unknown as {
@@ -26,21 +31,35 @@ const post = (message: WorkerReply, transfer: Transferable[] = []) => {
   scope.postMessage(message, transfer);
 };
 
+async function kernelFrom(bytes: ArrayBuffer | null): Promise<HtkpaKernel | null> {
+  if (!bytes) return null;
+  try {
+    return await loadHtkpaKernel(bytes);
+  } catch {
+    return null;
+  }
+}
+
 scope.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  const request = event.data;
   void (async () => {
     try {
-      const [wasmResponse, signalResponse] = await Promise.all([fetch(wasmUrl), fetch(signalUrl)]);
-      if (!wasmResponse.ok || !signalResponse.ok) {
-        throw new Error("The SnapTone converter is missing its test signal.");
+      if (request.type === "excitation") {
+        const input = buildExcitation(request.signal, request.rate);
+        post({ type: "excitation", input }, [input.buffer]);
+        return;
       }
-      const wasm = await wasmResponse.arrayBuffer();
-      const signal = new Uint8Array(await signalResponse.arrayBuffer());
-      const file = await namTextToSnapToneFile(event.data.namText, readSignalWav(signal), wasm, (phase, fraction) => {
-        post({ type: "progress", phase, fraction });
-      });
-      const copy = new ArrayBuffer(file.byteLength);
-      new Uint8Array(copy).set(file);
-      post({ type: "done", file: copy }, [copy]);
+      if (request.type === "render") {
+        const { chunk } = request;
+        const output = await renderChunk(request.json, request.wasm, request.input, chunk, chunk.from, (fraction) => {
+          post({ type: "progress", phase: "render", fraction });
+        });
+        post({ type: "render", output }, [output.buffer]);
+        return;
+      }
+      const kernel = await kernelFrom(request.kernel);
+      const file = cloneToSnapToneFile(cloneRendered(request.input, request.rendered, request.rate, kernel));
+      post({ type: "clone", file, usedKernel: kernel !== null }, [file.buffer]);
     } catch (error) {
       post({ type: "error", message: error instanceof Error ? error.message : "The SnapTone converter stopped." });
     }

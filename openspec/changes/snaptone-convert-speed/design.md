@@ -47,10 +47,11 @@ Each worker parses the model itself from the `.nam` text (12 ms) instead of rece
 
 ### 3. Clone hot loops in a second wasm kernel
 
-New `src/snaptone/htkpakernel.c`, freestanding like `a2kernel.c` (`clang --target=wasm32 -O3 -msimd128 -nostdlib -Wl,--no-entry -Wl,--import-memory`, plus `-ffp-contract=off` so no fused multiply-add changes rounding). Two exports:
+New `src/snaptone/htkpakernel.c`, freestanding like `a2kernel.c` (`clang --target=wasm32 -O3 -msimd128 -nostdlib -Wl,--no-entry -Wl,--import-memory`, plus `-ffp-contract=off` so no fused multiply-add changes rounding). Three exports:
 
-- `amp_chain(...)`: the per-sample loop of `ampModelChain` after the pre biquad and the optional `between` hook. It covers `OversampledShaper` (up1, up2, the four shaper taps, down1, down2) with the same coefficient tables and state, followed by the low-cut biquad. `expf` in TypeScript is `Math.fround(Math.exp(x))` in double. V8's `Math.exp` is fdlibm's `ieee754::exp`, so the kernel carries that fdlibm `exp` in C to keep the result. This is the one place where the output could differ, and the parity check is what proves it does not.
-- `convolve_blocks(...)`: `convolveBlocks` with `PartitionedConvolver` and `cjjFft128`, keeping the Q15 twiddle table, the bit-reversal order, the partition ring, and the accumulation order of `processBlock`. SIMD is used only across independent bins where the scalar order per bin stays the same.
+- `htkpa_biquad(...)`: `biquadFilter` in double, used for the pre and low-cut biquads around the `between` hook of `ampModelChain`.
+- `htkpa_shape(...)`: the per-sample `OversampledShaper` loop (up1, up2, the four shaper taps, down1, down2) with the same coefficient tables (passed from `htkpa.ts`) and state. `expf` in TypeScript is `Math.fround(Math.exp(x))` in double. V8's `Math.exp` is fdlibm's `ieee754::exp`, so the kernel carries that fdlibm `exp` in C to keep the result. This is the one place where the output could differ, and the parity check is what proves it does not.
+- `htkpa_convolve(...)`: `convolveBlocks` with `PartitionedConvolver` and `cjjFft128`, keeping the Q15 twiddle table, the bit-reversal order, the partition ring, and the accumulation order of `processBlock`. The C is scalar; clang may vectorize the per-bin loops, which keeps the order per bin.
 
 `htkpa.ts` keeps its TypeScript versions of both functions, used by the parity check and as the fallback when the kernel fails to load. Everything else in `cloneSnapTone` stays TypeScript; at under 4 s together it is not worth the risk of a port now.
 

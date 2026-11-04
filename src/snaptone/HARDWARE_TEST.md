@@ -19,3 +19,9 @@ Pato runs this on the production or staging web app, with the publishable key se
 - Reopen GP Studio and confirm the yellow dot and the Tone3000 label without the email code. Open the control and confirm the username.
 - Open TONE3000 from a user slot and confirm one A2 model takes the existing upload path.
 - Bluetooth and the native window do not show the control.
+
+## Conversion speed
+
+- Convert and upload one TONE3000 model and one local `.nam`, on GP-5 and on GP-50. Each sounds and is named as before.
+- In the same session, convert a second model at the same sample rate and note how long `Converting…` takes, first and second time.
+- Cancel during `Converting…`, then convert again: nothing was sent, and the next conversion works.
