@@ -4,9 +4,12 @@
  */
 
 import wasmUrl from "./a2kernel.wasm?url";
-import signalUrl from "./fixtures/nam_input_wav.wav?url";
 import { namTextToSnapToneFile, type ClonePhase } from "./pipeline";
 import { readSignalWav } from "./signal";
+
+// Valeton's test signal is not in the repo or the build: the server serves one shared copy
+// (public/snaptone/ in local dev). See README.md.
+const signalUrl = `${import.meta.env.BASE_URL}snaptone/nam_input_wav.wav`;
 
 export type WorkerRequest = { namText: string };
 export type WorkerReply =

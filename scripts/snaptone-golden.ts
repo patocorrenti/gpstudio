@@ -4,7 +4,7 @@ import { readSignalWav } from "../src/snaptone/signal.ts";
 import { assertGoldenBlob } from "../src/snaptone/golden.ts";
 
 const nam = readFileSync(new URL("../src/snaptone/fixtures/nam_core_a2.nam", import.meta.url), "utf8");
-const wav = readFileSync(new URL("../src/snaptone/fixtures/nam_input_wav.wav", import.meta.url));
+const wav = readFileSync(new URL("../public/snaptone/nam_input_wav.wav", import.meta.url));
 const wasm = readFileSync(new URL("../src/snaptone/a2kernel.wasm", import.meta.url));
 const expected = readFileSync("/tmp/VLTN-Tone-Studio/app/src/renderer/src/gp5/fixtures/snaptone-a2.clo");
 const started = Date.now();

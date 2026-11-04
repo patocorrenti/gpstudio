@@ -17,4 +17,4 @@ Portions adapted from [VLTN Tone Studio](https://github.com/grzmol/VLTN-Tone-Stu
 
 The module exports `inspectNam` and `convertNamToSnapTone` only. It does not import the session, React, or a MIDI transport. GP-5 and GP-50 share one blob, so convert has no `device` option.
 
-`fixtures/nam_input_wav.wav` is Valeton's test signal. It is gitignored and must sit next to the converter for a local build. `fixtures/nam_core_a2.nam` is NeuralAmpModelerCore's A2 example (MIT). `scripts/snaptone-golden.ts` compares that fixture's 8840-byte clone to VLTN's `snaptone-a2.clo`. The current diff is recorded in `RESEARCH.md`.
+`nam_input_wav.wav` is Valeton's test signal (from a Valeton Suite install). It is not committed and not part of the build: the worker fetches it at `/snaptone/nam_input_wav.wav`. Locally it sits in `public/snaptone/` (gitignored); on the server nginx serves one shared copy to staging and live. `fixtures/nam_core_a2.nam` is NeuralAmpModelerCore's A2 example (MIT). `scripts/snaptone-golden.ts` compares that fixture's 8840-byte clone to VLTN's `snaptone-a2.clo`. The current diff is recorded in `RESEARCH.md`.

@@ -215,7 +215,7 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 - The clone needs Valeton's `nam_input_wav.wav`, and VLTN does not ship it (`app/README.md` lines 86–87). GP Studio must not commit a copy taken from a Suite install. Section 3 cannot run a real convert until that excitation exists some other way (a fixture whose license allows it, or a local file the user points at and that stays out of git).
 - VLTN's `isEmptySlot` (`app/src/shared/tone3000.ts` lines 167–184) treats `""` as empty, which disagrees with the flag and with the GP-5 model picker. The flag is the one marked verified on hardware. Follow the flag.
 - Pedal on-screen numbering for slots 50–79 is unconfirmed (`devices.ts` lines 244–246). Labels in the updated spec use the protocol index (`SnapTone 50` … `SnapTone 79`).
-- The excitation wav is present locally at `src/snaptone/fixtures/nam_input_wav.wav` and is gitignored. It is not committed.
+- The excitation wav is not committed and not bundled. Locally it sits at `public/snaptone/nam_input_wav.wav` (gitignored); the deployed sites get it from one shared copy that nginx serves at `/snaptone/nam_input_wav.wav`.
 - Windows Suite deletes a user SnapTone with the USB SET in section 9 (family `0x1127`, fxId `0x0F000000 + slot`). GP Studio sends that SET on USB. Do not send `0x26` or `12 1B`.
 - Windows Suite renames a user SnapTone with the USB SET in section 10 (family `0x1126`, 13-byte name). GP Studio sends that SET on USB. Do not send Android `0x27`.
 
