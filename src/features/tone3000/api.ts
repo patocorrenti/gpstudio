@@ -14,6 +14,7 @@ export type A2ToneModels =
       gear: string;
       format: "NAM";
       username: string;
+      description: string | null;
       imageUrl: string | null;
       models: A2Model[];
     }
@@ -227,14 +228,23 @@ export type Tone3000User = {
 };
 
 function avatarUrlOf(value: unknown): string | null {
-  const direct = stringField(value, "avatar_url");
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const direct =
+    stringField(value, "avatar_url") ??
+    stringField(value, "avatar") ??
+    stringField(value, "image_url");
   if (direct) {
     return direct;
   }
-  if (!value || typeof value !== "object" || !("user" in value)) {
-    return null;
+  if ("data" in value) {
+    return avatarUrlOf((value as { data: unknown }).data);
   }
-  return stringField((value as { user: unknown }).user, "avatar_url");
+  if ("user" in value) {
+    return avatarUrlOf((value as { user: unknown }).user);
+  }
+  return null;
 }
 
 export async function fetchTone3000User(
@@ -242,11 +252,18 @@ export async function fetchTone3000User(
   fetchImpl: typeof fetch = fetch,
 ): Promise<Tone3000User> {
   const body = await authedJson(`${API_ORIGIN}/api/v1/user`, accessToken, fetchImpl);
-  const username = usernameOf(body);
+  const root =
+    body && typeof body === "object" && "data" in body
+      ? (body as { data: unknown }).data
+      : body;
+  const username = usernameOf(root) || usernameOf(body);
   if (!username) {
     throw new Error("TONE3000 did not return a username.");
   }
-  return { username, avatarUrl: avatarUrlOf(body) };
+  return {
+    username,
+    avatarUrl: avatarUrlOf(root) ?? avatarUrlOf(body),
+  };
 }
 
 async function fetchToneListPage(
@@ -326,6 +343,7 @@ export async function loadToneA2Models(
     gear: stringField(tone, "gear") ?? "",
     format: "NAM",
     username: usernameOf(tone),
+    description: stringField(tone, "description"),
     imageUrl: imageUrlOf(tone),
     models,
   };

@@ -589,7 +589,7 @@ export function SnapToneDialog({
         {preview || deleteAsk || renameAsk ? null : (
         <TooltipProvider delayDuration={300}>
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-stretch justify-between gap-2">
             <ButtonGroup aria-label="SnapTone source">
               {(
                 [
@@ -624,7 +624,7 @@ export function SnapToneDialog({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8 gap-2 bg-black px-3 text-white hover:bg-black hover:text-white dark:bg-black dark:text-white dark:hover:bg-black dark:hover:text-white"
+                className="h-[34px] gap-2 self-stretch bg-black px-3 text-white hover:bg-black hover:text-white dark:bg-black dark:text-white dark:hover:bg-black dark:hover:text-white"
                 disabled={!accepts || busy}
                 aria-label="Browse TONE3000"
                 onClick={() => {

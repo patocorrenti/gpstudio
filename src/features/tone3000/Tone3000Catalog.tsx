@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, LogOut } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import gpStudioLogoDark from "@/assets/img/gp-studio-logo-dark.png";
 import gpStudioLogoLight from "@/assets/img/gp-studio-logo-light.png";
+import t3kLogo from "@/assets/img/t3k-logo.png";
 import tone3000Logo from "@/assets/img/tone3000-logo.png";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -244,6 +245,7 @@ export function Tone3000Catalog({
   );
   const [targetSlot, setTargetSlot] = useState<number | null>(slot);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [listKind, setListKind] = useState<ToneListKind>("trending");
@@ -302,6 +304,10 @@ export function Tone3000Catalog({
   useEffect(() => {
     setTargetSlot(slot);
   }, [open, slot]);
+
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [account.status === "signed-in" ? account.avatarUrl : null]);
 
   function startSignInPopup(): void {
     setNotice("");
@@ -585,6 +591,7 @@ export function Tone3000Catalog({
       gear: row.gear,
       format: "NAM",
       username: row.username,
+      description: null,
       imageUrl: row.imageUrl,
       models: [],
     });
@@ -843,7 +850,13 @@ export function Tone3000Catalog({
         ) : (
           <DialogHeader>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pr-10">
-              <DialogTitle>Your Tones</DialogTitle>
+              <DialogTitle className="flex items-center">
+                <img
+                  src={tone3000Logo}
+                  alt="TONE3000"
+                  className="h-5 w-auto"
+                />
+              </DialogTitle>
               {account.status === "signed-in" ? (
                 <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
                   <PopoverTrigger asChild>
@@ -855,16 +868,20 @@ export function Tone3000Catalog({
                       aria-label={`TONE3000 account ${account.username}`}
                       aria-expanded={accountMenuOpen}
                     >
-                      {account.avatarUrl ? (
+                      {account.avatarUrl && !avatarBroken ? (
                         <img
                           src={account.avatarUrl}
                           alt=""
-                          className="size-5 shrink-0 rounded-full object-cover"
+                          referrerPolicy="no-referrer"
+                          className="size-6 shrink-0 rounded-full object-cover"
+                          onError={() => {
+                            setAvatarBroken(true);
+                          }}
                         />
                       ) : (
                         <span
                           aria-hidden
-                          className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
+                          className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
                         >
                           {account.username.slice(0, 1).toUpperCase()}
                         </span>
@@ -892,7 +909,7 @@ export function Tone3000Catalog({
             </div>
           </DialogHeader>
         )}
-        {tone ? (
+        {tone && draft ? (
           <div className="flex items-center gap-3 border-b border-foreground/10 px-1 py-2">
             {tone.imageUrl ? (
               <img
@@ -906,26 +923,19 @@ export function Tone3000Catalog({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{tone.title}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {[tone3000GearLabel(tone.gear), tone.format, tone.username].filter(Boolean).join(" · ")}
+                {[tone3000GearLabel(tone.gear), tone.format, tone.username]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
-            {showModels ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 shrink-0 px-3.5"
-                onClick={backToLists}
-              >
-                <ChevronLeft className="size-3.5 -translate-y-px" />
-                Back
-              </Button>
-            ) : null}
           </div>
         ) : null}
         {showPartnership ? (
           <div className="flex flex-col items-center gap-6 px-2 py-4 text-center sm:px-4">
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              <span className="text-lg font-light text-muted-foreground" aria-hidden>
+                +
+              </span>
               <span className="inline-flex items-center">
                 <img
                   src={gpStudioLogoLight}
@@ -939,7 +949,7 @@ export function Tone3000Catalog({
                 />
               </span>
               <span className="text-lg font-light text-muted-foreground" aria-hidden>
-                ×
+                +
               </span>
               <img
                 src={tone3000Logo}
@@ -948,9 +958,9 @@ export function Tone3000Catalog({
               />
             </div>
             <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-              GP Studio has partnered with TONE3000 to give you access to a massive
-              library of Neural Amp Modeler (NAM) captures and IRs of real analog
-              gear, created by a global community of musicians.
+              GP Studio connects to TONE3000, a massive library of Neural Amp
+              Modeler (NAM) captures and IRs of real gear, created by a global
+              community of musicians.
             </p>
             {notice ? <p className="text-sm text-foreground">{notice}</p> : null}
             <Button
@@ -1004,7 +1014,7 @@ export function Tone3000Catalog({
               >
                 <span>Browse all</span>
                 <img
-                  src={tone3000Logo}
+                  src={t3kLogo}
                   alt="TONE3000"
                   className="h-3.5 w-auto"
                 />
@@ -1109,20 +1119,80 @@ export function Tone3000Catalog({
             ) : null}
           </div>
         ) : null}
-        {showModels && toneLoading ? <NamListSkeleton /> : null}
-        {showModels && !toneLoading && tone ? (
-          <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
-            {tone.models.map((model) => (
+        {showModels && tone ? (
+          <div className="flex min-h-0 flex-1 flex-col px-1">
+            <div className="mb-4 flex shrink-0 justify-end">
               <button
-                key={model.modelUrl}
                 type="button"
-                className="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/50"
-                onClick={() => void choose(model)}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                onClick={backToLists}
               >
-                <span className="truncate">{model.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">NAM</span>
+                <ArrowLeft className="size-4 shrink-0" aria-hidden />
+                Back to Tones
               </button>
-            ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-3">
+              <div className="flex items-start gap-5">
+                {tone.imageUrl ? (
+                  <img
+                    src={tone.imageUrl}
+                    alt=""
+                    className="size-36 shrink-0 rounded-sm object-cover"
+                  />
+                ) : (
+                  <span className="size-36 shrink-0 rounded-sm bg-muted" />
+                )}
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div>
+                    <p className="text-xl font-semibold tracking-tight leading-snug">
+                      {tone.title}
+                    </p>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      {[tone3000GearLabel(tone.gear), tone.format, tone.username]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">Select a Tone:</p>
+                    {toneLoading ? (
+                      <NamListSkeleton rows={4} />
+                    ) : (
+                      <div
+                        className="max-h-[10.5rem] overflow-y-auto rounded-md border border-foreground/15 bg-muted/20 ring-1 ring-foreground/5"
+                        role="listbox"
+                        aria-label="Select a Tone"
+                      >
+                        <div className="divide-y divide-foreground/10">
+                          {tone.models.map((model) => (
+                            <button
+                              key={model.modelUrl}
+                              type="button"
+                              role="option"
+                              className="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/70 active:bg-muted"
+                              onClick={() => void choose(model)}
+                            >
+                              <span className="truncate font-medium">{model.name}</span>
+                              <span className="shrink-0 rounded-sm bg-background/80 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground ring-1 ring-foreground/10">
+                                NAM
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {tone.description ? (
+                    <div className="mt-5 space-y-1.5">
+                      <p className="text-sm font-medium">Description:</p>
+                      <p className="text-base leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                        {tone.description}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
         {draft === null && notice && !showPartnership ? (
@@ -1245,7 +1315,19 @@ export function Tone3000Catalog({
               Confirm
             </Button>
           </DialogFooter>
-        ) : null}
+        ) : (
+          <p className="mt-auto -mb-1 border-t border-foreground/10 pt-1.5 text-center text-[11px] leading-none text-muted-foreground">
+            Powered by{" "}
+            <a
+              href="https://www.tone3000.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              TONE3000
+            </a>
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );
