@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -157,6 +158,35 @@ function ToneListSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
+function NamListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-hidden" aria-busy="true" aria-label="Loading models">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center justify-between gap-3 px-3 py-2">
+          <Skeleton className="h-4 w-2/3 max-w-64" />
+          <Skeleton className="h-3 w-8 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function namDownloadName(fileName: string): string {
+  return fileName.toLowerCase().endsWith(".nam") ? fileName : `${fileName}.nam`;
+}
+
+function triggerNamDownload(fileName: string, bytes: ArrayBuffer): void {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(new Uint8Array(bytes));
+  const blob = new Blob([copy], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = namDownloadName(fileName);
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function Tone3000Catalog({
   open,
   onOpenChange,
@@ -187,6 +217,7 @@ export function Tone3000Catalog({
   const [tone, setTone] = useState<ListedTone | null>(null);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [saveNamLocal, setSaveNamLocal] = useState(true);
   const [convertProgress, setConvertProgress] = useState(0);
   const [shownProgress, setShownProgress] = useState(0);
   const realProgress = useRef(0);
@@ -510,10 +541,20 @@ export function Tone3000Catalog({
       return;
     }
     setNotice("");
+    setTone({
+      ok: true,
+      title: row.title,
+      gear: row.gear,
+      format: "NAM",
+      username: row.username,
+      imageUrl: row.imageUrl,
+      models: [],
+    });
     setToneLoading(true);
     try {
       const access = await ensureAccessToken();
       if (!access) {
+        setTone(null);
         setNotice("Tone3000 sign-in did not finish.");
         return;
       }
@@ -525,6 +566,7 @@ export function Tone3000Catalog({
       }
       setTone({ ...loaded, imageUrl: loaded.imageUrl ?? row.imageUrl });
     } catch (error) {
+      setTone(null);
       setNotice(error instanceof Error ? error.message : "The tone could not be loaded.");
     } finally {
       setToneLoading(false);
@@ -544,6 +586,7 @@ export function Tone3000Catalog({
       }
       const bytes = await downloadModelFile(model.modelUrl, access);
       const inspection = await session.inspectNam(bytes);
+      setSaveNamLocal(true);
       setDraft({
         fileName: model.name,
         file: bytes,
@@ -579,6 +622,9 @@ export function Tone3000Catalog({
     const controller = new AbortController();
     abortRef.current = controller;
     const name = snapName(draft.name);
+    if (saveNamLocal) {
+      triggerNamDownload(draft.fileName, draft.file);
+    }
     realProgress.current = 0;
     setConvertProgress(0);
     setShownProgress(0);
@@ -884,11 +930,11 @@ export function Tone3000Catalog({
                 ) : null}
               </div>
             ) : null}
-            {!browsing && (listLoading || toneLoading) ? <ToneListSkeleton /> : null}
-            {!browsing && !listLoading && !toneLoading && !notice && rows.length === 0 ? (
+            {!browsing && listLoading ? <ToneListSkeleton /> : null}
+            {!browsing && !listLoading && !notice && rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">{EMPTY_LIST}</p>
             ) : null}
-            {!browsing && !listLoading && !toneLoading && rows.length > 0 ? (
+            {!browsing && !listLoading && rows.length > 0 ? (
               <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
                 {rows.map((row) => (
                   <button
@@ -945,7 +991,8 @@ export function Tone3000Catalog({
             ) : null}
           </div>
         ) : null}
-        {showModels && tone ? (
+        {showModels && toneLoading ? <NamListSkeleton /> : null}
+        {showModels && !toneLoading && tone ? (
           <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
             {tone.models.map((model) => (
               <button
@@ -982,7 +1029,7 @@ export function Tone3000Catalog({
         {draft && !busy ? (
           <div className="flex flex-col gap-3 py-1">
             <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-              <span className="text-sm text-muted-foreground">Upload</span>
+              <span className="text-sm text-muted-foreground">Capture</span>
               <span className="truncate text-sm">{draft.fileName}</span>
               <span className="text-sm text-muted-foreground">In Slot</span>
               <span className="min-w-0 text-sm">
@@ -1006,6 +1053,18 @@ export function Tone3000Catalog({
                 }}
               />
             </div>
+            <label className="mt-2 grid cursor-pointer grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 text-sm">
+              <span />
+              <span className="flex items-center gap-2">
+                <Checkbox
+                  checked={saveNamLocal}
+                  onCheckedChange={(checked) => {
+                    setSaveNamLocal(checked === true);
+                  }}
+                />
+                Also save .nam file to this computer
+              </span>
+            </label>
             {draft.inspection.kind === "A2" ? null : <p className="text-sm">{draft.inspection.reason}</p>}
             {draft.message ? <p className="text-sm">{draft.message}</p> : null}
           </div>
