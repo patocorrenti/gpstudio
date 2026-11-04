@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bug, Download, Heart, Mail, RefreshCw } from "lucide-react";
+import { ArrowLeft, Bug, Download, Heart, Mail, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   getPwaInstallAvailability,
   promptPwaInstall,
@@ -114,6 +115,13 @@ export function AboutPage() {
     <section className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-4">
         <div className="space-y-2">
+          <Link
+            to="/"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4 shrink-0" aria-hidden />
+            Back to app
+          </Link>
           <h1 className="text-xl font-semibold tracking-tight">
             About GP Studio
           </h1>

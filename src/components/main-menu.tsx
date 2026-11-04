@@ -1,15 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Menu, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { NavLink, useMatch, useResolvedPath } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
 import {
   Popover,
   PopoverContent,
@@ -20,37 +13,7 @@ import { cn } from "@/lib/utils";
 const menuItemClass =
   "h-9 w-full justify-start gap-2 px-2 text-base font-normal";
 
-function MenuLink({
-  to,
-  end,
-  children,
-}: {
-  to: string;
-  end?: boolean;
-  children: ReactNode;
-}) {
-  const resolved = useResolvedPath(to);
-  const match = useMatch({ path: resolved.pathname, end: end ?? false });
-
-  return (
-    <NavigationMenuItem>
-      <NavigationMenuLink
-        asChild
-        active={Boolean(match)}
-        className={cn(
-          navigationMenuTriggerStyle(),
-          "rounded-[4px] bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground data-active:bg-muted data-active:text-foreground dark:hover:bg-muted/40 dark:data-active:bg-muted/40",
-        )}
-      >
-        <NavLink to={to} end={end}>
-          {children}
-        </NavLink>
-      </NavigationMenuLink>
-    </NavigationMenuItem>
-  );
-}
-
-function MobileNavLink({
+function MenuNavLink({
   to,
   end,
   children,
@@ -77,7 +40,7 @@ function MobileNavLink({
   );
 }
 
-function MobileThemeItem({ onToggle }: { onToggle: () => void }) {
+function MenuThemeItem({ onToggle }: { onToggle: () => void }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -111,41 +74,27 @@ export default function MainMenu() {
   const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="md:hidden"
-            aria-label="Menu"
-            aria-expanded={open}
-          >
-            <Menu className="size-5" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-48 gap-0.5 p-1">
-          <MobileNavLink to="/" end onNavigate={() => setOpen(false)}>
-            Pedal
-          </MobileNavLink>
-          <MobileNavLink to="/about" onNavigate={() => setOpen(false)}>
-            About
-          </MobileNavLink>
-          <MobileThemeItem onToggle={() => setOpen(false)} />
-        </PopoverContent>
-      </Popover>
-
-      <div className="hidden md:block">
-        <NavigationMenu viewport={false}>
-          <NavigationMenuList className="gap-1.5">
-            <MenuLink to="/" end>
-              Pedal
-            </MenuLink>
-            <MenuLink to="/about">About</MenuLink>
-          </NavigationMenuList>
-        </NavigationMenu>
-      </div>
-    </>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Menu"
+          aria-expanded={open}
+        >
+          <Menu className="size-5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-48 gap-0.5 p-1">
+        <MenuNavLink to="/" end onNavigate={() => setOpen(false)}>
+          Pedal
+        </MenuNavLink>
+        <MenuNavLink to="/about" onNavigate={() => setOpen(false)}>
+          About
+        </MenuNavLink>
+        <MenuThemeItem onToggle={() => setOpen(false)} />
+      </PopoverContent>
+    </Popover>
   );
 }
