@@ -140,6 +140,21 @@ function floatsFromBits(bits: readonly number[]): Float32Array {
 }
 
 // ---------------------------------------------------------------------------
+// Optional wasm kernel (htkpakernel.c) for the hot loops: biquadFilter, the
+// OversampledShaper loop and convolveBlocks. Same bytes as the TypeScript
+// below in V8 (scripts/snaptone-parity.ts). Set only for one cloneSnapTone call.
+// ---------------------------------------------------------------------------
+
+export interface HtkpaKernel {
+  biquad(src: Float32Array, srcOff: number, dst: Float32Array, n: number, c: BiquadCoeffs): void;
+  shape(buf: Float32Array, n: number, coeffPos: number, coeffNeg: number, ampPos: number, ampNeg: number): void;
+  /** Returns false when the kernel cannot take this IR; the caller then runs the TypeScript. */
+  convolve(ir: Float32Array, irLen: number, src: Float32Array, srcOff: number, dst: Float32Array, dstOff: number, n: number): boolean;
+}
+
+let kernel: HtkpaKernel | null = null;
+
+// ---------------------------------------------------------------------------
 // Algorithm constants (addresses are mac dylib data offsets).
 // ---------------------------------------------------------------------------
 
@@ -297,6 +312,13 @@ const CJJ_BITREV = (() => {
   return t;
 })();
 
+/** Tables htkpakernel.c reads: allpass coefficients and the CJJFFT twiddles. */
+export const HTKPA_KERNEL_TABLES = {
+  iirUp: IIR_UP_COEFFS,
+  iirDown: IIR_DOWN_COEFFS,
+  twiddle: CJJ_TWIDDLE,
+} as const;
+
 function cjjFft128(re: Float32Array, im: Float32Array, inverse: boolean): void {
   for (let i = 0; i < CJJ_N - 1; i++) {
     const j = CJJ_BITREV[i];
@@ -453,6 +475,7 @@ function convolveBlocks(
   dstOff: number,
   n: number,
 ): void {
+  if (kernel?.convolve(ir, irLen, src, srcOff, dst, dstOff, n)) return;
   const conv = new PartitionedConvolver(ir, irLen);
   const work = new Float32Array(CONV_BLOCK);
   let j = 0;
@@ -528,7 +551,7 @@ function computeSinCosTable(n: number): { sin: Float32Array; cos: Float32Array }
 // Biquads (double precision DF-II as inlined in startClone/iterAmpCoeff).
 // ---------------------------------------------------------------------------
 
-interface BiquadCoeffs {
+export interface BiquadCoeffs {
   readonly b0: number;
   readonly b1: number;
   readonly b2: number;
@@ -554,6 +577,10 @@ function lowCutBiquad(sr: number): BiquadCoeffs {
 }
 
 function biquadFilter(src: Float32Array, srcOff: number, dst: Float32Array, n: number, c: BiquadCoeffs): void {
+  if (kernel) {
+    kernel.biquad(src, srcOff, dst, n, c);
+    return;
+  }
   const na1 = -c.a1;
   const na2 = -c.a2;
   let w1 = 0;
@@ -657,8 +684,13 @@ function ampModelChain(
   const buf = new Float32Array(n);
   biquadFilter(src, srcOff, buf, n, PRE_BIQUAD);
   if (between) between(buf);
-  const shaper = new OversampledShaper(ctx.amp);
-  for (let i = 0; i < n; i++) buf[i] = shaper.process(buf[i]);
+  if (kernel) {
+    const { amp } = ctx;
+    kernel.shape(buf, n, -amp.kPos, amp.kNeg, amp.posPeak, -amp.negPeak);
+  } else {
+    const shaper = new OversampledShaper(ctx.amp);
+    for (let i = 0; i < n; i++) buf[i] = shaper.process(buf[i]);
+  }
   biquadFilter(buf, 0, buf, n, ctx.lowCut);
   return buf;
 }
@@ -2796,9 +2828,19 @@ function buildBlob(ctx: CloneContext, ir1: Float32Array, ir2: Float32Array): Uin
  * @param input  channel 0 of HTCache/<sr>.wav (the excitation), float [-1, 1)
  * @param output channel 0 of the NAM render of that excitation, same rate
  * @param sampleRate model sample rate: 44100, 48000 or 96000
+ * @param wasmKernel optional htkpakernel.wasm wrapper for the hot loops (same bytes)
  * @returns the 8840-byte VTSI blob
  */
-export function cloneSnapTone(input: Float32Array, output: Float32Array, sampleRate: number): Uint8Array {
+export function cloneSnapTone(input: Float32Array, output: Float32Array, sampleRate: number, wasmKernel: HtkpaKernel | null = null): Uint8Array {
+  kernel = wasmKernel;
+  try {
+    return startClone(input, output, sampleRate);
+  } finally {
+    kernel = null;
+  }
+}
+
+function startClone(input: Float32Array, output: Float32Array, sampleRate: number): Uint8Array {
   const ctx = createContext(input, output, sampleRate);
   detrendOutput(ctx);
   ctx.delay = findDelay(ctx);

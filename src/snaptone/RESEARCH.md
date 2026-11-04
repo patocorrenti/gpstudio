@@ -224,3 +224,14 @@ Two gates tripped. Delta specs for `device-connection` and `live-controller` wer
 `scripts/snaptone-golden.ts` renders `fixtures/nam_core_a2.nam` (NAM core A2 example) through the ported pipeline and compares the 8840-byte clone to VLTN's `snaptone-a2.clo` at the same commit. The check stays byte-for-byte. It is not loosened.
 
 Run on this machine (about 26 s): both blobs are 8840 bytes. Bytes 0–7 and 10–135 match. Bytes 8–9 are the CRC-16 (`fa 3a` here, `a9 6a` in the VLTN file) and differ because the impulse responses differ. The first payload difference is byte 136 (`BLOB_IR_DATA`, `0x88`). 3298 payload bytes differ. The first IR floats are last-ulp apart, for example `6.065848350524902` versus `6.065850734710693`. That is the same class of difference VLTN's `htkpa.ts` header already describes against Suite's dylib. The import-time check only rejects a truncated buffer so the app does not run this convert on startup.
+
+## Conversion speed (change `snaptone-convert-speed`)
+
+Fixture `fixtures/nam_core_a2.nam` (48 kHz), served test signal, 4 cores. Hashes are SHA-256.
+
+- 8840-byte clone: `d9d01a054605d048cee55461209d434587bd8bcc263f83c218dc7d0154b356e2` (48 kHz), `c4379457d0f10ba0d9151312606cc2ffff2d23ea497c2f6d9eb804ca203906fc` (fixture forced to 44.1 kHz).
+- 2696-byte file: `f4fb144465b2c0a4b7de0ec4e24e97b2b5df636b0191cee20243f8f517f25b52` (48 kHz), `14f8d34a8f2766f7c530712705b3fb06d9e240fb49df704928a534279977e112` (44.1 kHz).
+- Node 22.23 (`scripts/snaptone-parity.ts`): excitation 1.5–1.9 s at 48 kHz, 0.4 s at 44.1 kHz; render 8.0–9.6 s in one pass, 2.3–2.6 s for the slowest of 4 chunks; clone 12.6–13.9 s in TypeScript, 3.5–3.8 s with `htkpakernel.wasm`. Wasm clone, 2 chunks and 4 chunks: same bytes as the TypeScript one-pass path at both rates.
+- Profile before the change (`node --cpu-prof`, about 24 s): `a2_process` 8.3 s self; `iterAmpCoeff` 11.2 s inclusive, of which `ampModelChain` 7.1 s and `convolveBlocks` 6.1 s (overlapping); `finalizeIr2` 2.3 s; `convertSampleRate` 1.1 s.
+- Chromium (Playwright, dev server, 4 cores so 3 render workers), same file hash in every run: one-thread path 24.3 s; new path 10.7 s for the first conversion (fetch and excitation included), 7.0 s for the next one; after a cancel 7.5 s; with `htkpakernel.wasm` blocked 15–18 s and one console warning.
+- `expf` in `htkpa.ts` is `Math.fround(Math.exp(x))`. V8's `Math.exp` is fdlibm's, so the kernel carries fdlibm `exp`. Other engines' `Math.exp` may differ in the last bit; the USB targets (Chrome, Edge, WebView2) are V8.
