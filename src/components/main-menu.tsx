@@ -60,12 +60,12 @@ function MenuThemeItem({ onToggle }: { onToggle: () => void }) {
         onToggle();
       }}
     >
+      {mounted && isDark ? "Light mode" : "Dark mode"}
       {mounted && isDark ? (
         <Sun className="size-4 text-muted-foreground" />
       ) : (
         <Moon className="size-4 text-muted-foreground" />
       )}
-      {mounted && isDark ? "Light mode" : "Dark mode"}
     </Button>
   );
 }
@@ -88,12 +88,13 @@ export default function MainMenu() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-48 gap-0.5 p-1">
         <MenuNavLink to="/" end onNavigate={() => setOpen(false)}>
-          Pedal
+          Studio
         </MenuNavLink>
+        <MenuThemeItem onToggle={() => setOpen(false)} />
+        <div role="separator" className="bg-border -mx-1 my-1 h-px" />
         <MenuNavLink to="/about" onNavigate={() => setOpen(false)}>
           About
         </MenuNavLink>
-        <MenuThemeItem onToggle={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );

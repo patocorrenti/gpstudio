@@ -199,7 +199,7 @@ async function assertOAuthReturn(): Promise<void> {
     helper: true,
   });
   if (popup.kind !== "frame" || popup.payload.tone_id !== "42" || !isOAuthHelper({ framed: false, windowName: TONE3000_WINDOW_NAME, hasOpener: false })) {
-    throw new Error("A Tone3000 popup must post the return and must not store tokens itself");
+    throw new Error("A TONE3000 popup must post the return and must not store tokens itself");
   }
 
   const tokens: KeyValueStore = memoryStore();

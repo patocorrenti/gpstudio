@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ChevronLeft, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import gpStudioLogoDark from "@/assets/img/gp-studio-logo-dark.png";
+import gpStudioLogoLight from "@/assets/img/gp-studio-logo-light.png";
+import tone3000Logo from "@/assets/img/tone3000-logo.png";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,9 +15,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "cn";
 import type { DeviceSession, NamInspection } from "@/device/session";
+import { USER_SNAP_COUNT, USER_SNAP_FIRST } from "@/device/snaptone-table";
 import {
   loadToneA2Models,
   loadToneList,
@@ -26,7 +42,12 @@ import {
   type ToneListKind,
   type ToneListRow,
 } from "@/features/tone3000/api";
-import { completeTone3000SignIn } from "@/features/tone3000/account";
+import {
+  completeTone3000SignIn,
+  disconnectTone3000Account,
+  getTone3000Account,
+  subscribeTone3000Account,
+} from "@/features/tone3000/account";
 import { acceptOAuthState, catalogGearsForFilter } from "@/features/tone3000/oauth";
 import {
   closeTone3000Popup,
@@ -66,13 +87,12 @@ type GearFilter = "all" | ToneListGear;
 
 const DISCOVER_LABELS: { kind: ToneListKind; label: string }[] = [
   { kind: "trending", label: "Trending" },
-  { kind: "latest", label: "Latest" },
 ];
 
 const MY_LABELS: { kind: ToneListKind; label: string }[] = [
   { kind: "favorites", label: "Favorites" },
   { kind: "downloaded", label: "Downloaded" },
-  { kind: "created", label: "Uploaded" },
+  { kind: "created", label: "Created" },
 ];
 
 function isToneListKind(value: string | null): value is ToneListKind {
@@ -88,13 +108,16 @@ function isToneListKind(value: string | null): value is ToneListKind {
 function readStoredListKind(): ToneListKind {
   try {
     const stored = window.localStorage.getItem(LIST_KIND_KEY);
+    if (stored === "latest") {
+      return "trending";
+    }
     if (isToneListKind(stored)) {
       return stored;
     }
   } catch {
-    // Ignore storage failures and fall back to Trending.
+    // Ignore storage failures and fall back to Favorites.
   }
-  return "trending";
+  return "favorites";
 }
 
 function writeStoredListKind(kind: ToneListKind): void {
@@ -134,10 +157,6 @@ function snapName(value: string): string {
   return cut === "" ? "X" : cut;
 }
 
-function listAcceptsQuery(kind: ToneListKind): boolean {
-  return kind === "favorites" || kind === "created" || kind === "downloaded";
-}
-
 function listIsPaged(kind: ToneListKind): boolean {
   return kind === "favorites" || kind === "created" || kind === "downloaded";
 }
@@ -175,6 +194,19 @@ function namDownloadName(fileName: string): string {
   return fileName.toLowerCase().endsWith(".nam") ? fileName : `${fileName}.nam`;
 }
 
+function customSlotLabel(
+  protocol: number,
+  entry: { name: string | null; flag: number | null } | undefined,
+): string {
+  const padded = String(protocol).padStart(2, "0");
+  if (entry?.flag === 0) {
+    return entry.name && entry.name.length > 0
+      ? `${padded} · ${entry.name}`
+      : `${padded} · SnapTone ${String(protocol)}`;
+  }
+  return `${padded} · Empty`;
+}
+
 function triggerNamDownload(fileName: string, bytes: ArrayBuffer): void {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(new Uint8Array(bytes));
@@ -191,23 +223,31 @@ export function Tone3000Catalog({
   open,
   onOpenChange,
   slot,
-  existingName,
   session,
   onUploaded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   slot: number | null;
-  existingName: string | null;
   session: DeviceSession;
   onUploaded: () => void;
 }) {
+  const account = useSyncExternalStore(
+    subscribeTone3000Account,
+    getTone3000Account,
+    getTone3000Account,
+  );
+  const snapshot = useSyncExternalStore(
+    (listener) => session.subscribe(listener),
+    () => session.getSnapshot(),
+    () => session.getSnapshot(),
+  );
+  const [targetSlot, setTargetSlot] = useState<number | null>(slot);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [listKind, setListKind] = useState<ToneListKind>("trending");
   const [gear, setGear] = useState<GearFilter>("all");
-  const [titleQuery, setTitleQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<ToneListRow[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -260,11 +300,40 @@ export function Tone3000Catalog({
   }, [draft?.phase]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedQuery(titleQuery.trim());
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [titleQuery]);
+    setTargetSlot(slot);
+  }, [open, slot]);
+
+  function startSignInPopup(): void {
+    setNotice("");
+    setSigningIn(true);
+    signingInRef.current = true;
+    const held = peekTone3000Popup();
+    const popup = held ?? openTone3000Popup();
+    if (!popup) {
+      setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      return;
+    }
+    void beginAuthorize("sign-in")
+      .then((next) => {
+        if (!signingInRef.current) {
+          return;
+        }
+        const current = takeTone3000Popup() ?? popup;
+        if (current.closed) {
+          setNotice("The TONE3000 window was closed.");
+          return;
+        }
+        navigateTone3000Popup(current, next);
+        popupRef.current = current;
+      })
+      .catch(() => {
+        if (!signingInRef.current) {
+          return;
+        }
+        closeTone3000Popup(takeTone3000Popup() ?? popup);
+        setNotice("TONE3000 is not configured.");
+      });
+  }
 
   useEffect(() => {
     if (!open || slot === null) {
@@ -280,15 +349,14 @@ export function Tone3000Catalog({
     browsingRef.current = false;
     setListKind(readStoredListKind());
     setGear(readStoredGear());
-    setTitleQuery("");
-    setDebouncedQuery("");
     setPage(1);
     setRows([]);
     setTotalPages(1);
     setListReady(false);
     setListLoading(false);
-    setSigningIn(false);
-    signingInRef.current = false;
+    const needsSignIn = getTone3000Account().status !== "signed-in";
+    setSigningIn(needsSignIn);
+    signingInRef.current = needsSignIn;
 
     void (async () => {
       const access = await ensureAccessToken();
@@ -299,43 +367,16 @@ export function Tone3000Catalog({
         closeTone3000Popup(takeTone3000Popup());
         await completeTone3000SignIn();
         if (!cancelled) {
+          setSigningIn(false);
+          signingInRef.current = false;
           setListReady(true);
         }
         return;
       }
-      setSigningIn(true);
-      signingInRef.current = true;
-      const held = peekTone3000Popup();
-      const popup = held ?? openTone3000Popup();
-      if (!popup) {
-        setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
-        setSigningIn(false);
-        signingInRef.current = false;
+      if (cancelled) {
         return;
       }
-      void beginAuthorize("sign-in")
-        .then((next) => {
-          if (cancelled) {
-            return;
-          }
-          const current = takeTone3000Popup() ?? popup;
-          if (current.closed) {
-            setNotice("The Tone3000 window was closed.");
-            setSigningIn(false);
-            signingInRef.current = false;
-            return;
-          }
-          navigateTone3000Popup(current, next);
-          popupRef.current = current;
-        })
-        .catch(() => {
-          if (!cancelled) {
-            closeTone3000Popup(takeTone3000Popup() ?? popup);
-            setNotice("Tone3000 is not configured.");
-            setSigningIn(false);
-            signingInRef.current = false;
-          }
-        });
+      startSignInPopup();
     })();
 
     return () => {
@@ -361,7 +402,7 @@ export function Tone3000Catalog({
         setListReady(false);
         setSigningIn(true);
         signingInRef.current = true;
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         return;
       }
       try {
@@ -369,7 +410,6 @@ export function Tone3000Catalog({
           page: listIsPaged(listKind) ? page : undefined,
           pageSize: listIsPaged(listKind) ? PAGE_SIZE : undefined,
           gear: gear !== "all" ? gear : undefined,
-          query: listAcceptsQuery(listKind) && debouncedQuery ? debouncedQuery : undefined,
         });
         if (cancelled || requestId !== listRequestRef.current) {
           return;
@@ -390,7 +430,7 @@ export function Tone3000Catalog({
     return () => {
       cancelled = true;
     };
-  }, [open, listReady, listKind, gear, debouncedQuery, page, browsing, tone, draft, signingIn]);
+  }, [open, listReady, listKind, gear, page, browsing, tone, draft, signingIn]);
 
   useEffect(() => {
     if (!open) {
@@ -435,7 +475,7 @@ export function Tone3000Catalog({
       const exchanged = await exchangeAuthorizationCode(payload.code ?? "");
       if (!exchanged) {
         handledRef.current = false;
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         setSigningIn(false);
         signingInRef.current = false;
         setBrowsing(false);
@@ -445,7 +485,7 @@ export function Tone3000Catalog({
       const username = await completeTone3000SignIn();
       if (!username) {
         handledRef.current = false;
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         setSigningIn(false);
         signingInRef.current = false;
         setBrowsing(false);
@@ -461,8 +501,6 @@ export function Tone3000Catalog({
         signingInRef.current = false;
         setListKind(readStoredListKind());
         setGear(readStoredGear());
-        setTitleQuery("");
-        setDebouncedQuery("");
         setPage(1);
         setListReady(true);
         handledRef.current = false;
@@ -474,7 +512,7 @@ export function Tone3000Catalog({
         if (!popup) {
           setBrowsing(false);
           browsingRef.current = false;
-          setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
+          setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
           handledRef.current = false;
           return;
         }
@@ -486,7 +524,7 @@ export function Tone3000Catalog({
           if (popup.closed) {
             setBrowsing(false);
             browsingRef.current = false;
-            setNotice("The Tone3000 window was closed.");
+            setNotice("The TONE3000 window was closed.");
             handledRef.current = false;
             return;
           }
@@ -497,7 +535,7 @@ export function Tone3000Catalog({
           closeTone3000Popup(popup);
           setBrowsing(false);
           browsingRef.current = false;
-          setNotice("Tone3000 is not configured.");
+          setNotice("TONE3000 is not configured.");
           handledRef.current = false;
         }
         return;
@@ -513,7 +551,7 @@ export function Tone3000Catalog({
 
       const access = await ensureAccessToken();
       if (!access) {
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         handledRef.current = false;
         return;
       }
@@ -555,7 +593,7 @@ export function Tone3000Catalog({
       const access = await ensureAccessToken();
       if (!access) {
         setTone(null);
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         return;
       }
       const loaded = await loadToneA2Models(row.id, access);
@@ -581,7 +619,7 @@ export function Tone3000Catalog({
     try {
       const access = await ensureAccessToken();
       if (!access) {
-        setNotice("Tone3000 sign-in did not finish.");
+        setNotice("TONE3000 sign-in did not finish.");
         return;
       }
       const bytes = await downloadModelFile(model.modelUrl, access);
@@ -615,9 +653,16 @@ export function Tone3000Catalog({
   }
 
   async function startSend(): Promise<void> {
-    if (!draft || draft.inspection.kind !== "A2" || slot === null || draft.phase === "converting" || draft.phase === "sending") {
+    if (
+      !draft ||
+      draft.inspection.kind !== "A2" ||
+      targetSlot === null ||
+      draft.phase === "converting" ||
+      draft.phase === "sending"
+    ) {
       return;
     }
+    const uploadSlot = targetSlot;
     const generation = previewRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -646,12 +691,14 @@ export function Tone3000Catalog({
       setDraft((current) =>
         current ? { ...current, phase: "sending", message: "Uploading it to the Multi-Effects…" } : current,
       );
-      const result = await session.uploadUserSnapTone(slot, name, file, controller.signal);
+      const result = await session.uploadUserSnapTone(uploadSlot, name, file, controller.signal);
       if (previewRef.current !== generation) {
         return;
       }
       if (result.ok) {
-        toast.success(`${result.name} uploaded into the slot ${String(slot).padStart(2, "0")}.`);
+        toast.success(
+          `${result.name} uploaded into the slot ${String(uploadSlot).padStart(2, "0")}.`,
+        );
         setDraft(null);
         onUploaded();
         return;
@@ -690,10 +737,6 @@ export function Tone3000Catalog({
     setListKind(kind);
     writeStoredListKind(kind);
     setPage(1);
-    if (!listAcceptsQuery(kind)) {
-      setTitleQuery("");
-      setDebouncedQuery("");
-    }
     setNotice("");
   }
 
@@ -709,7 +752,7 @@ export function Tone3000Catalog({
     setTone(null);
     const popup = openTone3000Popup();
     if (!popup) {
-      setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
+      setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
       return;
     }
     holdTone3000Popup(popup);
@@ -731,7 +774,7 @@ export function Tone3000Catalog({
         closeTone3000Popup(popup);
         setBrowsing(false);
         browsingRef.current = false;
-        setNotice("Tone3000 is not configured.");
+        setNotice("TONE3000 is not configured.");
       });
   }
 
@@ -763,6 +806,12 @@ export function Tone3000Catalog({
   const busy = draft?.phase === "converting" || draft?.phase === "sending";
   const showModels = draft === null && tone !== null;
   const showLists = draft === null && tone === null && listReady && !signingIn;
+  const showPartnership =
+    draft === null &&
+    tone === null &&
+    !browsing &&
+    !listReady &&
+    (signingIn || Boolean(notice));
   const wide = showModels || showLists;
 
   return (
@@ -781,26 +830,68 @@ export function Tone3000Catalog({
       <DialogContent
         aria-describedby={undefined}
         showCloseButton={draft?.phase !== "sending"}
-        closeAction="back"
         className={
           wide
             ? "flex h-[min(85vh,52rem)] max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl"
             : "max-h-[85vh] overflow-hidden sm:max-w-lg"
         }
       >
-        <DialogHeader>
-          <DialogTitle className="flex flex-wrap items-baseline gap-x-2">
-            <span>Tone3000</span>
-            {slot !== null ? (
-              <>
-                <span className="font-normal text-muted-foreground" aria-hidden>
-                  →
-                </span>
-                <span className="font-normal text-muted-foreground">{`SnapTone ${String(slot).padStart(2, "0")}`}</span>
-              </>
-            ) : null}
-          </DialogTitle>
-        </DialogHeader>
+        {showPartnership ? (
+          <DialogHeader>
+            <DialogTitle className="sr-only">Connect with TONE3000</DialogTitle>
+          </DialogHeader>
+        ) : (
+          <DialogHeader>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pr-10">
+              <DialogTitle>Your Tones</DialogTitle>
+              {account.status === "signed-in" ? (
+                <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-2 px-1.5 font-normal"
+                      aria-label={`TONE3000 account ${account.username}`}
+                      aria-expanded={accountMenuOpen}
+                    >
+                      {account.avatarUrl ? (
+                        <img
+                          src={account.avatarUrl}
+                          alt=""
+                          className="size-5 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
+                        >
+                          {account.username.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="max-w-36 truncate">{account.username}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-52 gap-0.5 p-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        disconnectTone3000Account();
+                        onOpenChange(false);
+                      }}
+                    >
+                      <LogOut className="size-3.5 shrink-0 text-muted-foreground" />
+                      Logout from TONE3000
+                    </Button>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
+          </DialogHeader>
+        )}
         {tone ? (
           <div className="flex items-center gap-3 border-b border-foreground/10 px-1 py-2">
             {tone.imageUrl ? (
@@ -832,57 +923,96 @@ export function Tone3000Catalog({
             ) : null}
           </div>
         ) : null}
-        {signingIn && !notice ? (
-          <p className="text-sm text-muted-foreground">
-            Finish signing in in the Tone3000 window. This page stays open.
-          </p>
+        {showPartnership ? (
+          <div className="flex flex-col items-center gap-6 px-2 py-4 text-center sm:px-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              <span className="inline-flex items-center">
+                <img
+                  src={gpStudioLogoLight}
+                  alt="GP Studio"
+                  className="h-4 w-auto dark:hidden"
+                />
+                <img
+                  src={gpStudioLogoDark}
+                  alt="GP Studio"
+                  className="hidden h-4 w-auto dark:block"
+                />
+              </span>
+              <span className="text-lg font-light text-muted-foreground" aria-hidden>
+                ×
+              </span>
+              <img
+                src={tone3000Logo}
+                alt="TONE3000"
+                className="h-5 w-auto"
+              />
+            </div>
+            <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+              GP Studio has partnered with TONE3000 to give you access to a massive
+              library of Neural Amp Modeler (NAM) captures and IRs of real analog
+              gear, created by a global community of musicians.
+            </p>
+            {notice ? <p className="text-sm text-foreground">{notice}</p> : null}
+            <Button
+              type="button"
+              className="min-w-40"
+              onClick={() => {
+                startSignInPopup();
+              }}
+            >
+              Continue…
+            </Button>
+          </div>
         ) : null}
         {showLists ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {MY_LABELS.map((entry) => (
                 <Button
+                  key={entry.kind}
                   type="button"
                   size="sm"
-                  className="h-8 bg-orange-700 px-3.5 text-white hover:bg-orange-800 hover:text-white dark:bg-orange-700 dark:hover:bg-orange-600"
-                  onClick={startBrowse}
+                  variant={listKind === entry.kind ? "default" : "outline"}
+                  className="h-8 px-3.5"
+                  onClick={() => selectList(entry.kind)}
                   disabled={browsing}
                 >
-                  Search All
+                  {entry.label}
                 </Button>
-                {DISCOVER_LABELS.map((entry) => (
-                  <Button
-                    key={entry.kind}
-                    type="button"
-                    size="sm"
-                    variant={listKind === entry.kind ? "default" : "outline"}
-                    className="h-8 px-3.5"
-                    onClick={() => selectList(entry.kind)}
-                    disabled={browsing}
-                  >
-                    {entry.label}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {MY_LABELS.map((entry) => (
-                  <Button
-                    key={entry.kind}
-                    type="button"
-                    size="sm"
-                    variant={listKind === entry.kind ? "default" : "outline"}
-                    className="h-8 px-3.5"
-                    onClick={() => selectList(entry.kind)}
-                    disabled={browsing}
-                  >
-                    {entry.label}
-                  </Button>
-                ))}
-              </div>
+              ))}
+              {DISCOVER_LABELS.map((entry) => (
+                <Button
+                  key={entry.kind}
+                  type="button"
+                  size="sm"
+                  variant={listKind === entry.kind ? "default" : "outline"}
+                  className="h-8 px-3.5"
+                  onClick={() => selectList(entry.kind)}
+                  disabled={browsing}
+                >
+                  {entry.label}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-[34px] gap-2 bg-black px-3.5 text-white hover:bg-black hover:text-white dark:bg-black dark:text-white dark:hover:bg-black dark:hover:text-white"
+                onClick={startBrowse}
+                disabled={browsing}
+                aria-label="Browse all TONE3000"
+              >
+                <span>Browse all</span>
+                <img
+                  src={tone3000Logo}
+                  alt="TONE3000"
+                  className="h-3.5 w-auto"
+                />
+              </Button>
             </div>
             {browsing ? (
               <p className="text-sm text-muted-foreground">
-                Choose a tone in the Tone3000 window. This page stays open.
+                Choose a tone in the TONE3000 window. This page stays open.
               </p>
             ) : null}
             {!browsing ? (
@@ -916,18 +1046,6 @@ export function Tone3000Catalog({
                     );
                   })}
                 </ButtonGroup>
-                {listAcceptsQuery(listKind) ? (
-                  <Input
-                    aria-label="Search titles"
-                    placeholder="Search titles"
-                    value={titleQuery}
-                    className="h-7 max-w-xs rounded-sm text-xs"
-                    onChange={(event) => {
-                      setTitleQuery(event.target.value);
-                      setPage(1);
-                    }}
-                  />
-                ) : null}
               </div>
             ) : null}
             {!browsing && listLoading ? <ToneListSkeleton /> : null}
@@ -1007,7 +1125,9 @@ export function Tone3000Catalog({
             ))}
           </div>
         ) : null}
-        {draft === null && notice ? <p className="text-sm">{notice}</p> : null}
+        {draft === null && notice && !showPartnership ? (
+          <p className="text-sm">{notice}</p>
+        ) : null}
         {draft && busy ? (
           <div className="flex flex-col items-center gap-5 px-4 py-14 text-center">
             <p className="text-sm">{draft.message}</p>
@@ -1029,17 +1149,60 @@ export function Tone3000Catalog({
         {draft && !busy ? (
           <div className="flex flex-col gap-3 py-1">
             <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-              <span className="text-sm text-muted-foreground">Capture</span>
+              <span className="text-sm text-muted-foreground">Tone</span>
               <span className="truncate text-sm">{draft.fileName}</span>
-              <span className="text-sm text-muted-foreground">In Slot</span>
-              <span className="min-w-0 text-sm">
-                <span className="tabular-nums">{String(slot ?? 0).padStart(2, "0")}</span>
-                {existingName ? (
-                  <span className="ml-2.5 text-xs text-amber-600 dark:text-amber-400">
-                    {`(${existingName} will be overwritten)`}
-                  </span>
-                ) : null}
-              </span>
+              <span className="self-start pt-1.5 text-sm text-muted-foreground">In Slot</span>
+              <div className="min-w-0">
+                <Select
+                  value={targetSlot === null ? undefined : String(targetSlot)}
+                  onValueChange={(next) => {
+                    const protocol = Number(next);
+                    if (Number.isInteger(protocol)) {
+                      setTargetSlot(protocol);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label="SnapTone slot"
+                    className="h-8 w-full min-w-0"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-72">
+                    {Array.from({ length: USER_SNAP_COUNT }, (_, index) => {
+                      const protocol = USER_SNAP_FIRST + index;
+                      const entry =
+                        snapshot.status === "connected"
+                          ? snapshot.userSnapSlots[index]
+                          : undefined;
+                      return (
+                        <SelectItem key={protocol} value={String(protocol)}>
+                          {customSlotLabel(protocol, entry)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  if (targetSlot === null || snapshot.status !== "connected") {
+                    return null;
+                  }
+                  const entry = snapshot.userSnapSlots[targetSlot - USER_SNAP_FIRST];
+                  if (entry?.flag !== 0) {
+                    return null;
+                  }
+                  const overwritten =
+                    entry.name && entry.name.length > 0
+                      ? entry.name
+                      : `SnapTone ${String(targetSlot)}`;
+                  return (
+                    <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                      {`${overwritten} will be overwritten`}
+                    </p>
+                  );
+                })()}
+              </div>
               <span className="text-sm text-muted-foreground">As</span>
               <Input
                 aria-label="SnapTone name"

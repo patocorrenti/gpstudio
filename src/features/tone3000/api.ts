@@ -187,7 +187,7 @@ async function authedJson(url: string, accessToken: string, fetchImpl: typeof fe
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    throw new Error(`Tone3000 request failed (${String(response.status)})`);
+    throw new Error(`TONE3000 request failed (${String(response.status)})`);
   }
   return response.json() as Promise<unknown>;
 }
@@ -221,16 +221,32 @@ function a2Models(body: unknown): A2Model[] {
   return models;
 }
 
-export async function fetchTone3000Username(
+export type Tone3000User = {
+  username: string;
+  avatarUrl: string | null;
+};
+
+function avatarUrlOf(value: unknown): string | null {
+  const direct = stringField(value, "avatar_url");
+  if (direct) {
+    return direct;
+  }
+  if (!value || typeof value !== "object" || !("user" in value)) {
+    return null;
+  }
+  return stringField((value as { user: unknown }).user, "avatar_url");
+}
+
+export async function fetchTone3000User(
   accessToken: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<string> {
+): Promise<Tone3000User> {
   const body = await authedJson(`${API_ORIGIN}/api/v1/user`, accessToken, fetchImpl);
   const username = usernameOf(body);
   if (!username) {
-    throw new Error("Tone3000 did not return a username.");
+    throw new Error("TONE3000 did not return a username.");
   }
-  return username;
+  return { username, avatarUrl: avatarUrlOf(body) };
 }
 
 async function fetchToneListPage(
@@ -241,7 +257,7 @@ async function fetchToneListPage(
 ): Promise<ToneListPage> {
   const url = buildToneListUrl(kind, options);
   if (url.includes("/tones/search")) {
-    throw new Error("Tone3000 list reads must not use /tones/search");
+    throw new Error("TONE3000 list reads must not use /tones/search");
   }
   const body = await authedJson(url, accessToken, fetchImpl);
   return parseToneListPage(body);
