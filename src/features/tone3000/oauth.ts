@@ -25,7 +25,7 @@ export function publishableKey(): string {
 export function requireClientId(value: string): string {
   const clientId = value.trim();
   if (!clientId) {
-    throw new Error("Missing TONE3000 client_id");
+    throw new Error("Missing Tone3000 client_id");
   }
   return clientId;
 }

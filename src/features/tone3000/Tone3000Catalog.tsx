@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "cn";
 import type { DeviceSession, NamInspection } from "@/device/session";
 import {
   loadToneA2Models,
@@ -22,11 +25,7 @@ import {
   type ToneListKind,
   type ToneListRow,
 } from "@/features/tone3000/api";
-import {
-  completeTone3000SignIn,
-  getTone3000Account,
-  subscribeTone3000Account,
-} from "@/features/tone3000/account";
+import { completeTone3000SignIn } from "@/features/tone3000/account";
 import { acceptOAuthState, catalogGearsForFilter } from "@/features/tone3000/oauth";
 import {
   closeTone3000Popup,
@@ -64,12 +63,15 @@ type ListedTone = Extract<A2ToneModels, { ok: true }>;
 
 type GearFilter = "all" | ToneListGear;
 
-const LIST_LABELS: { kind: ToneListKind; label: string }[] = [
+const DISCOVER_LABELS: { kind: ToneListKind; label: string }[] = [
   { kind: "trending", label: "Trending" },
   { kind: "latest", label: "Latest" },
-  { kind: "favorites", label: "My Favorites" },
-  { kind: "downloaded", label: "Downloaded by Me" },
-  { kind: "created", label: "Created by Me" },
+];
+
+const MY_LABELS: { kind: ToneListKind; label: string }[] = [
+  { kind: "favorites", label: "Favorites" },
+  { kind: "downloaded", label: "Downloaded" },
+  { kind: "created", label: "Uploaded" },
 ];
 
 function isToneListKind(value: string | null): value is ToneListKind {
@@ -170,11 +172,6 @@ export function Tone3000Catalog({
   session: DeviceSession;
   onUploaded: () => void;
 }) {
-  const account = useSyncExternalStore(
-    subscribeTone3000Account,
-    getTone3000Account,
-    getTone3000Account,
-  );
   const [signingIn, setSigningIn] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [listKind, setListKind] = useState<ToneListKind>("trending");
@@ -280,7 +277,7 @@ export function Tone3000Catalog({
       const held = peekTone3000Popup();
       const popup = held ?? openTone3000Popup();
       if (!popup) {
-        setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+        setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
         setSigningIn(false);
         signingInRef.current = false;
         return;
@@ -292,7 +289,7 @@ export function Tone3000Catalog({
           }
           const current = takeTone3000Popup() ?? popup;
           if (current.closed) {
-            setNotice("The TONE3000 window was closed.");
+            setNotice("The Tone3000 window was closed.");
             setSigningIn(false);
             signingInRef.current = false;
             return;
@@ -303,7 +300,7 @@ export function Tone3000Catalog({
         .catch(() => {
           if (!cancelled) {
             closeTone3000Popup(takeTone3000Popup() ?? popup);
-            setNotice("TONE3000 is not configured.");
+            setNotice("Tone3000 is not configured.");
             setSigningIn(false);
             signingInRef.current = false;
           }
@@ -333,7 +330,7 @@ export function Tone3000Catalog({
         setListReady(false);
         setSigningIn(true);
         signingInRef.current = true;
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         return;
       }
       try {
@@ -407,7 +404,7 @@ export function Tone3000Catalog({
       const exchanged = await exchangeAuthorizationCode(payload.code ?? "");
       if (!exchanged) {
         handledRef.current = false;
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         setSigningIn(false);
         signingInRef.current = false;
         setBrowsing(false);
@@ -417,7 +414,7 @@ export function Tone3000Catalog({
       const username = await completeTone3000SignIn();
       if (!username) {
         handledRef.current = false;
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         setSigningIn(false);
         signingInRef.current = false;
         setBrowsing(false);
@@ -446,7 +443,7 @@ export function Tone3000Catalog({
         if (!popup) {
           setBrowsing(false);
           browsingRef.current = false;
-          setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+          setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
           handledRef.current = false;
           return;
         }
@@ -458,7 +455,7 @@ export function Tone3000Catalog({
           if (popup.closed) {
             setBrowsing(false);
             browsingRef.current = false;
-            setNotice("The TONE3000 window was closed.");
+            setNotice("The Tone3000 window was closed.");
             handledRef.current = false;
             return;
           }
@@ -469,7 +466,7 @@ export function Tone3000Catalog({
           closeTone3000Popup(popup);
           setBrowsing(false);
           browsingRef.current = false;
-          setNotice("TONE3000 is not configured.");
+          setNotice("Tone3000 is not configured.");
           handledRef.current = false;
         }
         return;
@@ -485,7 +482,7 @@ export function Tone3000Catalog({
 
       const access = await ensureAccessToken();
       if (!access) {
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         handledRef.current = false;
         return;
       }
@@ -499,7 +496,7 @@ export function Tone3000Catalog({
           handledRef.current = false;
           return;
         }
-        setTone(loaded);
+          setTone({ ...loaded, imageUrl: loaded.imageUrl ?? null });
         handledRef.current = false;
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "The tone could not be loaded.");
@@ -517,7 +514,7 @@ export function Tone3000Catalog({
     try {
       const access = await ensureAccessToken();
       if (!access) {
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         return;
       }
       const loaded = await loadToneA2Models(row.id, access);
@@ -526,7 +523,7 @@ export function Tone3000Catalog({
         setNotice(loaded.message);
         return;
       }
-      setTone(loaded);
+      setTone({ ...loaded, imageUrl: loaded.imageUrl ?? row.imageUrl });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The tone could not be loaded.");
     } finally {
@@ -542,7 +539,7 @@ export function Tone3000Catalog({
     try {
       const access = await ensureAccessToken();
       if (!access) {
-        setNotice("TONE3000 sign-in did not finish.");
+        setNotice("Tone3000 sign-in did not finish.");
         return;
       }
       const bytes = await downloadModelFile(model.modelUrl, access);
@@ -666,7 +663,7 @@ export function Tone3000Catalog({
     setTone(null);
     const popup = openTone3000Popup();
     if (!popup) {
-      setNotice("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      setNotice("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
       return;
     }
     holdTone3000Popup(popup);
@@ -688,7 +685,7 @@ export function Tone3000Catalog({
         closeTone3000Popup(popup);
         setBrowsing(false);
         browsingRef.current = false;
-        setNotice("TONE3000 is not configured.");
+        setNotice("Tone3000 is not configured.");
       });
   }
 
@@ -720,7 +717,6 @@ export function Tone3000Catalog({
   const busy = draft?.phase === "converting" || draft?.phase === "sending";
   const showModels = draft === null && tone !== null;
   const showLists = draft === null && tone === null && listReady && !signingIn;
-  const signedInName = account.status === "signed-in" ? account.username : "";
   const wide = showModels || showLists;
 
   return (
@@ -739,6 +735,7 @@ export function Tone3000Catalog({
       <DialogContent
         aria-describedby={undefined}
         showCloseButton={draft?.phase !== "sending"}
+        closeAction="back"
         className={
           wide
             ? "flex h-[min(85vh,52rem)] max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl"
@@ -746,81 +743,133 @@ export function Tone3000Catalog({
         }
       >
         <DialogHeader>
-          <DialogTitle>{slot === null ? "TONE3000" : `SnapTone ${String(slot).padStart(2, "0")}`}</DialogTitle>
+          <DialogTitle className="flex flex-wrap items-baseline gap-x-2">
+            <span>Tone3000</span>
+            {slot !== null ? (
+              <>
+                <span className="font-normal text-muted-foreground" aria-hidden>
+                  →
+                </span>
+                <span className="font-normal text-muted-foreground">{`SnapTone ${String(slot).padStart(2, "0")}`}</span>
+              </>
+            ) : null}
+          </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-wrap items-baseline gap-x-1.5">
-          <span className="text-sm font-medium">TONE3000</span>
-          {signedInName ? <span className="text-xs text-muted-foreground">{`- ${signedInName}`}</span> : null}
-        </div>
         {tone ? (
-          <>
-            <div className="border-t border-border" />
-            <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-              <span className="truncate text-sm font-medium">{tone.title}</span>
-              <span className="truncate text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 border-b border-foreground/10 px-1 py-2">
+            {tone.imageUrl ? (
+              <img
+                src={tone.imageUrl}
+                alt=""
+                className="size-10 shrink-0 rounded-sm object-cover"
+              />
+            ) : (
+              <span className="size-10 shrink-0 rounded-sm bg-muted" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{tone.title}</p>
+              <p className="truncate text-xs text-muted-foreground">
                 {[tone3000GearLabel(tone.gear), tone.format, tone.username].filter(Boolean).join(" · ")}
-              </span>
-            </p>
-          </>
+              </p>
+            </div>
+            {showModels ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 px-3.5"
+                onClick={backToLists}
+              >
+                <ChevronLeft className="size-3.5 -translate-y-px" />
+                Back
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         {signingIn && !notice ? (
           <p className="text-sm text-muted-foreground">
-            Finish signing in in the TONE3000 window. This page stays open.
+            Finish signing in in the Tone3000 window. This page stays open.
           </p>
         ) : null}
         {showLists ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                type="button"
-                size="sm"
-                className="h-7 bg-black px-2.5 text-xs text-white hover:bg-neutral-900 hover:text-white"
-                onClick={startBrowse}
-                disabled={browsing}
-              >
-                Browse all catalog
-              </Button>
-              {LIST_LABELS.map((entry) => (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <Button
-                  key={entry.kind}
                   type="button"
                   size="sm"
-                  variant={listKind === entry.kind ? "default" : "outline"}
-                  className="h-7 px-2 text-xs"
-                  onClick={() => selectList(entry.kind)}
+                  className="h-8 bg-orange-700 px-3.5 text-white hover:bg-orange-800 hover:text-white dark:bg-orange-700 dark:hover:bg-orange-600"
+                  onClick={startBrowse}
                   disabled={browsing}
                 >
-                  {entry.label}
+                  Search All
                 </Button>
-              ))}
+                {DISCOVER_LABELS.map((entry) => (
+                  <Button
+                    key={entry.kind}
+                    type="button"
+                    size="sm"
+                    variant={listKind === entry.kind ? "default" : "outline"}
+                    className="h-8 px-3.5"
+                    onClick={() => selectList(entry.kind)}
+                    disabled={browsing}
+                  >
+                    {entry.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {MY_LABELS.map((entry) => (
+                  <Button
+                    key={entry.kind}
+                    type="button"
+                    size="sm"
+                    variant={listKind === entry.kind ? "default" : "outline"}
+                    className="h-8 px-3.5"
+                    onClick={() => selectList(entry.kind)}
+                    disabled={browsing}
+                  >
+                    {entry.label}
+                  </Button>
+                ))}
+              </div>
             </div>
             {browsing ? (
               <p className="text-sm text-muted-foreground">
-                Choose a tone in the TONE3000 window. This page stays open.
+                Choose a tone in the Tone3000 window. This page stays open.
               </p>
             ) : null}
             {!browsing ? (
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap gap-1">
+                <ButtonGroup aria-label="Gear filter">
                   {(
                     [
                       ["all", "All"],
                       ["amp", "Amp"],
                       ["amp-cab", "Amp + Cab"],
                     ] as const
-                  ).map(([value, label]) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      size="sm"
-                      variant={gear === value ? "default" : "outline"}
-                      className="h-7 px-2 text-xs"
-                      onClick={() => selectGear(value)}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
+                  ).map(([value, label]) => {
+                    const selected = gear === value;
+                    return (
+                      <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        aria-pressed={selected}
+                        className={cn(
+                          "h-8 px-3.5",
+                          selected
+                            ? "bg-muted text-foreground hover:bg-muted dark:bg-input dark:hover:bg-input"
+                            : "text-muted-foreground/70",
+                        )}
+                        onClick={() => selectGear(value)}
+                      >
+                        {label}
+                      </Button>
+                    );
+                  })}
+                </ButtonGroup>
                 {listAcceptsQuery(listKind) ? (
                   <Input
                     aria-label="Search titles"
@@ -845,7 +894,7 @@ export function Tone3000Catalog({
                   <button
                     key={row.id}
                     type="button"
-                    className="flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left text-sm hover:bg-muted"
+                    className="flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left text-sm hover:bg-muted/50"
                     onClick={() => void chooseTone(row)}
                   >
                     {row.imageUrl ? (
@@ -897,25 +946,18 @@ export function Tone3000Catalog({
           </div>
         ) : null}
         {showModels && tone ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div>
-              <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={backToLists}>
-                Back
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
-              {tone.models.map((model) => (
-                <button
-                  key={model.modelUrl}
-                  type="button"
-                  className="flex w-full cursor-pointer items-center justify-between gap-3 px-1 py-2 text-left text-sm hover:bg-muted"
-                  onClick={() => void choose(model)}
-                >
-                  <span className="truncate">{model.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">NAM</span>
-                </button>
-              ))}
-            </div>
+          <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
+            {tone.models.map((model) => (
+              <button
+                key={model.modelUrl}
+                type="button"
+                className="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/50"
+                onClick={() => void choose(model)}
+              >
+                <span className="truncate">{model.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">NAM</span>
+              </button>
+            ))}
           </div>
         ) : null}
         {draft === null && notice ? <p className="text-sm">{notice}</p> : null}
@@ -979,18 +1021,6 @@ export function Tone3000Catalog({
               disabled={busy || draft.inspection.kind !== "A2"}
             >
               Confirm
-            </Button>
-          </DialogFooter>
-        ) : showModels ? (
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        ) : showLists || signingIn || notice ? (
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
             </Button>
           </DialogFooter>
         ) : null}

@@ -248,7 +248,6 @@ export function PatchBar({
   const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
-  const [snapShowFactory, setSnapShowFactory] = useState(true);
   const [abOpen, setAbOpen] = useState(false);
   const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
   const [abSideA, setAbSideA] = useState(0);
@@ -503,8 +502,7 @@ export function PatchBar({
   }, [registerStop]);
 
   useEffect(() => {
-    setSnapTonesOpenHandler((options) => {
-      setSnapShowFactory(options?.showFactory !== false);
+    setSnapTonesOpenHandler(() => {
       setSnapOpen(true);
     });
     return () => {
@@ -1108,7 +1106,6 @@ export function PatchBar({
               className="h-8 w-full justify-start gap-2 px-2 font-normal"
               onClick={() => {
                 setOptionsOpen(false);
-                setSnapShowFactory(true);
                 setSnapOpen(true);
               }}
             >
@@ -1135,12 +1132,7 @@ export function PatchBar({
       </div>
       </div>
       </TooltipProvider>
-      <SnapToneDialog
-        open={snapOpen}
-        onOpenChange={setSnapOpen}
-        session={session}
-        showFactory={snapShowFactory}
-      />
+      <SnapToneDialog open={snapOpen} onOpenChange={setSnapOpen} session={session} />
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {

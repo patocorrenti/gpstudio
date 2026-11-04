@@ -1,9 +1,4 @@
-export type SnapTonesOpenOptions = {
-  /** When false, factory SnapTones are omitted. Default true. */
-  showFactory?: boolean;
-};
-
-type OpenHandler = (options?: SnapTonesOpenOptions) => void;
+type OpenHandler = () => void;
 
 let openHandler: OpenHandler | null = null;
 
@@ -13,10 +8,10 @@ export function setSnapTonesOpenHandler(handler: OpenHandler | null): void {
 }
 
 /** Opens the SnapTones dialog when Controller has registered a handler. */
-export function requestOpenSnapTones(options?: SnapTonesOpenOptions): boolean {
+export function requestOpenSnapTones(): boolean {
   if (!openHandler) {
     return false;
   }
-  openHandler(options);
+  openHandler();
   return true;
 }

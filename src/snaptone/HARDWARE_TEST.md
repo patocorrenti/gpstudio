@@ -15,7 +15,7 @@ Pato runs this on a pedal. There is no in-browser pass.
 
 Pato runs this on the production or staging web app, with the publishable key set and a USB pedal. There is no in-browser pass.
 
-- Sign in to TONE3000 once.
+- Sign in to Tone3000 once.
 - Reopen GP Studio and confirm the yellow dot and the Tone3000 label without the email code. Open the control and confirm the username.
 - Open TONE3000 from a user slot and confirm one A2 model takes the existing upload path.
 - Bluetooth and the native window do not show the control.

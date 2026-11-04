@@ -4,7 +4,7 @@ const POPUP_FEATURES = "popup,width=520,height=760";
 
 let held: Window | null = null;
 
-/** Call during the click that starts TONE3000. A later open is blocked. */
+/** Call during the click that starts Tone3000. A later open is blocked. */
 export function openTone3000Popup(): Window | null {
   const popup = window.open("", TONE3000_WINDOW_NAME, POPUP_FEATURES);
   if (!popup) {

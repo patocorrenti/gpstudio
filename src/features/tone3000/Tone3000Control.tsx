@@ -75,13 +75,13 @@ export function Tone3000Control() {
     const exchanged = await exchangeAuthorizationCode(payload.code);
     if (!exchanged) {
       finishingRef.current = false;
-      setError("TONE3000 sign-in did not finish.");
+      setError("Tone3000 sign-in did not finish.");
       return;
     }
     const username = await completeTone3000SignIn();
     if (!username) {
       finishingRef.current = false;
-      setError("TONE3000 sign-in did not finish.");
+      setError("Tone3000 sign-in did not finish.");
       return;
     }
     setSigningIn(false);
@@ -92,7 +92,7 @@ export function Tone3000Control() {
     setError("");
     const popup = openTone3000Popup();
     if (!popup) {
-      setError("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      setError("The Tone3000 window was blocked. Allow popups for GP Studio and try again.");
       setSigningIn(true);
       openRef.current = true;
       setOpen(true);
@@ -112,7 +112,7 @@ export function Tone3000Control() {
       })
       .catch(() => {
         closeTone3000Popup(popup);
-        setError("TONE3000 sign-in did not finish.");
+        setError("Tone3000 sign-in did not finish.");
       });
   }
 
@@ -170,7 +170,7 @@ export function Tone3000Control() {
                     : "size-2 shrink-0 rounded-full bg-muted-foreground/50"
                 }
               />
-              <span>Tone3000</span>
+              <span>T3K</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{tip}</TooltipContent>
@@ -193,7 +193,7 @@ export function Tone3000Control() {
           {signedIn && !signingIn ? (
             <>
               <DialogHeader>
-                <DialogTitle>TONE3000</DialogTitle>
+                <DialogTitle>Tone3000</DialogTitle>
               </DialogHeader>
               <p className="text-sm text-muted-foreground">{`Connected as ${account.username}`}</p>
               <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +203,7 @@ export function Tone3000Control() {
                   className="gap-2"
                   onClick={() => {
                     close();
-                    requestOpenSnapTones({ showFactory: false });
+                    requestOpenSnapTones();
                   }}
                 >
                   <AudioLines className="size-3.5 text-muted-foreground" />
@@ -232,10 +232,10 @@ export function Tone3000Control() {
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>TONE3000</DialogTitle>
+                <DialogTitle>Tone3000</DialogTitle>
               </DialogHeader>
               <p className="text-sm text-muted-foreground">
-                Finish signing in in the TONE3000 window. This page stays open.
+                Finish signing in in the Tone3000 window. This page stays open.
               </p>
               {error ? <p className="text-sm">{error}</p> : null}
               <DialogFooter>

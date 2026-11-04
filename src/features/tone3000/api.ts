@@ -14,6 +14,7 @@ export type A2ToneModels =
       gear: string;
       format: "NAM";
       username: string;
+      imageUrl: string | null;
       models: A2Model[];
     }
   | { ok: false; message: string };
@@ -186,7 +187,7 @@ async function authedJson(url: string, accessToken: string, fetchImpl: typeof fe
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    throw new Error(`TONE3000 request failed (${String(response.status)})`);
+    throw new Error(`Tone3000 request failed (${String(response.status)})`);
   }
   return response.json() as Promise<unknown>;
 }
@@ -227,7 +228,7 @@ export async function fetchTone3000Username(
   const body = await authedJson(`${API_ORIGIN}/api/v1/user`, accessToken, fetchImpl);
   const username = usernameOf(body);
   if (!username) {
-    throw new Error("TONE3000 did not return a username.");
+    throw new Error("Tone3000 did not return a username.");
   }
   return username;
 }
@@ -240,7 +241,7 @@ async function fetchToneListPage(
 ): Promise<ToneListPage> {
   const url = buildToneListUrl(kind, options);
   if (url.includes("/tones/search")) {
-    throw new Error("TONE3000 list reads must not use /tones/search");
+    throw new Error("Tone3000 list reads must not use /tones/search");
   }
   const body = await authedJson(url, accessToken, fetchImpl);
   return parseToneListPage(body);
@@ -309,6 +310,7 @@ export async function loadToneA2Models(
     gear: stringField(tone, "gear") ?? "",
     format: "NAM",
     username: usernameOf(tone),
+    imageUrl: imageUrlOf(tone),
     models,
   };
 }
