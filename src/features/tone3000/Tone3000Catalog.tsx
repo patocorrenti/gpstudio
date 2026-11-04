@@ -36,6 +36,7 @@ import {
   loadToneA2Models,
   loadToneList,
   tone3000GearLabel,
+  tone3000LicenseLabel,
   downloadModelFile,
   type A2Model,
   type A2ToneModels,
@@ -218,6 +219,51 @@ function triggerNamDownload(fileName: string, bytes: ArrayBuffer): void {
   anchor.download = namDownloadName(fileName);
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function CreatorCredit({
+  username,
+  userUrl,
+  avatarUrl,
+}: {
+  username: string;
+  userUrl: string | null;
+  avatarUrl: string | null;
+}) {
+  const avatar = avatarUrl ? (
+    <img
+      src={avatarUrl}
+      alt=""
+      referrerPolicy="no-referrer"
+      className="size-3.5 shrink-0 rounded-full object-cover"
+    />
+  ) : (
+    <span
+      aria-hidden
+      className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground"
+    >
+      {username.slice(0, 1).toUpperCase()}
+    </span>
+  );
+  const className = "inline-flex items-center gap-1 text-foreground/75 transition-colors hover:text-foreground";
+  if (userUrl) {
+    return (
+      <a href={userUrl} target="_blank" rel="noopener" className={className}>
+        {avatar}
+        {username}
+      </a>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      {avatar}
+      {username}
+    </span>
+  );
+}
+
+function MetaSep() {
+  return <span aria-hidden>·</span>;
 }
 
 export function Tone3000Catalog({
@@ -591,6 +637,10 @@ export function Tone3000Catalog({
       gear: row.gear,
       format: "NAM",
       username: row.username,
+      userUrl: null,
+      userAvatarUrl: null,
+      toneUrl: null,
+      license: null,
       description: null,
       imageUrl: row.imageUrl,
       models: [],
@@ -820,6 +870,7 @@ export function Tone3000Catalog({
     !listReady &&
     (signingIn || Boolean(notice));
   const wide = showModels || showLists;
+  const licenseLabel = tone ? tone3000LicenseLabel(tone.license) : null;
 
   return (
     <Dialog
@@ -1142,26 +1193,55 @@ export function Tone3000Catalog({
                 ) : (
                   <span className="size-36 shrink-0 rounded-sm bg-muted" />
                 )}
-                <div className="min-w-0 flex-1 space-y-3">
+                <div className="min-w-0 flex-1">
                   <div>
                     <p className="text-xl font-semibold tracking-tight leading-snug">
                       {tone.title}
                     </p>
-                    <p className="mt-1.5 text-sm text-muted-foreground">
-                      {[tone3000GearLabel(tone.gear), tone.format, tone.username]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
+                      {tone3000GearLabel(tone.gear) ? (
+                        <span>{tone3000GearLabel(tone.gear)}</span>
+                      ) : null}
+                      {tone.format ? (
+                        <>
+                          <MetaSep />
+                          <span>{tone.format}</span>
+                        </>
+                      ) : null}
+                      {tone.username ? (
+                        <>
+                          <MetaSep />
+                          <CreatorCredit
+                            username={tone.username}
+                            userUrl={tone.userUrl}
+                            avatarUrl={tone.userAvatarUrl}
+                          />
+                        </>
+                      ) : null}
+                      {tone.toneUrl ? (
+                        <>
+                          <MetaSep />
+                          <a
+                            href={tone.toneUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-foreground/75 transition-colors hover:text-foreground"
+                          >
+                            View on TONE3000
+                          </a>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium">Select a Tone:</p>
+                  <div className="mt-7 mb-7 space-y-3">
+                    <p className="text-sm font-medium">Select a Capture:</p>
                     {toneLoading ? (
                       <NamListSkeleton rows={4} />
                     ) : (
                       <div
                         className="max-h-[10.5rem] overflow-y-auto rounded-md border border-foreground/15 bg-muted/20 ring-1 ring-foreground/5"
                         role="listbox"
-                        aria-label="Select a Tone"
+                        aria-label="Select a Capture"
                       >
                         <div className="divide-y divide-foreground/10">
                           {tone.models.map((model) => (
@@ -1183,12 +1263,25 @@ export function Tone3000Catalog({
                     )}
                   </div>
                   {tone.description ? (
-                    <div className="mt-5 space-y-1.5">
+                    <div className="space-y-1.5">
                       <p className="text-sm font-medium">Description:</p>
                       <p className="text-base leading-relaxed whitespace-pre-wrap text-muted-foreground">
                         {tone.description}
                       </p>
                     </div>
+                  ) : null}
+                  {licenseLabel ? (
+                    <p className={tone.description ? "mt-3 text-sm" : "text-sm"}>
+                      <span className="font-medium">License:</span>{" "}
+                      <a
+                        href="https://www.tone3000.com/guides/tone-sharing-guidelines#tone-sharing-policy"
+                        target="_blank"
+                        rel="noopener"
+                        className="text-foreground/75 transition-colors hover:text-foreground"
+                      >
+                        {licenseLabel}
+                      </a>
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -1219,7 +1312,7 @@ export function Tone3000Catalog({
         {draft && !busy ? (
           <div className="flex flex-col gap-3 py-1">
             <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-              <span className="text-sm text-muted-foreground">Tone</span>
+              <span className="text-sm text-muted-foreground">Capture</span>
               <span className="truncate text-sm">{draft.fileName}</span>
               <span className="self-start pt-1.5 text-sm text-muted-foreground">In Slot</span>
               <div className="min-w-0">
@@ -1321,8 +1414,8 @@ export function Tone3000Catalog({
             <a
               href="https://www.tone3000.com"
               target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
+              rel="noopener"
+              className="text-foreground/75 transition-colors hover:text-foreground"
             >
               TONE3000
             </a>
