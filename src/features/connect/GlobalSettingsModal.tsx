@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -346,6 +347,7 @@ function GlobalSettingsForm({ globals }: { globals: DeviceGlobals }) {
 }
 
 export function GlobalSettingsControl() {
+  const navigate = useNavigate();
   const snapshot = useSessionSnapshot();
   const [open, setOpen] = useState(false);
 
@@ -372,7 +374,10 @@ export function GlobalSettingsControl() {
               aria-haspopup="dialog"
               aria-expanded={open}
               aria-label="Global settings"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                navigate("/");
+                setOpen(true);
+              }}
             >
               <Settings className="size-4" aria-hidden />
             </Button>

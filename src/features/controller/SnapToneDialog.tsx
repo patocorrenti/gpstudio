@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil, SearchIcon, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import tone3000Logo from "@/assets/img/tone3000-logo.png";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
@@ -11,6 +12,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "cn";
 import {
   Tooltip,
@@ -19,6 +32,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
+import { USER_SNAP_COUNT, USER_SNAP_FIRST } from "@/device/snaptone-table";
 import { getTone3000Account } from "@/features/tone3000/account";
 import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
 import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
@@ -61,6 +75,19 @@ function storedName(value: string): string {
 
 function slotLabel(name: string | null, protocol: number): string {
   return name && name.length > 0 ? name : `SnapTone ${protocol}`;
+}
+
+function customSlotLabel(
+  protocol: number,
+  entry: { name: string | null; flag: number | null } | undefined,
+): string {
+  const padded = String(protocol).padStart(2, "0");
+  if (entry?.flag === 0) {
+    return entry.name && entry.name.length > 0
+      ? `${padded} · ${entry.name}`
+      : `${padded} · SnapTone ${String(protocol)}`;
+  }
+  return `${padded} · Empty`;
 }
 
 function matchesQuery(query: string, index: number, label: string): boolean {
@@ -113,6 +140,7 @@ export function SnapToneDialog({
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(50);
   const [toneSlot, setToneSlot] = useState<number | null>(null);
+  const [uploadMenuSlot, setUploadMenuSlot] = useState<number | null>(null);
 
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
 
@@ -398,14 +426,6 @@ export function SnapToneDialog({
   const overwriteName =
     draft && occupied?.flag === 0 ? slotLabel(occupied.name, draft.slot) : null;
 
-  const toneEntry = toneSlot === null ? undefined : snapshot.userSnapSlots[toneSlot - 50];
-  const existingName =
-    toneSlot !== null && toneEntry?.flag === 0
-      ? toneEntry.name && toneEntry.name.length > 0
-        ? toneEntry.name
-        : `SnapTone ${String(toneSlot)}`
-      : null;
-
   return (
     <>
     <Dialog
@@ -507,17 +527,46 @@ export function SnapToneDialog({
         {preview && draft && !busy ? (
           <div className="flex flex-col gap-3 py-1">
             <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-              <span className="text-sm text-muted-foreground">Upload</span>
+              <span className="text-sm text-muted-foreground">File</span>
               <span className="truncate text-sm">{draft.fileName}</span>
-              <span className="text-sm text-muted-foreground">In Slot</span>
-              <span className="min-w-0 text-sm">
-                <span className="tabular-nums">{String(draft.slot).padStart(2, "0")}</span>
+              <span className="self-start pt-1.5 text-sm text-muted-foreground">In Slot</span>
+              <div className="min-w-0">
+                <Select
+                  value={String(draft.slot)}
+                  onValueChange={(next) => {
+                    const protocol = Number(next);
+                    if (Number.isInteger(protocol)) {
+                      setDraft((current) =>
+                        current ? { ...current, slot: protocol } : current,
+                      );
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label="SnapTone slot"
+                    className="h-8 w-full min-w-0"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-72">
+                    {Array.from({ length: USER_SNAP_COUNT }, (_, index) => {
+                      const protocol = USER_SNAP_FIRST + index;
+                      const entry = snapshot.userSnapSlots[index];
+                      return (
+                        <SelectItem key={protocol} value={String(protocol)}>
+                          {customSlotLabel(protocol, entry)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
                 {overwriteName ? (
-                  <span className="ml-2.5 text-xs text-amber-600 dark:text-amber-400">
-                    {`(${overwriteName} will be overwritten)`}
-                  </span>
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    {`${overwriteName} will be overwritten`}
+                  </p>
                 ) : null}
-              </span>
+              </div>
               <span className="text-sm text-muted-foreground">As</span>
               <Input
                 aria-label="SnapTone name"
@@ -540,35 +589,69 @@ export function SnapToneDialog({
         {preview || deleteAsk || renameAsk ? null : (
         <TooltipProvider delayDuration={300}>
         <div className="flex flex-col gap-2">
-          <ButtonGroup aria-label="SnapTone source">
-            {(
-              [
-                ["custom", "Custom"],
-                ["factory", "Factory"],
-                ["all", "All"],
-              ] as const
-            ).map(([value, label]) => {
-              const selected = listFilter === value;
-              return (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  aria-pressed={selected}
-                  className={cn(
-                    "h-8 px-3.5",
-                    selected
-                      ? "bg-muted text-foreground hover:bg-muted dark:bg-input dark:hover:bg-input"
-                      : "text-muted-foreground/70",
-                  )}
-                  onClick={() => setListFilter(value)}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-          </ButtonGroup>
+          <div className="flex flex-wrap items-stretch justify-between gap-2">
+            <ButtonGroup aria-label="SnapTone source">
+              {(
+                [
+                  ["custom", "Custom"],
+                  ["factory", "Factory"],
+                  ["all", "All"],
+                ] as const
+              ).map(([value, label]) => {
+                const selected = listFilter === value;
+                return (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-pressed={selected}
+                    className={cn(
+                      "h-8 px-3.5",
+                      selected
+                        ? "bg-muted text-foreground hover:bg-muted dark:bg-input dark:hover:bg-input"
+                        : "text-muted-foreground/70",
+                    )}
+                    onClick={() => setListFilter(value)}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </ButtonGroup>
+            {offerTone3000 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-[34px] gap-2 self-stretch bg-black px-3 text-white hover:bg-black hover:text-white dark:bg-black dark:text-white dark:hover:bg-black dark:hover:text-white"
+                disabled={!accepts || busy}
+                aria-label="Browse TONE3000"
+                onClick={() => {
+                  const emptyIndex = snapshot.userSnapSlots.findIndex(
+                    (entry) => entry.flag !== 0,
+                  );
+                  const protocol = 50 + (emptyIndex >= 0 ? emptyIndex : 0);
+                  if (getTone3000Account().status !== "signed-in") {
+                    const popup = openTone3000Popup();
+                    if (!popup) {
+                      toast("Allow popups for GP Studio and try again.");
+                      return;
+                    }
+                    holdTone3000Popup(popup);
+                  }
+                  setToneSlot(protocol);
+                }}
+              >
+                <span>Browse</span>
+                <img
+                  src={tone3000Logo}
+                  alt="TONE3000"
+                  className="h-3.5 w-auto"
+                />
+              </Button>
+            ) : null}
+          </div>
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -638,30 +721,6 @@ export function SnapToneDialog({
                           type="button"
                           variant="outline"
                           size="icon-sm"
-                          aria-label={`Rename SnapTone ${protocol}`}
-                          disabled={!accepts || busy}
-                          onClick={() => {
-                            setRenameAsk({
-                              slot: protocol,
-                              name: storedName(entry.name && entry.name.length > 0 ? entry.name : label),
-                              phase: "edit",
-                              message: "",
-                            });
-                          }}
-                        >
-                          <Pencil />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">Rename</TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  {entry.flag === 0 ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
                           aria-label={`Delete SnapTone ${protocol}`}
                           disabled={!accepts || busy}
                           onClick={() => {
@@ -679,35 +738,70 @@ export function SnapToneDialog({
                       <TooltipContent side="right">Delete</TooltipContent>
                     </Tooltip>
                   ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Upload NAM"
-                        disabled={!accepts || busy}
-                        onClick={() => {
-                          slotRef.current = protocol;
-                          fileRef.current?.click();
-                        }}
-                      >
-                        <Upload />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">Upload NAM</TooltipContent>
-                  </Tooltip>
-                  {offerTone3000 ? (
+                  {entry.flag === 0 ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          aria-label={`Tone3000 SnapTone ${protocol}`}
+                          size="icon-sm"
+                          aria-label={`Rename SnapTone ${protocol}`}
                           disabled={!accepts || busy}
                           onClick={() => {
+                            setRenameAsk({
+                              slot: protocol,
+                              name: storedName(entry.name && entry.name.length > 0 ? entry.name : label),
+                              phase: "edit",
+                              message: "",
+                            });
+                          }}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Rename</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  <Popover
+                    open={uploadMenuSlot === protocol}
+                    onOpenChange={(next) => {
+                      setUploadMenuSlot(next ? protocol : null);
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Browse SnapTone source"
+                        disabled={!accepts || busy}
+                      >
+                        <Upload />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-44 gap-0.5 p-1">
+                      <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Browse in
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                        onClick={() => {
+                          setUploadMenuSlot(null);
+                          slotRef.current = protocol;
+                          fileRef.current?.click();
+                        }}
+                      >
+                        My Computer
+                      </Button>
+                      {offerTone3000 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                          onClick={() => {
+                            setUploadMenuSlot(null);
                             if (getTone3000Account().status !== "signed-in") {
                               const popup = openTone3000Popup();
                               if (!popup) {
@@ -719,12 +813,11 @@ export function SnapToneDialog({
                             setToneSlot(protocol);
                           }}
                         >
-                          T3K
+                          TONE3000
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">Tone3000</TooltipContent>
-                    </Tooltip>
-                  ) : null}
+                      ) : null}
+                    </PopoverContent>
+                  </Popover>
                 </span>
               </div>
             );
@@ -797,7 +890,6 @@ export function SnapToneDialog({
         }
       }}
       slot={toneSlot}
-      existingName={existingName}
       session={session}
       onUploaded={() => {
         setToneSlot(null);

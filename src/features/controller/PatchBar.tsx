@@ -1,4 +1,4 @@
-import { AudioLines, ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Save, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Pencil, Play, Settings2, Square, TriangleAlert, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -105,6 +105,8 @@ const abPlayReadyClass =
 const patchClusterEnterClass =
   "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-4 motion-safe:duration-300";
 const patchActionIconClass = "size-3 text-muted-foreground";
+/** Optical nudge: label glyphs sit a hair low in these chips. */
+const patchActionLabelClass = "-translate-y-px";
 
 const unsavedPatchHint = "Unsaved changes will be lost";
 
@@ -1013,7 +1015,7 @@ export function PatchBar({
           disabled={busy || !modified}
           className={
             modified && !busy
-              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100 [&_svg]:text-emerald-800 hover:[&_svg]:text-emerald-900 dark:[&_svg]:text-emerald-200 dark:hover:[&_svg]:text-emerald-100"
+              ? "rounded-[4px] border-transparent bg-emerald-100 px-3 text-emerald-800 hover:bg-emerald-200 hover:text-emerald-900 active:translate-y-0.5! dark:bg-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-700 dark:hover:text-emerald-100"
               : patchActionClass
           }
           aria-label="Save patch"
@@ -1021,8 +1023,7 @@ export function PatchBar({
             void savePatchWithToast(session);
           }}
         >
-          <Save className={modified && !busy ? "size-3" : patchActionIconClass} />
-          Save
+          <span className={patchActionLabelClass}>Save</span>
         </Button>
         <Popover
           open={optionsOpen}
@@ -1042,8 +1043,8 @@ export function PatchBar({
               aria-label="Options"
               aria-expanded={optionsOpen}
             >
-              <Settings2 className={patchActionIconClass} />
-              Options
+              <Settings2 className={`${patchActionIconClass} ${patchActionLabelClass}`} />
+              <span className={patchActionLabelClass}>Options</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-44 gap-0.5 p-1">
@@ -1098,19 +1099,6 @@ export function PatchBar({
             >
               <Upload className={patchActionIconClass} />
               Upload
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              className="h-8 w-full justify-start gap-2 px-2 font-normal"
-              onClick={() => {
-                setOptionsOpen(false);
-                setSnapOpen(true);
-              }}
-            >
-              <AudioLines className={patchActionIconClass} />
-              SnapTones
             </Button>
           </PopoverContent>
         </Popover>

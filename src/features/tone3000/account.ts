@@ -1,10 +1,10 @@
-import { fetchTone3000Username } from "@/features/tone3000/api";
+import { fetchTone3000User } from "@/features/tone3000/api";
 import { disconnectTone3000, ensureAccessToken } from "@/features/tone3000/tokens";
 
 export type Tone3000Account =
   | { status: "unknown" }
   | { status: "signed-out" }
-  | { status: "signed-in"; username: string };
+  | { status: "signed-in"; username: string; avatarUrl: string | null };
 
 let account: Tone3000Account = { status: "unknown" };
 const listeners = new Set<() => void>();
@@ -41,10 +41,14 @@ export async function completeTone3000SignIn(): Promise<string | null> {
     return null;
   }
   try {
-    const username = await fetchTone3000Username(access);
-    account = { status: "signed-in", username };
+    const user = await fetchTone3000User(access);
+    account = {
+      status: "signed-in",
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+    };
     emit();
-    return username;
+    return user.username;
   } catch {
     account = { status: "signed-out" };
     emit();

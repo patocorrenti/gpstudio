@@ -14,6 +14,11 @@ export type A2ToneModels =
       gear: string;
       format: "NAM";
       username: string;
+      userUrl: string | null;
+      userAvatarUrl: string | null;
+      toneUrl: string | null;
+      license: string | null;
+      description: string | null;
       imageUrl: string | null;
       models: A2Model[];
     }
@@ -61,6 +66,33 @@ export function tone3000GearLabel(gear: string): string {
     return "Amp + Cab";
   }
   return gear;
+}
+
+/** Human label for Tone.license from GET /api/v1/tones/{id}. */
+export function tone3000LicenseLabel(license: string | null | undefined): string | null {
+  if (!license) {
+    return null;
+  }
+  switch (license) {
+    case "t3k":
+      return "T3K";
+    case "cc-by":
+      return "CC BY";
+    case "cc-by-sa":
+      return "CC BY-SA";
+    case "cc-by-nc":
+      return "CC BY-NC";
+    case "cc-by-nc-sa":
+      return "CC BY-NC-SA";
+    case "cc-by-nd":
+      return "CC BY-ND";
+    case "cc-by-nc-nd":
+      return "CC BY-NC-ND";
+    case "cco":
+      return "CC0";
+    default:
+      return license;
+  }
 }
 
 /** Amp and Amp + Cab only — not pedals, IR, or other gears. */
@@ -117,6 +149,13 @@ function usernameOf(value: unknown): string {
     return "";
   }
   return stringField((value as { user: unknown }).user, "username") ?? "";
+}
+
+function userUrlOf(value: unknown): string | null {
+  if (!value || typeof value !== "object" || !("user" in value)) {
+    return null;
+  }
+  return stringField((value as { user: unknown }).user, "url");
 }
 
 function imageUrlOf(value: unknown): string | null {
@@ -187,7 +226,7 @@ async function authedJson(url: string, accessToken: string, fetchImpl: typeof fe
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    throw new Error(`Tone3000 request failed (${String(response.status)})`);
+    throw new Error(`TONE3000 request failed (${String(response.status)})`);
   }
   return response.json() as Promise<unknown>;
 }
@@ -221,16 +260,48 @@ function a2Models(body: unknown): A2Model[] {
   return models;
 }
 
-export async function fetchTone3000Username(
+export type Tone3000User = {
+  username: string;
+  avatarUrl: string | null;
+};
+
+function avatarUrlOf(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const direct =
+    stringField(value, "avatar_url") ??
+    stringField(value, "avatar") ??
+    stringField(value, "image_url");
+  if (direct) {
+    return direct;
+  }
+  if ("data" in value) {
+    return avatarUrlOf((value as { data: unknown }).data);
+  }
+  if ("user" in value) {
+    return avatarUrlOf((value as { user: unknown }).user);
+  }
+  return null;
+}
+
+export async function fetchTone3000User(
   accessToken: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<string> {
+): Promise<Tone3000User> {
   const body = await authedJson(`${API_ORIGIN}/api/v1/user`, accessToken, fetchImpl);
-  const username = usernameOf(body);
+  const root =
+    body && typeof body === "object" && "data" in body
+      ? (body as { data: unknown }).data
+      : body;
+  const username = usernameOf(root) || usernameOf(body);
   if (!username) {
-    throw new Error("Tone3000 did not return a username.");
+    throw new Error("TONE3000 did not return a username.");
   }
-  return username;
+  return {
+    username,
+    avatarUrl: avatarUrlOf(root) ?? avatarUrlOf(body),
+  };
 }
 
 async function fetchToneListPage(
@@ -241,7 +312,7 @@ async function fetchToneListPage(
 ): Promise<ToneListPage> {
   const url = buildToneListUrl(kind, options);
   if (url.includes("/tones/search")) {
-    throw new Error("Tone3000 list reads must not use /tones/search");
+    throw new Error("TONE3000 list reads must not use /tones/search");
   }
   const body = await authedJson(url, accessToken, fetchImpl);
   return parseToneListPage(body);
@@ -310,6 +381,11 @@ export async function loadToneA2Models(
     gear: stringField(tone, "gear") ?? "",
     format: "NAM",
     username: usernameOf(tone),
+    userUrl: userUrlOf(tone),
+    userAvatarUrl: avatarUrlOf(tone),
+    toneUrl: stringField(tone, "url"),
+    license: stringField(tone, "license"),
+    description: stringField(tone, "description"),
     imageUrl: imageUrlOf(tone),
     models,
   };

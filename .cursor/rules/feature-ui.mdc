@@ -6,7 +6,7 @@ alwaysApply: true
 # Feature UI placement
 
 - Feature UI stays in `src/features/<feature>/` as sibling files (Connect modal, Controller patch bar, later Editor/Library).
-- `src/components/ui/` is shadcn primitives only. `src/components/` is shell chrome (`main-menu`, `theme-toggle`).
+- `src/components/ui/` is shadcn primitives only. `src/components/` is shell chrome (`main-menu`).
 - Do **not** add `src/components/connection/` or other pedal/domain folders under `src/components/`.
 - Promote a widget to `src/components/` only when a second feature imports it.
 

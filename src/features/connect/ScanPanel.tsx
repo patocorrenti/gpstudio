@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import {
   ArrowLeftRight,
   ArrowRight,
+  AudioLines,
   Bluetooth,
   RefreshCw,
   TriangleAlert,
@@ -97,6 +98,15 @@ export function ScanPanel({
           <ModeNotes
             notes={[
               {
+                icon: AudioLines,
+                text: (
+                  <span className="text-foreground">
+                    <span className="font-bold">SnapTones</span>
+                    {" "}—{" "}Your own captures or a huge online catalog.
+                  </span>
+                ),
+              },
+              {
                 icon: Zap,
                 text: (
                   <span className="text-foreground">
@@ -158,6 +168,10 @@ export function ScanPanel({
                 {
                   icon: Turtle,
                   text: "Slower connection",
+                },
+                {
+                  icon: Usb,
+                  text: "SnapTones and IRs require USB",
                 },
               ]}
             />

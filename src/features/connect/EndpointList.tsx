@@ -34,7 +34,7 @@ export function EndpointList({
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-col gap-2">
         <p id="select-pedal-label" className="text-sm text-center font-light text-foreground/60">
-          Select a pedal
+          Select a Multi-Effect
         </p>
         <ul
           className="flex max-h-64 flex-col gap-1 overflow-y-auto"
