@@ -809,6 +809,7 @@ export function ModuleAbBlock({
                     highlighted={false}
                     current={sounding === "a"}
                     onHoverSlot={onHoverSlot}
+                    startExpanded
                     {...sideWriters("a")}
                   />
                 </div>
@@ -840,6 +841,7 @@ export function ModuleAbBlock({
                     highlighted={false}
                     current={sounding === "b"}
                     onHoverSlot={onHoverSlot}
+                    startExpanded
                     {...sideWriters("b")}
                   />
                 </div>

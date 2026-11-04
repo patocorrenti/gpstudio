@@ -1167,4 +1167,227 @@ While the cycle is running, both selectors and the seconds input MUST NOT be usa
 
 - **WHEN** a USB session and a Bluetooth session each start a cycle from patch `10` to comparison slot `11`
 - **THEN** both alternate those slots through the device session
+
+### Requirement: Controller offers a SnapTone file modal
+
+When a pedal session is connected, the patch bar SHALL offer an English SnapTone control that opens a modal. The control MUST NOT be a route or a main-menu item. The modal MUST list the connected pedal's factory NS models (protocol indices 0–49) and its thirty user SnapTone slots (protocol indices 50–79). Factory rows MUST show the catalog label and MUST NOT accept a file. User rows MUST show the protocol index and the slot-table name, or `SnapTone 50` through `SnapTone 79` when the name is missing. They are not the twenty-four `SnapTone 01` through `SnapTone 24` rows. The modal MUST read those names and occupancy flags from the session snapshot. When names arrive after the modal is open, the user rows MUST update without closing the modal and without sending patch recall. Disconnecting MUST close the modal. Controller MUST NOT send raw MIDI.
+
+A user row MUST accept a `.nam` by button or by drop. After a file is chosen, the modal MUST show the inspection the session returns: kind, version when present, and name when present. An unsupported file MUST show the session's English reason on one line and MUST NOT start a send. An A1 file MUST show `A1 captures aren't supported yet`. The modal MUST offer a slot-name field that starts with the file name when the inspection includes one. The field MUST submit at most 10 characters, and only ASCII letters and digits (the form the pedal stores). A name that has no letter or digit MUST be submitted as `X`.
+
+When the chosen user slot holds a capture (occupancy flag 0), confirming the send MUST ask before replace, including when the name is blank. The confirmation MUST show that protocol index and the dumped name when one exists. The confirmation MUST NOT list patches. Cancel MUST NOT send. When the slot does not hold a capture (the name `Empty` with a flag other than 0), the send MUST NOT require that confirmation. A blank name MUST NOT skip the ask when the flag is 0. A confirmed send MUST go through the device session for that user slot and MUST NOT change which patch is selected. Patches that already point at that slot number keep pointing at it.
+
+The modal MUST show two English progress stages for a send that starts: `Converting…` and then `Sending to the multi-effects…`. Cancel during conversion MUST stop the conversion and MUST NOT send. Cancel during the send MUST stop further sends and MUST tell the user, in English, that the slot is unknown until SnapTone names are read again. When the session reports that the open link cannot accept a SnapTone file, the modal MUST explain that in English and MUST NOT convert or send. While a SnapTone file send is in progress, Reload, Save, rename, duplicate, download, patch upload, previous, next, and slot edits MUST NOT be usable, the same as while the current patch is syncing. Disconnect during a send MUST show an English message that the slot is unknown until names are read again. A failed send MUST show an English error. When the failure is that the MIDI port cannot be written, that error MUST suggest closing Valeton Suite. Success MUST be shown only after the refreshed snapshot carries the submitted name for that slot.
+
+#### Scenario: Connected patch bar opens the modal
+
+- **WHEN** a pedal session is connected and the user activates the patch bar SnapTone control
+- **THEN** a modal lists the factory NS models (indices 0–49) and user slots `SnapTone 50` through `SnapTone 79` or their dumped names
+- **AND** factory rows do not accept a file
+- **AND** no patch recall is sent solely because the modal opened
+
+#### Scenario: Names fill in while the modal is open
+
+- **WHEN** the modal is listing `SnapTone 52` and the session receives the name `MyAmp` for protocol index 52
+- **THEN** that row shows `MyAmp`
+- **AND** the modal stays open
+- **AND** no patch recall is sent solely because the name arrived
+
+#### Scenario: A1 file is rejected
+
+- **WHEN** the user loads an A1 `.nam` onto a user slot
+- **THEN** the modal shows `A1 captures aren't supported yet`
+- **AND** no SnapTone file is sent
+
+#### Scenario: Named slot asks before replace
+
+- **WHEN** protocol index 52 holds a capture named `MyAmp` and the user confirms a supported `.nam` for that slot
+- **THEN** the modal asks to replace index 52, `MyAmp`
+- **AND** the ask does not list patches
+- **AND** no SnapTone file is sent until the user confirms
+
+#### Scenario: Blank name with a capture still asks
+
+- **WHEN** protocol index 52 has a blank name and occupancy flag 0 and the user confirms a supported `.nam` for that slot
+- **THEN** the modal asks to replace index 52
+- **AND** no SnapTone file is sent until the user confirms
+
+#### Scenario: Empty slot does not ask
+
+- **WHEN** protocol index 50 is named `Empty` with an occupancy flag other than 0 and the user confirms a supported `.nam` for that slot
+- **THEN** the modal does not ask to replace it before the send
+
+#### Scenario: Cancel during conversion sends nothing
+
+- **WHEN** the user cancels while the modal shows `Converting…`
+- **THEN** conversion stops
+- **AND** no SnapTone file is sent
+
+#### Scenario: Link that cannot accept a file explains and does not send
+
+- **WHEN** the session reports that the open link cannot accept a SnapTone file and the user opens the modal
+- **THEN** the modal explains that in English
+- **AND** no conversion or send starts
+
+#### Scenario: Success follows the refreshed name
+
+- **WHEN** the user confirms a send of a supported `.nam` named `NewAmp` to protocol index 52 and the refreshed snapshot name for that slot is `NewAmp`
+- **THEN** the modal shows success for index 52
+- **AND** the selected patch does not change
+
+#### Scenario: Disconnect closes the modal
+
+- **WHEN** the user disconnects while the SnapTone modal is open
+- **THEN** the modal closes
+
+### Requirement: Controller confirms before deleting a user SnapTone
+
+In the SnapTone modal, a user slot (protocol indices 50–79) that holds a capture MUST ask in English before delete. The ask MUST show that protocol index and the current name. Cancel MUST send nothing. Factory rows (protocol indices 0–49) MUST NOT offer delete. A user slot that does not hold a capture MUST NOT offer delete. When the session reports that the open link cannot accept a SnapTone file, the modal MUST explain that in English with the same message used for a SnapTone file and MUST NOT send a delete. While a delete is in progress, Reload, Save, rename, duplicate, download, patch upload, previous, next, and slot edits MUST NOT be usable, the same as while a SnapTone file send is in progress, and the chain-sync overlay MUST NOT be shown solely because of the delete. Controller MUST NOT send raw MIDI.
+
+Success MUST be shown only after the refreshed snapshot shows that slot with an occupancy flag other than 0. The modal keeps the name from that table. If the delete fails and the slot is left unnamed, the modal MUST tell the user, in English, that the slot is unknown until SnapTone names are read again.
+
+#### Scenario: Occupied user slot asks before delete
+
+- **WHEN** protocol index 77 holds a capture named `MyAmp` and the user starts a delete for that slot
+- **THEN** the modal asks to delete index 77, `MyAmp`
+- **AND** no delete is sent until the user confirms
+
+#### Scenario: Cancel sends nothing
+
+- **WHEN** the modal is asking to delete protocol index 77 and the user cancels
+- **THEN** no delete is sent
+
+#### Scenario: Factory row is not deleted
+
+- **WHEN** the modal lists factory index 10
+- **THEN** that row does not offer delete
+
+#### Scenario: Empty user slot is not deleted
+
+- **WHEN** protocol index 50 is named `Empty` with an occupancy flag other than 0
+- **THEN** that row does not offer delete
+
+#### Scenario: Bluetooth explains and does not send
+
+- **WHEN** the session reports that the open link cannot accept a SnapTone file and the user opens the modal
+- **THEN** the modal explains that in English
+- **AND** no delete is sent
+
+#### Scenario: Delete does not show the chain overlay
+
+- **WHEN** a user SnapTone delete is in progress
+- **THEN** Save is not usable
+- **AND** the chain-sync overlay is not shown solely because of the delete
+
+#### Scenario: Success follows the refreshed slot
+
+- **WHEN** the user confirms a delete of protocol index 77 and the refreshed snapshot shows that slot with an occupancy flag other than 0
+- **THEN** the modal shows success for index 77
+
+#### Scenario: Failed delete leaves the slot unknown
+
+- **WHEN** the user confirms a delete and the session leaves that slot unnamed
+- **THEN** the modal tells the user that the slot is unknown until SnapTone names are read again
 - **AND** neither sends raw MIDI from Controller
+
+### Requirement: Controller renames an occupied user SnapTone
+
+In the SnapTone modal, a user slot (protocol indices 50–79) that holds a capture MUST offer an English rename. The rename MUST show that protocol index and the current name, and MUST start from that name. Cancel MUST send nothing. Confirm MUST send the edited name through the device session for that slot. Factory rows (protocol indices 0–49) MUST NOT offer rename. A user slot that does not hold a capture MUST NOT offer rename. The edited name MUST keep ASCII letters and digits and MUST keep at most 10 characters. When the session reports that the open link cannot accept a SnapTone file, the modal MUST explain that in English with the same message used for a SnapTone file and MUST NOT send a rename. While a rename is in progress, Reload, Save, patch rename, duplicate, download, patch upload, previous, next, and slot edits MUST NOT be usable, the same as while a SnapTone file send is in progress, and the chain-sync overlay MUST NOT be shown solely because of the rename. A SnapTone file send or a user SnapTone delete already in progress MUST leave rename unusable. Controller MUST NOT send raw MIDI.
+
+Success MUST be shown only after the refreshed snapshot names that slot with the sanitized name. A name that sanitizes to nothing MUST succeed only as `X`. If the rename fails and the slot is left unnamed, the modal MUST tell the user, in English, that the slot is unknown until SnapTone names are read again. When the failure is that the MIDI port cannot be written, that error MUST suggest closing Valeton Suite. The rename MUST NOT change which patch is selected. A chain label that already shows that slot MUST show the refreshed name without patch recall.
+
+#### Scenario: Occupied user slot can be renamed
+
+- **WHEN** protocol index 77 holds a capture named `MyAmp` and the user starts a rename for that slot
+- **THEN** the modal shows index 77 and starts from `MyAmp`
+- **AND** no rename is sent until the user confirms
+
+#### Scenario: Cancel sends nothing
+
+- **WHEN** the modal is renaming protocol index 77 and the user cancels
+- **THEN** no rename is sent
+
+#### Scenario: Factory row is not renamed
+
+- **WHEN** the modal lists factory index 10
+- **THEN** that row does not offer rename
+
+#### Scenario: Empty user slot is not renamed
+
+- **WHEN** protocol index 50 is named `Empty` with an occupancy flag other than 0
+- **THEN** that row does not offer rename
+
+#### Scenario: Name keeps letters and digits
+
+- **WHEN** the user edits a rename to `Lead Ch$`
+- **THEN** the name the modal will submit is `LeadCh`
+
+#### Scenario: Bluetooth explains and does not send
+
+- **WHEN** the session reports that the open link cannot accept a SnapTone file and the user opens the modal
+- **THEN** the modal explains that in English
+- **AND** no rename is sent
+
+#### Scenario: Rename does not show the chain overlay
+
+- **WHEN** a user SnapTone rename is in progress
+- **THEN** Save is not usable
+- **AND** the chain-sync overlay is not shown solely because of the rename
+
+#### Scenario: Success follows the refreshed name
+
+- **WHEN** the user confirms a rename of protocol index 77 to `LeadCh` and the refreshed snapshot names that slot `LeadCh`
+- **THEN** the modal shows success for index 77
+- **AND** the selected patch is unchanged
+
+#### Scenario: Chain label follows the refreshed name
+
+- **WHEN** the current patch NS model is protocol index 77 and that slot's refreshed name is `LeadCh`
+- **THEN** the chain shows `LeadCh` for that slot
+- **AND** no patch recall is sent solely because of the rename
+
+#### Scenario: Failed rename leaves the slot unknown
+
+- **WHEN** the user confirms a rename and the session leaves that slot unnamed
+- **THEN** the modal tells the user that the slot is unknown until SnapTone names are read again
+
+#### Scenario: Port failure names Valeton Suite
+
+- **WHEN** the user confirms a rename and the session reports that the MIDI port cannot be written
+- **THEN** the modal tells the user to close Valeton Suite
+
+### Requirement: User SnapTone row opens TONE3000 for that slot
+
+In the SnapTone modal, a user row (protocol indices 50–79) SHALL offer an English TONE3000 action beside the disk upload when the session reports that the open link can accept a SnapTone file and the shell is showing the TONE3000 control. Activating it MUST open the TONE3000 catalog modal for that protocol index. Factory rows MUST NOT offer it. The native desktop window MUST NOT offer it. When the session reports that the open link cannot accept a SnapTone file, the row MUST NOT offer it, and the modal MUST keep the existing English explanation and MUST NOT start a TONE3000 download or a send. A TONE3000 send MUST follow the SnapTone file modal's replace ask, progress, cancel, and success rules for that slot. Disk upload, delete, and rename on the row MUST stay available as they are today. Controller MUST NOT send raw MIDI.
+
+#### Scenario: User row offers TONE3000 on USB
+
+- **WHEN** a USB session can accept a SnapTone file and the SnapTone modal lists protocol index 62
+- **THEN** that row offers TONE3000 beside the disk upload
+
+#### Scenario: Factory row has no TONE3000 action
+
+- **WHEN** the SnapTone modal lists factory index 10
+- **THEN** that row does not offer TONE3000
+
+#### Scenario: Native window does not offer TONE3000
+
+- **WHEN** the SnapTone modal is open in the native desktop window on a USB link that can accept a SnapTone file
+- **THEN** no row offers TONE3000
+
+#### Scenario: Bluetooth explains and does not offer TONE3000
+
+- **WHEN** the session reports that the open link cannot accept a SnapTone file and the user opens the SnapTone modal
+- **THEN** the modal explains that in English
+- **AND** no row offers TONE3000
+- **AND** no TONE3000 download or SnapTone file is sent
+
+#### Scenario: TONE3000 send asks before replacing a capture
+
+- **WHEN** protocol index 62 holds a capture named `MyAmp` and the user confirms a TONE3000 model for that slot
+- **THEN** the modal asks to replace index 62, `MyAmp`, before the send
+- **AND** the ask does not list patches
+
+#### Scenario: Disconnect closes the TONE3000 catalog
+
+- **WHEN** the user disconnects while the TONE3000 catalog modal is open from a SnapTone row
+- **THEN** that modal closes

@@ -25,7 +25,7 @@ import {
   type FxControl,
 } from "@/device/catalog";
 import { userIrDisplayName } from "@/device/ir-names";
-import { userNsDisplayName } from "@/device/nam-names";
+import { userSnapDisplayName } from "@/device/nam-names";
 import type { DeviceModel } from "@/device/models";
 import {
   EFFECT_IDS,
@@ -221,6 +221,7 @@ export function SlotControlPanel({
   onModelChange,
   onControlChange,
   revealRequest = null,
+  startExpanded = false,
 }: {
   slot: EffectPanelSlot;
   pedal: DeviceModel;
@@ -236,11 +237,15 @@ export function SlotControlPanel({
   onControlChange?: (index: number, value: number, flush: boolean) => void;
   /** Mobile: expand and scroll when the chain icon for this slot is tapped. */
   revealRequest?: { id: EffectId; nonce: number } | null;
+  /** Mobile: open expanded on mount, even when this slot was collapsed. */
+  startExpanded?: boolean;
 }) {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
   const panelRef = useRef<HTMLElement>(null);
-  const [expanded, setExpanded] = useState(() => readExpandedPanels().has(slot.id));
+  const [expanded, setExpanded] = useState(
+    () => startExpanded || readExpandedPanels().has(slot.id),
+  );
   const collapsed = !expanded;
 
   useEffect(() => {
@@ -259,12 +264,12 @@ export function SlotControlPanel({
     return null;
   }
   const userIrNames = snapshot.status === "connected" ? snapshot.userIrNames : undefined;
-  const userNsNames = snapshot.status === "connected" ? snapshot.userNsNames : undefined;
+  const userSnapSlots = snapshot.status === "connected" ? snapshot.userSnapSlots : undefined;
   const options = modelsForKind(slot.id, pedal).map((option) => ({
     ...option,
     label:
       option.userNsSlot !== undefined
-        ? userNsDisplayName(option, userNsNames)
+        ? userSnapDisplayName(option, userSnapSlots)
         : userIrDisplayName(option, userIrNames),
   }));
   const kindLabel = chainSlotLabel(slot.id);
