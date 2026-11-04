@@ -6,19 +6,29 @@ import { App } from "@/app/App";
 import { initPwaInstallPrompt } from "@/app/pwa-install";
 import { markPwaUpdateReady, trackPwaUpdates } from "@/app/pwa-update";
 import { reportUsageOpen } from "@/app/usage-ping";
+import { bootTone3000Return } from "@/features/tone3000/return";
 import { isTauriRuntime } from "@/midi/detect";
 import "./index.css";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
-
-if (!isTauriRuntime()) {
-  initPwaInstallPrompt();
-  void registerProductionServiceWorker();
-  reportUsageOpen();
+const tone3000Boot = bootTone3000Return();
+if (tone3000Boot !== "blank") {
+  const start = (): void => {
+    createRoot(document.getElementById("root")!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    if (!isTauriRuntime()) {
+      initPwaInstallPrompt();
+      void registerProductionServiceWorker();
+      reportUsageOpen();
+    }
+  };
+  if (tone3000Boot === "ready") {
+    start();
+  } else {
+    void tone3000Boot.then(start);
+  }
 }
 
 function showPwaUpdateToast(onReload: () => void): void {

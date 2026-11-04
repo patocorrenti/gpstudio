@@ -29,3 +29,5 @@ src-tauri/gen
 
 # Reference files
 _reference/
+# Valeton test signal (not committed; the server serves its own copy)
+public/snaptone/nam_input_wav.wav

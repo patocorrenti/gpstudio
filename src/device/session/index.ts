@@ -21,9 +21,14 @@ export { emptyStomps, type StompAssignment } from "@/device/chain-codec";
 export {
   DeviceSession,
   type ChainSync,
+  type NamInspection,
   type OmittedFactoryModel,
   type SessionSnapshot,
   type SessionSync,
+  type SnapDeleteResult,
+  type SnapRenameResult,
+  type SnapSlot,
+  type SnapUploadResult,
   type UploadPatchPreview,
   type UploadPatchResult,
 } from "./device-session";

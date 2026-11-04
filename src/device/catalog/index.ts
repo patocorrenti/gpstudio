@@ -87,25 +87,29 @@ if (factoryCab?.id !== "cab-twd-cp-1x8") {
 if (userIr20?.id !== "cab-user-ir-20" || userIr20.userIrSlot !== 20) {
   throw new Error("CAB wire 13 00 10 0a must be User IR 20");
 }
-const userNs3 = modelByWire("ns", [0x3a, 0x00, 0x00, 0x0f]);
+const userNs58 = modelByWire("ns", [0x3a, 0x00, 0x00, 0x0f]);
 const factoryNs = modelByWire("ns", [0x00, 0x00, 0x00, 0x0f]);
-const userNs24 = modelByWire("ns", [0x4f, 0x00, 0x00, 0x0f]);
+const userNs50 = modelByWire("ns", [0x32, 0x00, 0x00, 0x0f]);
+const userNs79 = modelByWire("ns", [0x4f, 0x00, 0x00, 0x0f]);
 if (
-  userNs3?.id !== "ns-user-03" ||
-  userNs3.label !== "SnapTone 03" ||
-  userNs3.userNsSlot !== 3 ||
-  !userNs3.devices.has("gp5") ||
-  !userNs3.devices.has("gp50") ||
-  userNs3.controls[0]?.label !== "Gain" ||
-  userNs3.controls.length !== 5
+  userNs58?.id !== "ns-user-58" ||
+  userNs58.label !== "SnapTone 58" ||
+  userNs58.userNsSlot !== 58 ||
+  !userNs58.devices.has("gp5") ||
+  !userNs58.devices.has("gp50") ||
+  userNs58.controls[0]?.label !== "Gain" ||
+  userNs58.controls.length !== 5
 ) {
-  throw new Error("NS wire 3a 00 00 0f must be SnapTone 03");
+  throw new Error("NS wire 3a 00 00 0f must be SnapTone 58");
 }
 if (factoryNs?.id !== "ns-14-dst") {
   throw new Error("Factory NS wires must still resolve");
 }
-if (userNs24?.id !== "ns-user-24" || userNs24.userNsSlot !== 24) {
-  throw new Error("NS wire 4f 00 00 0f must be SnapTone 24");
+if (userNs50?.id !== "ns-user-50" || userNs50.label !== "SnapTone 50") {
+  throw new Error("NS wire 32 00 00 0f must be SnapTone 50");
+}
+if (userNs79?.id !== "ns-user-79" || userNs79.userNsSlot !== 79) {
+  throw new Error("NS wire 4f 00 00 0f must be SnapTone 79");
 }
 
 const cWah = BY_ID.get("pre-c-wah");

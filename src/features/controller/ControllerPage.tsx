@@ -148,7 +148,7 @@ function ConnectedController() {
         <PatchBar
           patch={snapshot.patch}
           patchNames={snapshot.patchNames}
-          busy={snapshot.chainSync === "syncing"}
+          busy={snapshot.chainSync === "syncing" || snapshot.snapFileSend}
           canExportPatch={snapshot.canExportPatch}
           modified={snapshot.modified}
           model={snapshot.model}
@@ -159,7 +159,7 @@ function ConnectedController() {
           chain={snapshot.chain}
           stomps={snapshot.stomps}
           pedal={snapshot.model}
-          busy={snapshot.chainSync === "syncing"}
+          busy={snapshot.chainSync === "syncing" || snapshot.snapFileSend}
         />
       </section>
     </AbCycleClaimProvider>
