@@ -281,12 +281,13 @@ The production web app SHALL send one same-origin GET to `/usage` on each cold s
 
 ### Requirement: Desktop nav offers TONE3000 beside Pedal on USB
 
-While a pedal session is connected over USB and the shell shows Pedal as a navigation link, the shell SHALL show the TONE3000 control defined by tone3000 immediately before Pedal. The control MUST be absent when the pedal is disconnected, when the link is Bluetooth, when Pedal is inside the narrow-screen menu, and in the native desktop window. Activating the control MUST open its modal without changing the current section and MUST NOT send MIDI.
+While a pedal session is connected over USB and the shell shows Pedal as a navigation link, the shell SHALL show the TONE3000 control defined by tone3000 in the same desktop header cluster as the connection-status and pedal foot controls. The control MUST be absent when the pedal is disconnected, when the link is Bluetooth, when Pedal is inside the narrow-screen menu, and in the native desktop window. Activating the control MUST open its modal without changing the current section and MUST NOT send MIDI.
 
-#### Scenario: USB desktop nav places TONE3000 before Pedal
+#### Scenario: USB desktop nav places TONE3000 in the connection cluster
 
 - **WHEN** a USB pedal session is connected and Pedal is shown as a navigation link
-- **THEN** the TONE3000 control is immediately before Pedal
+- **THEN** the TONE3000 control sits with the connection-status and pedal foot controls
+- **AND** it is not beside the main menu
 
 #### Scenario: Bluetooth nav has no TONE3000 control
 

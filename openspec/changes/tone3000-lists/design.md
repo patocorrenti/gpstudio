@@ -25,7 +25,7 @@ See proposal.md for why. The slot modal in `src/features/tone3000/Tone3000Catalo
 
 4. **Browse reuses the select iframe.** Browse TONE3000 sets the iframe to `beginAuthorize("catalog")`, the URL the modal uses today (`prompt=select_tone`, `format=nam`, `architecture=2`, `gears=amp_amp-cab`, `menubar=true`). A return with a `tone_id` loads A2 models and hides the iframe. A return with a code and no `tone_id` exchanges it and loads a fresh select URL, as the iframe does today. Back clears that URL and shows the lists again. The list view itself does not navigate to TONE3000.
 
-5. **Signed-out slot uses the header sign-in.** No token: the modal shows the same partnership screen, then the existing sign-in popup (`beginAuthorize("sign-in")`). Success shows Favorites. Cancel closes the modal and stays signed out. The select iframe is not the sign-in screen.
+5. **Signed-out slot uses the header sign-in.** No token: the modal opens the existing sign-in popup (`beginAuthorize("sign-in")`) with no partnership screen. Success shows Favorites. Cancel closes the modal and stays signed out. The select iframe is not the sign-in screen.
 
 6. **Docs only state the extra reads.** One sentence in `docs/architecture.md` and in `openspec/config.yaml` context: the same web USB client may read favorites, created, downloads, trending, and latest. No server, no secret key, no search endpoint.
 

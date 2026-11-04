@@ -37,17 +37,17 @@ GP Studio SHALL keep a TONE3000 session for the browser profile after the user s
 
 ### Requirement: Shell control shows TONE3000 only on USB
 
-While a pedal session is connected over USB and the shell is showing Pedal as a navigation link, the shell SHALL show an English TONE3000 control immediately before Pedal. Signed out, the control MUST use a muted dot and the label TONE3000. Signed in, the control MUST use a lime dot and the TONE3000 username. The control MUST NOT appear when the pedal is disconnected, when the link is Bluetooth, inside the narrow-screen menu, or in the native desktop window. Activating it MUST NOT change the current section and MUST NOT send MIDI. When the app has no TONE3000 publishable key, the control MUST NOT appear.
+While a pedal session is connected over USB and the shell is showing Pedal as a navigation link, the shell SHALL show an English TONE3000 control in the same desktop header cluster as the connection-status and pedal foot controls. Signed out, the control MUST use a muted dot and the label `Tone3000`. Signed in, the control MUST use a yellow dot and MUST keep the label `Tone3000`. The control MUST NOT appear when the pedal is disconnected, when the link is Bluetooth, inside the narrow-screen menu, or in the native desktop window. Activating it MUST NOT change the current section and MUST NOT send MIDI. When the app has no TONE3000 publishable key, the control MUST NOT appear.
 
 #### Scenario: USB desktop nav shows signed out
 
 - **WHEN** a USB pedal session is connected, Pedal is shown as a navigation link, and the user is signed out of TONE3000
-- **THEN** a TONE3000 control with a muted dot sits immediately before Pedal
+- **THEN** a control labeled `Tone3000` with a muted dot sits in the connection cluster
 
-#### Scenario: Signed in shows the username
+#### Scenario: Signed in keeps the Tone3000 label
 
 - **WHEN** a USB pedal session is connected, Pedal is shown as a navigation link, and the user is signed in to TONE3000 as `ampuser`
-- **THEN** the TONE3000 control uses a lime dot and shows `ampuser`
+- **THEN** the control uses a yellow dot and shows `Tone3000`
 
 #### Scenario: Bluetooth hides the control
 
@@ -69,28 +69,26 @@ While a pedal session is connected over USB and the shell is showing Pedal as a 
 - **WHEN** GP Studio is open in the native desktop window and a USB pedal session is connected
 - **THEN** the shell does not show the TONE3000 control
 
-### Requirement: Sign-in stays inside a modal
+### Requirement: Sign-in opens the connector
 
-Activating the signed-out TONE3000 control SHALL open a modal on the current section. The modal MUST first show an English partnership screen that names GP Studio and TONE3000. Continuing MUST show TONE3000's own sign-in inside that modal. Cancel MUST close the modal and leave the user signed out. A completed sign-in MUST close the modal and show the signed-in control. The controller MUST stay mounted. The modal MUST NOT send MIDI.
+Activating the signed-out TONE3000 control SHALL open TONE3000 sign-in without a partnership screen. Cancel MUST leave the user signed out. A completed sign-in MUST show the signed-in control. The controller MUST stay mounted. Sign-in MUST NOT send MIDI.
 
-#### Scenario: Partnership screen before sign-in
+#### Scenario: Signed out opens sign-in
 
 - **WHEN** the user activates the signed-out TONE3000 control
-- **THEN** a modal opens on the current section
-- **AND** the modal names the GP Studio and TONE3000 partnership in English
+- **THEN** TONE3000 sign-in starts
+- **AND** no partnership screen is shown
 - **AND** the current section does not change
 
 #### Scenario: Cancel leaves the user signed out
 
-- **WHEN** the sign-in modal is open and the user cancels
-- **THEN** the modal closes
-- **AND** the TONE3000 control stays signed out
+- **WHEN** the user cancels during sign-in
+- **THEN** the TONE3000 control stays signed out
 
 #### Scenario: Completed sign-in updates the control
 
-- **WHEN** the user finishes TONE3000 sign-in inside the modal
-- **THEN** the modal closes
-- **AND** the TONE3000 control shows the signed-in username
+- **WHEN** the user finishes TONE3000 sign-in
+- **THEN** the TONE3000 control shows the signed-in state
 
 ### Requirement: Signed-in control opens status
 

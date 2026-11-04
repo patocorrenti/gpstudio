@@ -11,7 +11,7 @@
 ## 3. Browse and sign-in
 
 - [ ] 3.1 While the lists are showing, an English Browse TONE3000 action sets the existing catalog iframe (`prompt=select_tone`, `format=nam`, `architecture=2`, `gears=amp_amp-cab`, `menubar=true`). A return with `tone_id` lists A2 models. A return with a code and no `tone_id` exchanges it and loads a fresh select URL. Back clears the iframe and shows the lists without sending. Verify `npx tsc -b --pretty false` exits 0.
-- [ ] 3.2 A signed-out open shows the existing partnership screen, then the header sign-in popup (`beginAuthorize("sign-in")`), not the select iframe. Cancel closes the modal and stays signed out. Success shows Favorites. Verify `npx tsc -b --pretty false` exits 0.
+- [ ] 3.2 A signed-out open starts the header sign-in popup (`beginAuthorize("sign-in")`) with no partnership screen and no select iframe. Cancel closes the modal and stays signed out. Success shows Favorites. Verify `npx tsc -b --pretty false` exits 0.
 
 ## 4. Docs
 

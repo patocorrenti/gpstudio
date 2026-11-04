@@ -7,6 +7,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import {
   completeTone3000SignIn,
@@ -21,8 +27,6 @@ import { setOAuthReturnHandler, type OAuthReturnFields } from "@/features/tone30
 import { STATE_KEY, beginAuthorize, exchangeAuthorizationCode } from "@/features/tone3000/tokens";
 import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 
-type SignInStep = "partnership" | "signin";
-
 export function Tone3000Control() {
   const snapshot = useSessionSnapshot();
   const account = useSyncExternalStore(
@@ -33,7 +37,7 @@ export function Tone3000Control() {
   const [open, setOpen] = useState(false);
   const openRef = useRef(open);
   openRef.current = open;
-  const [step, setStep] = useState<SignInStep>("partnership");
+  const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState("");
   const popupRef = useRef<Window | null>(null);
   const finishingRef = useRef(false);
@@ -49,14 +53,14 @@ export function Tone3000Control() {
   }, []);
 
   useEffect(() => {
-    if (!open || step !== "signin") {
+    if (!open || !signingIn) {
       return;
     }
     setOAuthReturnHandler((payload) => {
       void finishSignIn(payload);
     });
     return () => setOAuthReturnHandler(null);
-  }, [open, step]);
+  }, [open, signingIn]);
 
   async function finishSignIn(payload: OAuthReturnFields): Promise<void> {
     if (finishingRef.current) {
@@ -78,18 +82,24 @@ export function Tone3000Control() {
       setError("TONE3000 sign-in did not finish.");
       return;
     }
+    setSigningIn(false);
     setOpen(false);
   }
 
-  function continueSignIn(): void {
+  function startSignIn(): void {
     setError("");
     const popup = openTone3000Popup();
     if (!popup) {
       setError("The TONE3000 window was blocked. Allow popups for GP Studio and try again.");
+      setSigningIn(true);
+      openRef.current = true;
+      setOpen(true);
       return;
     }
     popupRef.current = popup;
-    setStep("signin");
+    setSigningIn(true);
+    openRef.current = true;
+    setOpen(true);
     void beginAuthorize("sign-in")
       .then((url) => {
         if (!openRef.current || popup.closed) {
@@ -110,7 +120,7 @@ export function Tone3000Control() {
     closeTone3000Popup(popupRef.current);
     popupRef.current = null;
     setOpen(false);
-    setStep("partnership");
+    setSigningIn(false);
     setError("");
   }
 
@@ -119,38 +129,51 @@ export function Tone3000Control() {
   }
 
   const signedIn = account.status === "signed-in";
-  const label = signedIn ? account.username : "TONE3000";
+  const tip = signedIn
+    ? `Connected to Tone3000 as ${account.username}`
+    : "Connect with Tone3000";
 
   return (
     <div className="hidden md:block">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 gap-2.5 px-3 text-sm md:h-7 md:px-2.5 md:text-[0.8rem]"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={signedIn ? `TONE3000 ${account.username}` : "TONE3000"}
-        onClick={() => {
-          if (account.status === "unknown") {
-            return;
-          }
-          setStep("partnership");
-          setError("");
-          openRef.current = true;
-          setOpen(true);
-        }}
-      >
-        <span
-          aria-hidden
-          className={
-            signedIn
-              ? "size-2 shrink-0 rounded-full bg-lime-400 shadow-[0_0_8px_2px] shadow-lime-400/70"
-              : "size-2 shrink-0 rounded-full bg-muted-foreground/50"
-          }
-        />
-        <span className="max-w-32 truncate">{label}</span>
-      </Button>
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-2 px-2.5 text-xs md:h-7 md:px-2 md:text-[0.72rem]"
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              aria-label={tip}
+              onClick={() => {
+                if (account.status === "unknown") {
+                  return;
+                }
+                if (signedIn) {
+                  setSigningIn(false);
+                  setError("");
+                  openRef.current = true;
+                  setOpen(true);
+                  return;
+                }
+                startSignIn();
+              }}
+            >
+              <span
+                aria-hidden
+                className={
+                  signedIn
+                    ? "size-2 shrink-0 rounded-full bg-yellow-400 shadow-[0_0_8px_2px] shadow-yellow-400/70"
+                    : "size-2 shrink-0 rounded-full bg-muted-foreground/50"
+                }
+              />
+              <span>Tone3000</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{tip}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -165,7 +188,7 @@ export function Tone3000Control() {
           aria-describedby={undefined}
           className="sm:max-w-md"
         >
-          {signedIn ? (
+          {signedIn && !signingIn ? (
             <>
               <DialogHeader>
                 <DialogTitle>TONE3000</DialogTitle>
@@ -183,25 +206,6 @@ export function Tone3000Control() {
                   }}
                 >
                   Disconnect
-                </Button>
-              </DialogFooter>
-            </>
-          ) : step === "partnership" ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>TONE3000</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground">
-                GP Studio and TONE3000 work together so you can choose a NAM capture for a SnapTone slot.
-                TONE3000 handles sign-in. GP Studio keeps that session in this browser.
-              </p>
-              {error ? <p className="text-sm">{error}</p> : null}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={close}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={() => void continueSignIn()}>
-                  Continue
                 </Button>
               </DialogFooter>
             </>

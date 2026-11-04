@@ -108,11 +108,11 @@ export function AppShell() {
         </Link>
         <div className="flex items-center gap-2 pr-2 md:pr-0">
           <GlobalSettingsControl />
-          <ConnectionStatus />
           <PedalFootControls />
+          <ConnectionStatus />
+          <Tone3000Control />
         </div>
         <div className="flex items-center gap-2 md:justify-end md:gap-3">
-          <Tone3000Control />
           <MainMenu />
           <div className="hidden md:block">
             <ThemeToggle />

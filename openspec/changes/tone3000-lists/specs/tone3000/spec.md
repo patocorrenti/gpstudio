@@ -118,17 +118,18 @@ While the lists are showing, the modal SHALL offer an English Browse TONE3000 ac
 
 ### Requirement: Signed-out catalog signs in first
 
-Opening the catalog modal while signed out SHALL show the existing partnership screen before any list. Continuing MUST use the existing TONE3000 sign-in. Cancel MUST leave the user signed out and MUST NOT download or send. A completed sign-in MUST show the Favorites list.
+Opening the catalog modal while signed out SHALL start the existing TONE3000 sign-in with no partnership screen and MUST NOT show a tone list until sign-in finishes. Cancel MUST leave the user signed out and MUST NOT download or send. A completed sign-in MUST show the Favorites list.
 
-#### Scenario: Signed out sees the partnership first
+#### Scenario: Signed out opens sign-in
 
 - **WHEN** the user opens the catalog modal while signed out of TONE3000
-- **THEN** the modal shows the partnership screen
+- **THEN** TONE3000 sign-in starts
+- **AND** no partnership screen is shown
 - **AND** no tone list is shown
 
 #### Scenario: Cancel stays signed out
 
-- **WHEN** that partnership screen is open and the user cancels
+- **WHEN** the user cancels during that sign-in
 - **THEN** the modal closes
 - **AND** the user stays signed out
 - **AND** no SnapTone file is sent
