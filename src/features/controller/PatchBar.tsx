@@ -43,6 +43,7 @@ import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { useAbCycleClaim } from "@/features/controller/AbCycleClaim";
 import { SnapToneDialog } from "@/features/controller/SnapToneDialog";
+import { setSnapTonesOpenHandler } from "@/features/controller/snap-tones-bridge";
 import { AbSideLabel } from "@/features/controller/AbSideLabel";
 import {
   AB_SECONDS_DEFAULT,
@@ -499,6 +500,15 @@ export function PatchBar({
       registerStop("patch", null);
     };
   }, [registerStop]);
+
+  useEffect(() => {
+    setSnapTonesOpenHandler(() => {
+      setSnapOpen(true);
+    });
+    return () => {
+      setSnapTonesOpenHandler(null);
+    };
+  }, []);
 
   useEffect(() => {
     if (!abOpen || moduleOpen) {

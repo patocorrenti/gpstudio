@@ -37,7 +37,11 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          # Publishable TONE3000 key. Unset still builds; the control stays hidden.
+          VITE_TONE3000_CLIENT_ID: ${{ vars.VITE_TONE3000_CLIENT_ID }}
 
       - name: Upload
         env:

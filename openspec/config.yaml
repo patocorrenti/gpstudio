@@ -81,7 +81,7 @@ context: |
       live state or command-out read capabilities (liveFromPedal, commandToPedal)
       instead of forking UI. Patch commandToPedal is true on USB and Bluetooth.
   - Device state: shared TypeScript layer, independent of transport
-  - No HTTP backend. The app talks directly to the pedal. The production web app may send one best-effort same-origin GET `/usage` per cold start; failure is ignored. That request is not an application backend.
+  - No HTTP backend. The app talks directly to the pedal. The production web app may send one best-effort same-origin GET `/usage` per cold start; failure is ignored. That request is not an application backend. A web USB client on the static site may call TONE3000 with the publishable key (`VITE_TONE3000_CLIENT_ID`) and the user's token. The same web USB client may read favorites, created, downloads, trending, and latest. A GP Studio server, a secret key, and `/tones/search` stay out of scope.
   - Electron is rejected (heavier, worse mobile path).
 
   Architecture:
@@ -222,7 +222,7 @@ context: |
     import (current-patch store / rename / duplicate / connected-model .prst
     export and current-patch .prst import onto the selected slot from either
     model are in scope; not the Library route)
-  - IR file upload and A1 SnapTone captures (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). A2 SnapTone file upload, USB delete, and USB rename of a user slot are in scope via session-owned USB SysEx and `src/snaptone/` conversion. Copied third-party SysEx stays forbidden.
+  - IR file upload and A1 SnapTone captures (IR-name read, user-IR CAB select, Nam-name read, and user-NS SnapTone select are in scope). A2 SnapTone file upload, USB delete, and USB rename of a user slot are in scope via session-owned USB SysEx and `src/snaptone/` conversion. On the static site, a web USB client may fetch one TONE3000 NAM A2 model with the publishable key (`VITE_TONE3000_CLIENT_ID`) and the user's token. The same web USB client may read favorites, created, downloads, trending, and latest. A GP Studio server, a secret key, and `/tones/search` stay out of scope. Copied third-party SysEx stays forbidden.
   - Applying liveFromPedal inbound volume/BPM CC or tuner to the snapshot
     while the patch stays the same (Bluetooth live patch-volume SysEx,
     live-module SysEx, Stomp

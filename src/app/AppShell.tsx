@@ -19,6 +19,7 @@ import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider"
 import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import { PedalFootControls } from "@/features/connect/PedalFootControls";
 import { IosWebNotice } from "@/features/controller/IosWebNotice";
+import { Tone3000Control } from "@/features/tone3000/Tone3000Control";
 import MainMenu from "@/components/main-menu";
 
 function FooterSupportCta() {
@@ -107,8 +108,9 @@ export function AppShell() {
         </Link>
         <div className="flex items-center gap-2 pr-2 md:pr-0">
           <GlobalSettingsControl />
-          <ConnectionStatus />
           <PedalFootControls />
+          <ConnectionStatus />
+          <Tone3000Control />
         </div>
         <div className="flex items-center gap-2 md:justify-end md:gap-3">
           <MainMenu />

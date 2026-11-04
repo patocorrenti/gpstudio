@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, SearchIcon, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "cn";
 import {
   Tooltip,
   TooltipContent,
@@ -17,6 +19,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
+import { getTone3000Account } from "@/features/tone3000/account";
+import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
+import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
+import { publishableKey } from "@/features/tone3000/oauth";
+import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 
 const UNKNOWN_SLOT = "This slot is unknown until SnapTone names are read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
@@ -77,6 +84,8 @@ function SlotIndex({ index }: { index: number }) {
   );
 }
 
+type SnapListFilter = "custom" | "factory" | "all";
+
 export function SnapToneDialog({
   open,
   onOpenChange,
@@ -91,6 +100,7 @@ export function SnapToneDialog({
   const [convertProgress, setConvertProgress] = useState(0);
   const [shownProgress, setShownProgress] = useState(0);
   const realProgress = useRef(0);
+  const [listFilter, setListFilter] = useState<SnapListFilter>("custom");
   const [query, setQuery] = useState("");
   const [deleteAsk, setDeleteAsk] = useState<DeleteAsk | null>(null);
   const [renameAsk, setRenameAsk] = useState<RenameAsk | null>(null);
@@ -102,8 +112,17 @@ export function SnapToneDialog({
   const previewRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(50);
+  const [toneSlot, setToneSlot] = useState<number | null>(null);
 
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setListFilter("custom");
+    setQuery("");
+  }, [open]);
 
   useEffect(() => {
     if (draft?.phase !== "converting" && draft?.phase !== "sending") {
@@ -142,6 +161,7 @@ export function SnapToneDialog({
         toast(UNKNOWN_SLOT);
       }
     }
+    setToneSlot(null);
     onOpenChange(false);
   }, [deleteAsk?.phase, draft?.phase, onOpenChange, open, renameAsk?.phase, snapshot.status]);
 
@@ -150,10 +170,19 @@ export function SnapToneDialog({
   }
 
   const accepts = snapshot.snapFileLink;
+  const offerTone3000 = isTone3000ControlVisible({
+    connected: true,
+    usb: snapshot.linkMode === "usb",
+    publishableKey: publishableKey(),
+    tauri: isNativeDesktop(),
+  });
   const deleting = deleteAsk?.phase === "deleting";
   const renaming = renameAsk?.phase === "renaming";
   const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting || renaming;
-  const factory = session.factorySnapToneLabels();
+  const factoryAll = session.factorySnapToneLabels();
+  const showFactoryRows = listFilter === "factory" || listFilter === "all";
+  const showCustomRows = listFilter === "custom" || listFilter === "all";
+  const factory = showFactoryRows ? factoryAll : [];
 
   function tellUnknown() {
     if (toldRef.current) {
@@ -369,7 +398,16 @@ export function SnapToneDialog({
   const overwriteName =
     draft && occupied?.flag === 0 ? slotLabel(occupied.name, draft.slot) : null;
 
+  const toneEntry = toneSlot === null ? undefined : snapshot.userSnapSlots[toneSlot - 50];
+  const existingName =
+    toneSlot !== null && toneEntry?.flag === 0
+      ? toneEntry.name && toneEntry.name.length > 0
+        ? toneEntry.name
+        : `SnapTone ${String(toneSlot)}`
+      : null;
+
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(next) => {
@@ -390,6 +428,7 @@ export function SnapToneDialog({
           setDraft(null);
           setDeleteAsk(null);
           setRenameAsk(null);
+          setToneSlot(null);
           deletingRef.current = false;
           renamingRef.current = false;
         }
@@ -501,6 +540,35 @@ export function SnapToneDialog({
         {preview || deleteAsk || renameAsk ? null : (
         <TooltipProvider delayDuration={300}>
         <div className="flex flex-col gap-2">
+          <ButtonGroup aria-label="SnapTone source">
+            {(
+              [
+                ["custom", "Custom"],
+                ["factory", "Factory"],
+                ["all", "All"],
+              ] as const
+            ).map(([value, label]) => {
+              const selected = listFilter === value;
+              return (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={selected}
+                  className={cn(
+                    "h-8 px-3.5",
+                    selected
+                      ? "bg-muted text-foreground hover:bg-muted dark:bg-input dark:hover:bg-input"
+                      : "text-muted-foreground/70",
+                  )}
+                  onClick={() => setListFilter(value)}
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </ButtonGroup>
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -515,7 +583,7 @@ export function SnapToneDialog({
           </div>
           <div className="max-h-[50vh] divide-y divide-foreground/10 overflow-y-auto">
           {factory.filter((row) => matchesQuery(query, row.index, row.label)).map((row) => (
-            <div key={row.index} className="flex items-center justify-between gap-3 px-1 py-1.5 text-sm">
+            <div key={row.index} className="flex items-center justify-between gap-3 px-1 py-1.5 text-sm hover:bg-muted/50">
               <span className="flex min-w-0 items-center gap-1">
                 <SlotIndex index={row.index} />
                 <span className="truncate">{row.label}</span>
@@ -523,11 +591,15 @@ export function SnapToneDialog({
               <span className="shrink-0 text-xs text-muted-foreground">Factory</span>
             </div>
           ))}
-          {factory.every((row) => !matchesQuery(query, row.index, row.label)) &&
-          snapshot.userSnapSlots.every((entry, index) => !matchesQuery(query, 50 + index, slotLabel(entry.name, 50 + index))) ? (
+          {(!showFactoryRows || factory.every((row) => !matchesQuery(query, row.index, row.label))) &&
+          (!showCustomRows ||
+            snapshot.userSnapSlots.every(
+              (entry, index) => !matchesQuery(query, 50 + index, slotLabel(entry.name, 50 + index)),
+            )) ? (
             <p className="px-1 py-3 text-sm text-muted-foreground">No matches.</p>
           ) : null}
-          {snapshot.userSnapSlots.map((entry, index) => {
+          {showCustomRows
+            ? snapshot.userSnapSlots.map((entry, index) => {
             const protocol = 50 + index;
             const label = slotLabel(entry.name, protocol);
             if (!matchesQuery(query, protocol, label)) {
@@ -536,7 +608,7 @@ export function SnapToneDialog({
             return (
               <div
                 key={protocol}
-                className="flex items-center justify-between gap-3 px-1 py-1.5 text-sm"
+                className="flex items-center justify-between gap-3 px-1 py-1.5 text-sm hover:bg-muted/50"
                 onDragOver={(event) => {
                   if (!accepts || busy) {
                     return;
@@ -625,10 +697,39 @@ export function SnapToneDialog({
                     </TooltipTrigger>
                     <TooltipContent side="right">Upload NAM</TooltipContent>
                   </Tooltip>
+                  {offerTone3000 ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          aria-label={`Tone3000 SnapTone ${protocol}`}
+                          disabled={!accepts || busy}
+                          onClick={() => {
+                            if (getTone3000Account().status !== "signed-in") {
+                              const popup = openTone3000Popup();
+                              if (!popup) {
+                                toast("Allow popups for GP Studio and try again.");
+                                return;
+                              }
+                              holdTone3000Popup(popup);
+                            }
+                            setToneSlot(protocol);
+                          }}
+                        >
+                          T3K
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Tone3000</TooltipContent>
+                    </Tooltip>
+                  ) : null}
                 </span>
               </div>
             );
-          })}
+          })
+            : null}
           </div>
         </div>
         </TooltipProvider>
@@ -688,5 +789,21 @@ export function SnapToneDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+    <Tone3000Catalog
+      open={toneSlot !== null}
+      onOpenChange={(next) => {
+        if (!next) {
+          setToneSlot(null);
+        }
+      }}
+      slot={toneSlot}
+      existingName={existingName}
+      session={session}
+      onUploaded={() => {
+        setToneSlot(null);
+        onOpenChange(false);
+      }}
+    />
+    </>
   );
 }
