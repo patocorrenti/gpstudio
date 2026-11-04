@@ -1,6 +1,7 @@
 import {
   TONE3000_TOKEN_URL,
   type AuthorizeKind,
+  type CatalogGears,
   buildAuthorizeUrl,
   codeChallenge,
   publishableKey,
@@ -212,6 +213,7 @@ export async function beginAuthorize(
   kind: AuthorizeKind,
   session: KeyValueStore = window.sessionStorage,
   origin: string = window.location.origin,
+  catalog?: { gears?: CatalogGears },
 ): Promise<string> {
   const clientId = requireClientId(publishableKey());
   const verifier = randomVerifier();
@@ -225,6 +227,7 @@ export async function beginAuthorize(
     redirectUri: tone3000RedirectUri(origin),
     state,
     challenge,
+    gears: kind === "catalog" ? (catalog?.gears ?? "amp_amp-cab") : undefined,
   });
 }
 

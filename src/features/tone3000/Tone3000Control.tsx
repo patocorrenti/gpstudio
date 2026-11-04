@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AudioLines, AudioWaveform, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
+import { requestOpenSnapTones } from "@/features/controller/snap-tones-bridge";
 import {
   completeTone3000SignIn,
   disconnectTone3000Account,
@@ -193,18 +195,36 @@ export function Tone3000Control() {
               <DialogHeader>
                 <DialogTitle>TONE3000</DialogTitle>
               </DialogHeader>
-              <p className="text-sm">{account.username}</p>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={close}>
-                  Cancel
-                </Button>
+              <p className="text-sm text-muted-foreground">{`Connected as ${account.username}`}</p>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    close();
+                    requestOpenSnapTones({ showFactory: false });
+                  }}
+                >
+                  <AudioLines className="size-3.5 text-muted-foreground" />
+                  SnapTones
+                </Button>
+                <Button type="button" variant="outline" className="gap-2" disabled aria-disabled>
+                  <AudioWaveform className="size-3.5 text-muted-foreground" />
+                  IR
+                  <span className="text-xs font-normal text-muted-foreground">(coming soon)</span>
+                </Button>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => {
                     disconnectTone3000Account();
                     close();
                   }}
                 >
+                  <LogOut className="size-3 text-muted-foreground" />
                   Disconnect
                 </Button>
               </DialogFooter>

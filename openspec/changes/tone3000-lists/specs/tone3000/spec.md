@@ -43,17 +43,22 @@ A TONE3000 catalog modal opened for a user SnapTone slot SHALL open on the free-
 
 ### Requirement: Slot modal lists the signed-in user's tones
 
-While signed in, the catalog modal SHALL offer five English lists: Favorites, Created, Downloaded, Trending, and Latest. The modal MUST open on Favorites. Favorites, Created, and Downloaded MUST be that user's lists and MUST offer the next page when more tones exist. Trending and Latest MUST show at most ten tones and MUST NOT offer another page. Each row MUST show the tone image when the list provides one, the title, the gear, the format, and the creator username. The list view MUST name TONE3000 and MUST show the signed-in username. A failed list MUST show an English error and MUST NOT download a model or send a SnapTone file. An empty list MUST say so in English and MUST NOT send.
+While signed in, the catalog modal SHALL offer five English lists in this order: Trending, Latest, My Favorites, Downloaded by Me, and Created by Me. My Favorites, Created by Me, and Downloaded by Me MUST be that user's lists and MUST offer the next page when more tones exist. Trending and Latest MUST show at most ten tones and MUST NOT offer another page. Each row MUST show the tone image when the list provides one, the title, the gear, the format, and the creator username. The list view MUST name TONE3000 and MUST show the signed-in username. A failed list MUST show an English error and MUST NOT download a model or send a SnapTone file. An empty list MUST say so in English and MUST NOT send.
 
-#### Scenario: Favorites opens first
+#### Scenario: Trending opens first when nothing is stored
 
-- **WHEN** the user opens the catalog modal while signed in
-- **THEN** the modal shows the Favorites list
+- **WHEN** the user opens the catalog modal while signed in and no list choice is stored
+- **THEN** the modal shows the Trending list
 - **AND** the view names TONE3000 and shows the signed-in username
 
-#### Scenario: Created can show the next page
+#### Scenario: Remembered list returns on reopen
 
-- **WHEN** the user selects Created and more created tones exist than the current page
+- **WHEN** the user selects My Favorites, closes the modal, and opens it again while signed in
+- **THEN** the modal shows My Favorites
+
+#### Scenario: Created by Me can show the next page
+
+- **WHEN** the user selects Created by Me and more created tones exist than the current page
 - **THEN** the modal can show the next page
 - **AND** that page is still the user's created tones
 
@@ -78,16 +83,16 @@ While signed in, the catalog modal SHALL offer five English lists: Favorites, Cr
 
 ### Requirement: List filters follow the list
 
-Favorites, Created, and Downloaded SHALL offer a gear filter of All, Amp, and Amp + Cab, and a title search. Trending SHALL offer that gear filter and MUST NOT offer a title search. Latest MUST NOT offer a gear filter or a title search. The modal MUST open with All and an empty title search. Changing the gear or the title MUST reload the current list. Amp MUST show only Amp tones. Amp + Cab MUST show only Amp + Cab tones. All MUST include every gear that list returns. A title search MUST keep tones whose title contains that text.
+My Favorites, Created by Me, and Downloaded by Me SHALL offer a gear filter of All, Amp, and Amp + Cab, and a title search. Trending SHALL offer that gear filter and MUST NOT offer a title search. Latest MUST NOT offer a gear filter or a title search. The modal MUST open with All and an empty title search. Changing the gear or the title MUST reload the current list. Amp MUST show only Amp tones. Amp + Cab MUST show only Amp + Cab tones. All MUST include every gear that list returns. A title search MUST keep tones whose title contains that text.
 
 #### Scenario: Amp filter on favorites
 
-- **WHEN** the user sets the gear filter to Amp on Favorites
+- **WHEN** the user sets the gear filter to Amp on My Favorites
 - **THEN** the list shows only Amp tones from the user's favorites
 
 #### Scenario: Title search on downloads
 
-- **WHEN** the user searches Downloaded for `plexi`
+- **WHEN** the user searches Downloaded by Me for `plexi`
 - **THEN** the list shows downloaded tones whose title contains `plexi`
 
 #### Scenario: Latest has no filters
@@ -101,24 +106,25 @@ Favorites, Created, and Downloaded SHALL offer a gear filter of All, Amp, and Am
 - **THEN** the modal offers the gear filter
 - **AND** it does not offer a title search
 
-### Requirement: Browse TONE3000 stays available
+### Requirement: Browse all catalog opens a popup
 
-While the lists are showing, the modal SHALL offer an English Browse TONE3000 action. Activating it MUST show TONE3000's select catalog inside the same modal, limited to NAM tones of gear amp or amp-plus-cab. Back MUST return to the lists without sending a SnapTone file. Choosing a tone from that catalog MUST use the same A2 model list and send path as a tone chosen from the lists.
+While the lists are showing, the modal SHALL offer a highlighted English Browse all catalog action to the left of the list tabs. Activating it MUST open TONE3000's select catalog in a popup window, limited to NAM tones of gear amp or amp-plus-cab, and MUST NOT embed that catalog in an iframe. The modal MUST stay open on the lists while that window is used. Choosing a tone from that catalog MUST use the same A2 model list and send path as a tone chosen from the lists. Closing the modal MUST close that popup without sending a SnapTone file.
 
-#### Scenario: Browse opens the select catalog
+#### Scenario: Browse opens the select catalog in a popup
 
-- **WHEN** the user activates Browse TONE3000 from the lists
-- **THEN** TONE3000's select catalog is shown inside the same modal
+- **WHEN** the user activates Browse all catalog from the lists
+- **THEN** TONE3000's select catalog opens in a popup window
+- **AND** the modal stays on the lists
 
-#### Scenario: Back returns to the lists
+#### Scenario: Closing the modal closes the popup
 
-- **WHEN** the select catalog is showing and the user goes back
-- **THEN** the lists are shown again
+- **WHEN** the select catalog popup is open and the user closes the catalog modal
+- **THEN** that popup is closed
 - **AND** no SnapTone file is sent
 
 ### Requirement: Signed-out catalog signs in first
 
-Opening the catalog modal while signed out SHALL start the existing TONE3000 sign-in with no partnership screen and MUST NOT show a tone list until sign-in finishes. Cancel MUST leave the user signed out and MUST NOT download or send. A completed sign-in MUST show the Favorites list.
+Opening the catalog modal while signed out SHALL start the existing TONE3000 sign-in with no partnership screen and MUST NOT show a tone list until sign-in finishes. Cancel MUST leave the user signed out and MUST NOT download or send. A completed sign-in MUST show the remembered list, or Trending when none is stored.
 
 #### Scenario: Signed out opens sign-in
 
@@ -136,5 +142,5 @@ Opening the catalog modal while signed out SHALL start the existing TONE3000 sig
 
 #### Scenario: Sign-in then lists
 
-- **WHEN** the user finishes sign-in from that modal
-- **THEN** the modal shows the Favorites list
+- **WHEN** the user finishes sign-in from that modal and no list choice is stored
+- **THEN** the modal shows the Trending list

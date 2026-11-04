@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
+import { getTone3000Account } from "@/features/tone3000/account";
 import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
 import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
 import { publishableKey } from "@/features/tone3000/oauth";
@@ -85,10 +86,13 @@ export function SnapToneDialog({
   open,
   onOpenChange,
   session,
+  showFactory = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: DeviceSession;
+  /** When false, factory SnapTones are omitted from the list. */
+  showFactory?: boolean;
 }) {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>(() => session.getSnapshot());
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -165,7 +169,7 @@ export function SnapToneDialog({
   const deleting = deleteAsk?.phase === "deleting";
   const renaming = renameAsk?.phase === "renaming";
   const busy = draft?.phase === "converting" || draft?.phase === "sending" || deleting || renaming;
-  const factory = session.factorySnapToneLabels();
+  const factory = showFactory ? session.factorySnapToneLabels() : [];
 
   function tellUnknown() {
     if (toldRef.current) {
@@ -658,12 +662,14 @@ export function SnapToneDialog({
                           aria-label={`TONE3000 SnapTone ${protocol}`}
                           disabled={!accepts || busy}
                           onClick={() => {
-                            const popup = openTone3000Popup();
-                            if (!popup) {
-                              toast("Allow popups for GP Studio and try again.");
-                              return;
+                            if (getTone3000Account().status !== "signed-in") {
+                              const popup = openTone3000Popup();
+                              if (!popup) {
+                                toast("Allow popups for GP Studio and try again.");
+                                return;
+                              }
+                              holdTone3000Popup(popup);
                             }
-                            holdTone3000Popup(popup);
                             setToneSlot(protocol);
                           }}
                         >

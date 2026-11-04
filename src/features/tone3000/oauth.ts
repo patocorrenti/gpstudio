@@ -4,6 +4,19 @@ export const TONE3000_TOKEN_URL = "https://www.tone3000.com/api/v1/oauth/token";
 
 export type AuthorizeKind = "sign-in" | "catalog";
 
+/** Select-catalog `gears` query: All → amp + amp-cab; otherwise one gear. */
+export type CatalogGears = "amp" | "amp-cab" | "amp_amp-cab";
+
+export function catalogGearsForFilter(gear: "all" | "amp" | "amp-cab"): CatalogGears {
+  if (gear === "amp") {
+    return "amp";
+  }
+  if (gear === "amp-cab") {
+    return "amp-cab";
+  }
+  return "amp_amp-cab";
+}
+
 export function publishableKey(): string {
   const value = import.meta.env.VITE_TONE3000_CLIENT_ID;
   return typeof value === "string" ? value.trim() : "";
@@ -36,6 +49,7 @@ export function buildAuthorizeUrl(input: {
   redirectUri: string;
   state: string;
   challenge: string;
+  gears?: CatalogGears;
 }): string {
   const clientId = requireClientId(input.clientId);
   const url = new URL(AUTHORIZE_URL);
@@ -49,7 +63,7 @@ export function buildAuthorizeUrl(input: {
     url.searchParams.set("prompt", "select_tone");
     url.searchParams.set("format", "nam");
     url.searchParams.set("architecture", "2");
-    url.searchParams.set("gears", "amp_amp-cab");
+    url.searchParams.set("gears", input.gears ?? "amp_amp-cab");
     url.searchParams.set("menubar", "true");
   }
   return url.toString();
@@ -114,6 +128,19 @@ function assertOAuth(): void {
   );
   if (signIn.searchParams.has("prompt")) {
     throw new Error("Header sign-in must omit prompt");
+  }
+  const ampOnly = new URL(
+    buildAuthorizeUrl({
+      kind: "catalog",
+      clientId: "pub_key",
+      redirectUri,
+      state: "state1",
+      challenge: "challenge1",
+      gears: "amp",
+    }),
+  );
+  if (ampOnly.searchParams.get("gears") !== "amp" || catalogGearsForFilter("all") !== "amp_amp-cab") {
+    throw new Error("Catalog gears must follow the Amp / Amp + Cab / All filter");
   }
   let missing = false;
   try {
