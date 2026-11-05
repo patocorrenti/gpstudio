@@ -166,12 +166,25 @@ export function ScanPanel({
                   ),
                 },
                 {
-                  icon: Turtle,
-                  text: "Slower connection",
+                  icon: Usb,
+                  text: (
+                    <span>
+                      SnapTones require{" "}
+                      <button
+                        type="button"
+                        className="cursor-pointer text-foreground/75 underline underline-offset-2 transition-colors hover:text-foreground"
+                        onClick={() => {
+                          onLinkTabChange("usb");
+                        }}
+                      >
+                        USB
+                      </button>
+                    </span>
+                  ),
                 },
                 {
-                  icon: Usb,
-                  text: "SnapTones and IRs require USB",
+                  icon: Turtle,
+                  text: "Slower connection",
                 },
               ]}
             />

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { type DeviceSession, type NamInspection, type SessionSnapshot } from "@/device/session";
 import { USER_SNAP_COUNT, USER_SNAP_FIRST } from "@/device/snaptone-table";
+import { setSnapToneLoadListener } from "@/features/controller/snap-tones-bridge";
 import { getTone3000Account } from "@/features/tone3000/account";
 import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
 import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
@@ -145,6 +146,20 @@ export function SnapToneDialog({
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
 
   useEffect(() => {
+    setSnapToneLoadListener((request) => {
+      if (request.source === "tone3000") {
+        setToneSlot(request.slot);
+        return;
+      }
+      slotRef.current = request.slot;
+      fileRef.current?.click();
+    });
+    return () => {
+      setSnapToneLoadListener(null);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
@@ -237,6 +252,7 @@ export function SnapToneDialog({
       message: "",
     });
     toldRef.current = false;
+    onOpenChange(true);
   }
 
   function leavePreview() {
@@ -827,21 +843,6 @@ export function SnapToneDialog({
         </div>
         </TooltipProvider>
         )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".nam,application/json"
-          className="hidden"
-          aria-hidden
-          tabIndex={-1}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) {
-              void onFile(slotRef.current, file);
-            }
-          }}
-        />
         {preview ? (
           <DialogFooter>
             <Button type="button" variant="outline" onClick={leavePreview} disabled={draft?.phase === "sending"}>
@@ -882,6 +883,21 @@ export function SnapToneDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+    <input
+      ref={fileRef}
+      type="file"
+      accept=".nam,application/json"
+      className="hidden"
+      aria-hidden
+      tabIndex={-1}
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) {
+          void onFile(slotRef.current, file);
+        }
+      }}
+    />
     <Tone3000Catalog
       open={toneSlot !== null}
       onOpenChange={(next) => {
