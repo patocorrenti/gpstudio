@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { AudioLines, AudioWaveform, LogOut } from "lucide-react";
+import { AudioLines, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -208,11 +208,6 @@ export function Tone3000Control() {
                 >
                   <AudioLines className="size-3.5 text-muted-foreground" />
                   SnapTones
-                </Button>
-                <Button type="button" variant="outline" className="gap-2" disabled aria-disabled>
-                  <AudioWaveform className="size-3.5 text-muted-foreground" />
-                  IR
-                  <span className="text-xs font-normal text-muted-foreground">(coming soon)</span>
                 </Button>
               </div>
               <DialogFooter>
