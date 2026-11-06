@@ -104,3 +104,6 @@ Valeton, GP-5, and GP-50 are trademarks of their respective owners. Use of these
 ## Non-affiliation notice
 
 GP Studio is an independent project. It is not affiliated with, endorsed by, or sponsored by Valeton.
+## Credits
+
+The NAM to SnapTone conversion is adapted from [VLTN Tone Studio](https://github.com/grzmol/VLTN-Tone-Studio) (GPL-3.0). It also uses work from [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore), [r8brain-free-src](https://github.com/avaneev/r8brain-free-src) (sample rate converter designed by Aleksey Vaneev of Voxengo), [Ooura FFT](http://www.kurims.kyoto-u.ac.jp/~ooura/fft.html), [AudioFFT](https://github.com/HiFi-LoFi/AudioFFT) and fdlibm. Licenses and notices are in [src/snaptone/NOTICE.md](src/snaptone/NOTICE.md).
