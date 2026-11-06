@@ -4,6 +4,8 @@ Portions adapted from [VLTN Tone Studio](https://github.com/grzmol/VLTN-Tone-Stu
 
 Copyright (c) 2026 VLTN Tone Studio contributors. Each ported file says in its header that GP Studio modified it, and when.
 
+Third-party notices and licenses (VLTN, NeuralAmpModelerCore, r8brain-free-src, Ooura FFT, AudioFFT, fdlibm) are in [`NOTICE.md`](NOTICE.md).
+
 | File | Upstream |
 | --- | --- |
 | `nam.ts` | `app/src/shared/nam.ts` |
