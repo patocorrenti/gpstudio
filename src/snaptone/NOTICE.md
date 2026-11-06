@@ -74,11 +74,9 @@ THE SOFTWARE.
 - Used in: `htkpa.ts`, the real FFT shared by the resampler and the clone (`RealFft`, `OouraFft`). GP Studio modified it (a TypeScript port).
 
 ```
-Copyright(C) 1996-2001 Takuya OOURA
+Copyright Takuya OOURA, 1996-2001
 
-You may use, copy, modify and distribute this code for any purpose (include
-commercial use) and without fee. Please refer to this package when you modify
-this code.
+You may use, copy, modify and distribute this code for any purpose (include commercial use) and without fee. Please refer to this package when you modify this code.
 ```
 
 ## AudioFFT
