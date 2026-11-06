@@ -66,6 +66,7 @@ GP Studio se distribuye bajo **GPL-3.0-only**, la misma licencia que VLTN. Igual
 
 - **Todo el código portado o adaptado de VLTN va aislado en `src/snaptone/`.** Debe tener:
   - Header en cada archivo con atribución: `Portions adapted from VLTN Tone Studio (https://github.com/grzmol/VLTN-Tone-Studio), GPL-3.0`.
+  - En el mismo header, el aviso de modificación con fecha que pide la GPL v3 (§5a): `Copyright (c) 2026 VLTN Tone Studio contributors. Modified for GP Studio by Patricio Correnti, <fecha>.` Si cambiás un archivo portado, actualizá la fecha.
   - Un `README.md` del módulo que liste qué archivo viene de dónde, con el commit de origen.
 - El resto de GP Studio habla con ese módulo **solo a través de la interfaz de conversión**. La UI y la sesión no comparten código con el módulo. La idea es poder reemplazar la conversión más adelante sin tocar la UI ni el SysEx.
 - No copies código de Valeton Suite ni de sus binarios. Tampoco incluyas datos propietarios en el repo, por ejemplo JSONs extraídos de una instalación del Suite.

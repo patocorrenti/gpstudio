@@ -2,6 +2,8 @@
 
 Portions adapted from [VLTN Tone Studio](https://github.com/grzmol/VLTN-Tone-Studio), GPL-3.0, commit `9591679ea3c41ec56938ff5af937af6c3ba2bdef`.
 
+Copyright (c) 2026 VLTN Tone Studio contributors. Each ported file says in its header that GP Studio modified it, and when.
+
 | File | Upstream |
 | --- | --- |
 | `nam.ts` | `app/src/shared/nam.ts` |
