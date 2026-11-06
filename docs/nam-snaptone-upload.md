@@ -60,15 +60,15 @@ Equipos objetivo: **GP-5 y GP-50**.
 - Tiene notas de protocolo en `docs/` y `re/`.
 - GP Studio ya tiene el dump de nombres SnapTone. Esta referencia se usa si la Fase 0 necesita un mensaje que el dump actual no cubre (por ejemplo, ocupado/vacío).
 
-## Licencia: pendiente de decisión, NO resolver en esta tarea
+## Licencia
 
-GP Studio (MIT) todavía no decidió cómo manejar la GPL-3 de VLTN. Hasta que eso se resuelva:
+GP Studio se distribuye bajo **GPL-3.0-only**, la misma licencia que VLTN. Igual se mantienen estas reglas de atribución y aislamiento:
 
 - **Todo el código portado o adaptado de VLTN va aislado en `src/snaptone/`.** Debe tener:
   - Header en cada archivo con atribución: `Portions adapted from VLTN Tone Studio (https://github.com/grzmol/VLTN-Tone-Studio), GPL-3.0`.
+  - En el mismo header, el aviso de modificación con fecha que pide la GPL v3 (§5a): `Copyright (c) 2026 VLTN Tone Studio contributors. Modified for GP Studio by Patricio Correnti, <fecha>.` Si cambiás un archivo portado, actualizá la fecha.
   - Un `README.md` del módulo que liste qué archivo viene de dónde, con el commit de origen.
 - El resto de GP Studio habla con ese módulo **solo a través de la interfaz de conversión**. La UI y la sesión no comparten código con el módulo. La idea es poder reemplazar la conversión más adelante sin tocar la UI ni el SysEx.
-- Trabajá en una **rama aparte**. No hagas merge a main ni deploy a producción.
 - No copies código de Valeton Suite ni de sus binarios. Tampoco incluyas datos propietarios en el repo, por ejemplo JSONs extraídos de una instalación del Suite.
 - El SysEx de catálogo y de upload se escribe como el resto del protocolo de GP Studio (capturas, no un port de VLTN). Si eso no alcanza, se para y se pregunta.
 

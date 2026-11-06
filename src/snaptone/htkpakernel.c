@@ -1,5 +1,6 @@
 /*
  * Portions adapted from VLTN Tone Studio (https://github.com/grzmol/VLTN-Tone-Studio), GPL-3.0.
+ * Copyright (c) 2026 VLTN Tone Studio contributors. Modified for GP Studio by Patricio Correnti, 2026-11-04.
  * Upstream: app/src/renderer/src/snaptone/htkpa.ts at 9591679ea3c41ec56938ff5af937af6c3ba2bdef.
  * exp() is FreeBSD/fdlibm e_exp.c (Copyright (C) 2004 by Sun Microsystems, Inc.; permission to use, copy,
  * modify, and distribute this software is freely granted, provided that this notice is preserved).

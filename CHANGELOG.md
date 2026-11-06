@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.0.0]
+
+- License changed from MIT to GNU GPL v3.0 only (GPL-3.0-only)
+- SnapTone control
+- TONE3000 catalog integration
+
 ## [1.0.2]
 
 - Fixed a build error that blocked the 1.0.1 release
