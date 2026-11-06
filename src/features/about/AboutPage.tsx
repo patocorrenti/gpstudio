@@ -27,6 +27,10 @@ const actionLabelClassName =
 const CHANGELOG_URL =
   "https://github.com/patocorrenti/gpstudio/blob/main/CHANGELOG.md";
 
+const REPO_URL = "https://github.com/patocorrenti/gpstudio";
+const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
+const CREDITS_URL = `${REPO_URL}#credits`;
+
 // Show again once the Edge-hosted PWA is listed in the Microsoft Store.
 const SHOW_MICROSOFT_STORE_BADGE = false;
 
@@ -330,6 +334,37 @@ export function AboutPage() {
           I hope you enjoy using it as much as I enjoyed building it.
         </p>
       </div>
+
+      <p className="border-t border-border pt-6 text-[11px] leading-snug text-muted-foreground/60">
+        © 2026 Patricio Correnti. Licensed under{" "}
+        <a
+          href={LICENSE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          GPL-3.0
+        </a>
+        , with no warranty.{" "}
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          Source
+        </a>{" "}
+        and{" "}
+        <a
+          href={CREDITS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          credits
+        </a>{" "}
+        on GitHub.
+      </p>
     </section>
   );
 }
