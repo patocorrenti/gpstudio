@@ -62,7 +62,7 @@ Equipos objetivo: **GP-5 y GP-50**.
 
 ## Licencia
 
-GP Studio se distribuye bajo **GPL-3.0-or-later**, compatible con la GPL-3.0 de VLTN. Igual se mantienen estas reglas de atribución y aislamiento:
+GP Studio se distribuye bajo **GPL-3.0-only**, la misma licencia que VLTN. Igual se mantienen estas reglas de atribución y aislamiento:
 
 - **Todo el código portado o adaptado de VLTN va aislado en `src/snaptone/`.** Debe tener:
   - Header en cada archivo con atribución: `Portions adapted from VLTN Tone Studio (https://github.com/grzmol/VLTN-Tone-Studio), GPL-3.0`.

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- License changed from MIT to GNU GPL v3.0 or later (GPL-3.0-or-later)
+- License changed from MIT to GNU GPL v3.0 only (GPL-3.0-only)
 
 ## [1.0.2]
 

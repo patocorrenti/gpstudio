@@ -91,9 +91,9 @@ Financial support is completely voluntary and does not purchase any product, ser
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0 or later](LICENSE) (GPL-3.0-or-later).
+This project is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only).
 
-You may redistribute and modify it under the terms of the GPL, as published by the Free Software Foundation, version 3 or (at your option) any later version. GP Studio is distributed WITHOUT ANY WARRANTY; see the [LICENSE](LICENSE) file for details.
+You may redistribute and modify it under the terms of version 3 of the GPL, as published by the Free Software Foundation. GP Studio is distributed WITHOUT ANY WARRANTY; see the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2026 [Patricio Correnti](https://patocorrenti.com).
 
