@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0]
+
 - License changed from MIT to GNU GPL v3.0 only (GPL-3.0-only)
+- SnapTone control
+- TONE3000 catalog integration
 
 ## [1.0.2]
 
