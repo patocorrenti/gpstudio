@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- License changed from MIT to GNU GPL v3.0 or later (GPL-3.0-or-later)
+
 ## [1.0.2]
 
 - Fixed a build error that blocked the 1.0.1 release

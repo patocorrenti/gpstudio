@@ -2,7 +2,7 @@
   "name": "gpstudio",
   "private": true,
   "version": "1.0.2",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "author": "Patricio Correnti",
   "type": "module",
   "scripts": {
