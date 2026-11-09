@@ -984,9 +984,6 @@ export function Tone3000Catalog({
         {showPartnership ? (
           <div className="flex flex-col items-center gap-6 px-2 py-4 text-center sm:px-4">
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-              <span className="text-lg font-light text-muted-foreground" aria-hidden>
-                +
-              </span>
               <span className="inline-flex items-center">
                 <img
                   src={gpStudioLogoLight}
