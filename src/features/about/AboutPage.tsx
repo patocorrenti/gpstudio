@@ -305,7 +305,8 @@ export function AboutPage() {
             Works on Windows, Mac and Linux (Chrome or Edge) and Android (Chrome,
             Bluetooth only).
             <br />
-            iPhone and iPad can&apos;t connect to the pedal.
+            On iPhone or iPad, try a browser with Bluetooth, such as Bluefy or a
+            similar one.
           </p>
         </div>
       ) : null}
