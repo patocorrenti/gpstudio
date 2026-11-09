@@ -1,3 +1,6 @@
+/** Toast when Bluetooth cannot manage SnapTone files. */
+export const SNAP_USB_REQUIRED = "Managing SnapTones requires USB.";
+
 type OpenHandler = () => void;
 
 export type SnapToneLoadSource = "computer" | "tone3000";
