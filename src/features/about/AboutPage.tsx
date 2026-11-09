@@ -138,7 +138,7 @@ export function AboutPage() {
               rel="noopener noreferrer"
               className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
             >
-              Version 2.0.0
+              Version 2.0.1
             </a>{" "}
             · Free controller for the Valeton GP-5/50 multi-effects.
           </p>

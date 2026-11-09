@@ -122,7 +122,7 @@ export function AppShell() {
       <footer className="flex items-center gap-4 border-t bg-background pt-2 pr-6 pb-2.5 pl-6 text-[12px] leading-none text-muted-foreground/70">
         <p className="min-w-0 flex-1 text-left">
           <span className="font-bold">GP Studio</span>
-          {' '}v2.0.0{' · '}
+          {' '}v2.0.1{' · '}
           <Link
             to="/about"
             className="text-foreground/60 transition-colors hover:text-foreground"
