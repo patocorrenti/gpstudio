@@ -10,11 +10,10 @@ export function IosWebNotice({ onDismiss }: { onDismiss: () => void }) {
     >
       <div className="min-w-0 flex-1">
         <h2 id="ios-web-notice-title" className="font-medium">
-          This browser can&apos;t reach the pedal
+          Try a browser with Bluetooth
         </h2>
         <p className="mt-1 leading-relaxed text-muted-foreground">
-          On iPhone or iPad, Bluetooth needs a browser that supports it, such as
-          Bluefy.
+          On iPhone or iPad, Bluefy or a similar browser can reach the pedal.
         </p>
       </div>
       <Button

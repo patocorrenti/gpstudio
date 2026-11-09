@@ -145,7 +145,7 @@ The native desktop window MUST NOT register a service worker. The web developmen
 
 ### Requirement: Installed app reaches the pedal only on affirmed platforms
 
-The installed app SHALL use the same pedal links as the browser tab on that platform. Pedal connection MUST be affirmed only for Chrome or Edge on Windows (USB and Bluetooth), including a Microsoft Store package that hosts Edge; Chrome or Edge on Mac (USB and Bluetooth); Chrome on Android (Bluetooth); and Chrome or Edge on Linux (USB and Bluetooth). The app MUST NOT affirm USB on Android. iPhone and iPad MUST NOT be presented as a way to connect to the pedal.
+The installed app SHALL use the same pedal links as the browser tab on that platform. Pedal connection MUST be affirmed only for Chrome or Edge on Windows (USB and Bluetooth), including a Microsoft Store package that hosts Edge; Chrome or Edge on Mac (USB and Bluetooth); Chrome on Android (Bluetooth); and Chrome or Edge on Linux (USB and Bluetooth). The app MUST NOT affirm USB on Android. iPhone and iPad MUST NOT be listed among those affirmed platforms. About MAY suggest a browser with Bluetooth, such as Bluefy or a similar one, without a link.
 
 #### Scenario: Windows keeps USB and Bluetooth
 - **WHEN** the user installs the app from Chrome or Edge on Windows, or from an Edge-hosted Microsoft Store package of the same site
@@ -166,16 +166,16 @@ The installed app SHALL use the same pedal links as the browser tab on that plat
 
 #### Scenario: iPhone and iPad are excluded
 - **WHEN** the production app is opened on an iPhone or iPad
-- **THEN** that device is not a supported way to connect to the pedal
+- **THEN** iPhone and iPad are not listed among the affirmed platforms
 
 ### Requirement: About describes the installed web app
 
-The About page SHALL include an English Install section for the installed web app. The section MUST be readable without a connected pedal and MUST NOT send MIDI or change the session. The section MUST state platform limits that match the affirmed platforms in this capability, MUST state that iPhone and iPad are not supported for connecting to the pedal, and MUST NOT show a Microsoft Store badge or claim a Store listing is already available until that listing exists. About MUST offer an Install now control that uses the browser install prompt when the browser has offered one, and MUST show an English fallback that points at the Chrome or Edge install menu when that prompt is not available.
+The About page SHALL include an English Install section for the installed web app. The section MUST be readable without a connected pedal and MUST NOT send MIDI or change the session. The section MUST state platform limits that match the affirmed platforms in this capability, MUST suggest that on iPhone or iPad the user try a browser with Bluetooth, such as Bluefy or a similar one, without a link, and MUST NOT show a Microsoft Store badge or claim a Store listing is already available until that listing exists. About MUST offer an Install now control that uses the browser install prompt when the browser has offered one, and MUST show an English fallback that points at the Chrome or Edge install menu when that prompt is not available.
 
 #### Scenario: Install section is shown without a pedal
 - **WHEN** the user opens About with no pedal connected
 - **THEN** the page shows the Install section
-- **AND** the section does not present iPhone or iPad as a way to connect to the pedal
+- **AND** the section suggests a browser with Bluetooth, such as Bluefy or a similar one, without a link
 - **AND** no device or MIDI action occurs
 
 #### Scenario: Install now uses the browser prompt when available
@@ -190,13 +190,13 @@ The About page SHALL include an English Install section for the installed web ap
 
 ### Requirement: iPhone and iPad web home shows a connection notice
 
-When the web app is opened on an iPhone or iPad in a browser that does not expose Web Bluetooth, the home screen SHALL show an English banner. The banner MUST state that this browser can't reach the pedal, and that Bluetooth on iPhone or iPad needs a browser that supports it, such as Bluefy. The banner MUST leave the home content usable. The banner MUST offer a control that dismisses it for the rest of that visit; a later visit MUST show the banner again. The banner MUST NOT appear when that browser exposes Web Bluetooth. The banner MUST NOT appear on About, Log, Editor, or Library, and MUST NOT appear in a desktop browser or in the desktop shell. iPhone and iPad remain unaffirmed platforms in About.
+When the web app is opened on an iPhone or iPad in a browser that does not expose Web Bluetooth, the home screen SHALL show an English banner. The banner MUST suggest trying a browser with Bluetooth, and MUST name Bluefy or a similar browser as able to reach the pedal. The banner MUST NOT link to a browser. The banner MUST leave the home content usable. The banner MUST offer a control that dismisses it for the rest of that visit; a later visit MUST show the banner again. The banner MUST NOT appear when that browser exposes Web Bluetooth. The banner MUST NOT appear on About, Log, Editor, or Library, and MUST NOT appear in a desktop browser or in the desktop shell.
 
 #### Scenario: iPhone or iPad home without Web Bluetooth
 - **WHEN** a user opens the home screen in a browser on an iPhone or iPad that does not expose Web Bluetooth
 - **THEN** a banner is shown and the home content remains usable
-- **AND** the banner states that this browser can't reach the pedal
-- **AND** the banner states that Bluetooth on iPhone or iPad needs a browser that supports it, such as Bluefy
+- **AND** the banner suggests trying a browser with Bluetooth
+- **AND** the banner names Bluefy or a similar browser, without a link
 
 #### Scenario: Dismiss hides the banner for the visit
 - **WHEN** that user dismisses the banner
