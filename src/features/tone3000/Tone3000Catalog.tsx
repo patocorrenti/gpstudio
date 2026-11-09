@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import gpStudioLogoDark from "@/assets/img/gp-studio-logo-dark.png";
 import gpStudioLogoLight from "@/assets/img/gp-studio-logo-light.png";
@@ -1108,7 +1108,9 @@ export function Tone3000Catalog({
             ) : null}
             {!browsing && listLoading ? <ToneListSkeleton /> : null}
             {!browsing && !listLoading && !notice && rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{EMPTY_LIST}</p>
+              <div className="flex min-h-80 flex-1 items-center justify-center rounded-md border border-foreground/15 bg-muted/20 px-6">
+                <p className="text-center text-sm text-muted-foreground">{EMPTY_LIST}</p>
+              </div>
             ) : null}
             {!browsing && !listLoading && rows.length > 0 ? (
               <div className="min-h-0 flex-1 divide-y divide-foreground/10 overflow-y-auto">
@@ -1139,7 +1141,7 @@ export function Tone3000Catalog({
               </div>
             ) : null}
             {!browsing && listIsPaged(listKind) && !listLoading && totalPages > 1 ? (
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -1148,10 +1150,12 @@ export function Tone3000Catalog({
                   disabled={page <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                 >
+                  <ChevronLeft aria-hidden />
                   Previous
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  {`Page ${String(page)} of ${String(totalPages)}`}
+                  Page <span className="font-bold text-foreground">{String(page)}</span>
+                  {` of ${String(totalPages)}`}
                 </span>
                 <Button
                   type="button"
@@ -1162,6 +1166,7 @@ export function Tone3000Catalog({
                   onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 >
                   Next
+                  <ChevronRight aria-hidden />
                 </Button>
               </div>
             ) : null}
