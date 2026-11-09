@@ -1,13 +1,14 @@
 {
   "name": "gpstudio",
   "private": true,
-  "version": "1.0.2",
-  "license": "MIT",
+  "version": "2.0.1",
+  "license": "GPL-3.0-only",
   "author": "Patricio Correnti",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:wasm": "clang --target=wasm32 -O3 -msimd128 -ffp-contract=off -nostdlib -Wl,--no-entry -Wl,--export=htkpa_biquad -Wl,--export=htkpa_shape -Wl,--export=htkpa_convolve -Wl,--export=__heap_base -Wl,--import-memory -o src/snaptone/htkpakernel.wasm src/snaptone/htkpakernel.c",
     "preview": "vite preview",
     "tauri": "tauri",
     "release": "node scripts/release.mjs"

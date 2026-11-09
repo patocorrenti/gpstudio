@@ -1204,8 +1204,8 @@ function assertPresetDumpFixtures(): void {
   writeNibbleBytes(tweedy, GP50_VALUES_AT.ns, float32Le(40));
   const withUserNs = parsePresetDump(tweedy, GP50_LAYOUT, "gp50");
   const userNs = withUserNs?.find((slot) => slot.id === "ns");
-  if (userNs?.modelId !== "ns-user-03" || userNs.values?.[0] !== 40) {
-    throw new Error("GP-50 user SnapTone dump fixture did not fill NS SnapTone 03 Gain 40");
+  if (userNs?.modelId !== "ns-user-58" || userNs.values?.[0] !== 40) {
+    throw new Error("GP-50 user SnapTone dump fixture did not fill NS SnapTone 58 Gain 40");
   }
 
   const unknown = new Uint8Array(tweedy);
@@ -1276,8 +1276,8 @@ function assertPresetDumpFixtures(): void {
   writeNibbleBytes(liveNs, 21, Uint8Array.from([0x3a, 0x00, 0x00, 0x0f]));
   const liveUserNs = decodeLiveSlotModel(liveNs);
   const resolvedNs = liveUserNs ? modelByWire("ns", liveUserNs.wire) : undefined;
-  if (liveUserNs?.kind !== "ns" || resolvedNs?.id !== "ns-user-03") {
-    throw new Error("Live NS user SnapTone notify must decode SnapTone 03");
+  if (liveUserNs?.kind !== "ns" || resolvedNs?.id !== "ns-user-58") {
+    throw new Error("Live NS user SnapTone notify must decode SnapTone 58");
   }
 
   const liveVol50 = Uint8Array.from(

@@ -3,7 +3,7 @@ import { cn } from "cn"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
-import { XIcon } from "lucide-react"
+import { ChevronLeftIcon, XIcon } from "lucide-react"
 
 function Dialog({
   ...props
@@ -49,10 +49,13 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeAction = "close",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  closeAction?: "close" | "back"
 }) {
+  const isBack = closeAction === "back"
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -69,12 +72,11 @@ function DialogContent({
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-2 right-2"
-              size="icon-sm"
+              className="absolute top-2 right-2 hover:bg-muted dark:hover:bg-white/10"
+              size="icon"
             >
-              <XIcon
-              />
-              <span className="sr-only">Close</span>
+              {isBack ? <ChevronLeftIcon /> : <XIcon />}
+              <span className="sr-only">{isBack ? "Back" : "Close"}</span>
             </Button>
           </DialogPrimitive.Close>
         )}
@@ -87,7 +89,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex flex-col gap-3 pb-3", className)}
       {...props}
     />
   )

@@ -11,7 +11,6 @@ import {
   subscribePwaInstall,
   type PwaInstallAvailability,
 } from "@/app/pwa-install";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { ConnectionStatus } from "@/features/connect/ConnectionStatus";
@@ -19,6 +18,7 @@ import { ConnectDialogProvider } from "@/features/connect/ConnectDialogProvider"
 import { GlobalSettingsControl } from "@/features/connect/GlobalSettingsModal";
 import { PedalFootControls } from "@/features/connect/PedalFootControls";
 import { IosWebNotice } from "@/features/controller/IosWebNotice";
+import { SnapTonesControl } from "@/features/controller/SnapTonesControl";
 import MainMenu from "@/components/main-menu";
 
 function FooterSupportCta() {
@@ -92,8 +92,8 @@ export function AppShell() {
     <ConnectDialogProvider>
       <Toaster />
       <div className="flex min-h-svh flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b px-6 py-3 md:grid md:grid-cols-[1fr_auto_1fr] md:gap-4">
-        <Link to="/" className="mr-auto w-fit md:mr-0" aria-label="GP Studio">
+      <header className="flex items-center gap-2 border-b px-6 py-3">
+        <Link to="/" className="mr-auto w-fit" aria-label="GP Studio">
           <img
             src={logoLight}
             alt="GP Studio"
@@ -105,17 +105,13 @@ export function AppShell() {
             className="hidden h-3.5 w-auto dark:block"
           />
         </Link>
-        <div className="flex items-center gap-2 pr-2 md:pr-0">
+        <div className="flex items-center gap-2 pr-2">
           <GlobalSettingsControl />
-          <ConnectionStatus />
           <PedalFootControls />
+          <SnapTonesControl />
+          <ConnectionStatus />
         </div>
-        <div className="flex items-center gap-2 md:justify-end md:gap-3">
-          <MainMenu />
-          <div className="hidden md:block">
-            <ThemeToggle />
-          </div>
-        </div>
+        <MainMenu />
       </header>
       <div className="relative flex min-h-0 flex-1 flex-col">
         <main className="flex min-h-0 flex-1 flex-col bg-linear-to-t from-muted/80 to-transparent p-6 dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent">
@@ -126,7 +122,7 @@ export function AppShell() {
       <footer className="flex items-center gap-4 border-t bg-background pt-2 pr-6 pb-2.5 pl-6 text-[12px] leading-none text-muted-foreground/70">
         <p className="min-w-0 flex-1 text-left">
           <span className="font-bold">GP Studio</span>
-          {' '}v1.0.2{' · '}
+          {' '}v2.0.1{' · '}
           <Link
             to="/about"
             className="text-foreground/60 transition-colors hover:text-foreground"

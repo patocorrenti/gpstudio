@@ -44,15 +44,15 @@ export function ConnectedPanel({
     <>
       <DialogHeader>
         <DialogTitle>Connected</DialogTitle>
-        <DialogDescription className="flex items-center gap-1.5">
-          {linkMode === "bluetooth" ? (
-            <Bluetooth className="size-3.5" />
-          ) : (
-            <Usb className="size-3.5" />
-          )}
-          {linkModeLabel(linkMode)} · {connectedDetail(endpointLabel, model)}
-        </DialogDescription>
       </DialogHeader>
+      <DialogDescription className="flex items-center gap-1.5">
+        {linkMode === "bluetooth" ? (
+          <Bluetooth className="size-3.5" />
+        ) : (
+          <Usb className="size-3.5" />
+        )}
+        {linkModeLabel(linkMode)} · {connectedDetail(endpointLabel, model)}
+      </DialogDescription>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <DialogFooter>
         <Button

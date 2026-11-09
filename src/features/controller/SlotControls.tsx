@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { toast } from "sonner";
 import abCompareIcon from "@/assets/img/icon-ab-compare.png";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -25,8 +31,9 @@ import {
   type FxControl,
 } from "@/device/catalog";
 import { userIrDisplayName } from "@/device/ir-names";
-import { userNsDisplayName } from "@/device/nam-names";
+import { userSnapDisplayName } from "@/device/nam-names";
 import type { DeviceModel } from "@/device/models";
+import { snapSlotHoldsCapture } from "@/device/snaptone-table";
 import {
   EFFECT_IDS,
   chainSlotBypassed,
@@ -40,6 +47,14 @@ import {
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { ModelSelect } from "@/features/controller/ModelSelect";
+import {
+  requestSnapToneLoad,
+  SNAP_USB_REQUIRED,
+} from "@/features/controller/snap-tones-bridge";
+import { getTone3000Account } from "@/features/tone3000/account";
+import { publishableKey } from "@/features/tone3000/oauth";
+import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
+import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 import { cn } from "@/lib/utils";
 
 const EXPANDED_PANELS_KEY = "gpstudio.slot-controls.expanded";
@@ -246,6 +261,7 @@ export function SlotControlPanel({
   const [expanded, setExpanded] = useState(
     () => startExpanded || readExpandedPanels().has(slot.id),
   );
+  const [loadMenuOpen, setLoadMenuOpen] = useState(false);
   const collapsed = !expanded;
 
   useEffect(() => {
@@ -264,21 +280,59 @@ export function SlotControlPanel({
     return null;
   }
   const userIrNames = snapshot.status === "connected" ? snapshot.userIrNames : undefined;
-  const userNsNames = snapshot.status === "connected" ? snapshot.userNsNames : undefined;
+  const userSnapSlots = snapshot.status === "connected" ? snapshot.userSnapSlots : undefined;
   const options = modelsForKind(slot.id, pedal).map((option) => ({
     ...option,
     label:
       option.userNsSlot !== undefined
-        ? userNsDisplayName(option, userNsNames)
+        ? userSnapDisplayName(option, userSnapSlots)
         : userIrDisplayName(option, userIrNames),
   }));
   const kindLabel = chainSlotLabel(slot.id);
   const shownLabel = options.find((option) => option.id === model.id)?.label ?? model.label;
   const marked = highlighted || current;
+  const userNsSlot = model.userNsSlot;
+  const emptyUserSnap =
+    slot.id === "ns" &&
+    userNsSlot !== undefined &&
+    userNsSlot >= 50 &&
+    !snapSlotHoldsCapture(userSnapSlots?.[userNsSlot - 50]);
+  const acceptsSnapUpload = snapshot.status === "connected" && snapshot.snapFileLink;
+  const offerTone3000 = isTone3000ControlVisible({
+    connected: snapshot.status === "connected",
+    usb: snapshot.status === "connected" && snapshot.linkMode === "usb",
+    publishableKey: publishableKey(),
+    tauri: isNativeDesktop(),
+  });
 
   function openAb() {
     onOpenAb?.(slot.id);
   }
+
+  function loadFromComputer() {
+    setLoadMenuOpen(false);
+    if (userNsSlot === undefined) {
+      return;
+    }
+    requestSnapToneLoad(userNsSlot, "computer");
+  }
+
+  function loadFromTone3000() {
+    setLoadMenuOpen(false);
+    if (userNsSlot === undefined) {
+      return;
+    }
+    if (getTone3000Account().status !== "signed-in") {
+      const popup = openTone3000Popup();
+      if (!popup) {
+        toast("Allow popups for GP Studio and try again.");
+        return;
+      }
+      holdTone3000Popup(popup);
+    }
+    requestSnapToneLoad(userNsSlot, "tone3000");
+  }
+
 
   return (
     <section
@@ -399,20 +453,73 @@ export function SlotControlPanel({
       </div>
       <div
         className={cn(
-          "flex-col gap-3",
-          collapsed ? "hidden md:flex" : "flex",
+          "relative",
+          collapsed ? "hidden md:block" : "block",
         )}
       >
-        {controlsForPedal(model, pedal).map((control) => (
-          <SlotControl
-            key={control.index}
-            kind={slot.id}
-            control={control}
-            value={slot.values[control.index] ?? control.default}
-            disabled={disabled}
-            onControlChange={onControlChange}
-          />
-        ))}
+        {emptyUserSnap ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-1">
+            <Popover
+              open={loadMenuOpen}
+              onOpenChange={(next) => {
+                if (next && !acceptsSnapUpload) {
+                  toast(SNAP_USB_REQUIRED);
+                  return;
+                }
+                setLoadMenuOpen(next);
+              }}
+            >
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-foreground/15 bg-background/95 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-default disabled:opacity-50"
+                >
+                  Load a SnapTone
+                  <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="center" className="w-44 gap-0.5 p-1">
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">Browse in</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                  onClick={loadFromComputer}
+                >
+                  My Computer
+                </Button>
+                {offerTone3000 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                    onClick={loadFromTone3000}
+                  >
+                    TONE3000
+                  </Button>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : null}
+        <div
+          className={cn(
+            "flex flex-col gap-3",
+            emptyUserSnap && "pointer-events-none opacity-25",
+          )}
+        >
+          {controlsForPedal(model, pedal).map((control) => (
+            <SlotControl
+              key={control.index}
+              kind={slot.id}
+              control={control}
+              value={slot.values[control.index] ?? control.default}
+              disabled={disabled || emptyUserSnap}
+              onControlChange={onControlChange}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );

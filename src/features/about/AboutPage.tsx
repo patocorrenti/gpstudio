@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Bug, Download, Heart, Mail, RefreshCw } from "lucide-react";
+import { ArrowLeft, Bug, Download, Heart, Mail, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   getPwaInstallAvailability,
   promptPwaInstall,
@@ -25,6 +26,10 @@ const actionLabelClassName =
 
 const CHANGELOG_URL =
   "https://github.com/patocorrenti/gpstudio/blob/main/CHANGELOG.md";
+
+const REPO_URL = "https://github.com/patocorrenti/gpstudio";
+const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`;
+const CREDITS_URL = `${REPO_URL}#credits`;
 
 // Show again once the Edge-hosted PWA is listed in the Microsoft Store.
 const SHOW_MICROSOFT_STORE_BADGE = false;
@@ -114,6 +119,15 @@ export function AboutPage() {
     <section className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-4">
         <div className="space-y-2">
+          <div className="mb-4 flex justify-end">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="size-4 shrink-0" aria-hidden />
+              Back to Studio
+            </Link>
+          </div>
           <h1 className="text-xl font-semibold tracking-tight">
             About GP Studio
           </h1>
@@ -124,7 +138,7 @@ export function AboutPage() {
               rel="noopener noreferrer"
               className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
             >
-              Version 1.0.2
+              Version 2.0.1
             </a>{" "}
             · Free controller for the Valeton GP-5/50 multi-effects.
           </p>
@@ -320,6 +334,37 @@ export function AboutPage() {
           I hope you enjoy using it as much as I enjoyed building it.
         </p>
       </div>
+
+      <p className="border-t border-border pt-6 text-[11px] leading-snug text-muted-foreground/60">
+        © 2026 Patricio Correnti. Licensed under{" "}
+        <a
+          href={LICENSE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          GPL-3.0
+        </a>
+        , with no warranty.{" "}
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          Source
+        </a>{" "}
+        and{" "}
+        <a
+          href={CREDITS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          credits
+        </a>{" "}
+        on GitHub.
+      </p>
     </section>
   );
 }

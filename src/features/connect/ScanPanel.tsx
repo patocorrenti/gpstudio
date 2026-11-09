@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import {
   ArrowLeftRight,
   ArrowRight,
+  AudioLines,
   Bluetooth,
   RefreshCw,
   TriangleAlert,
@@ -97,6 +98,15 @@ export function ScanPanel({
           <ModeNotes
             notes={[
               {
+                icon: AudioLines,
+                text: (
+                  <span className="text-foreground">
+                    <span className="font-bold">SnapTones</span>
+                    {" "}—{" "}Your own captures or a huge online catalog.
+                  </span>
+                ),
+              },
+              {
                 icon: Zap,
                 text: (
                   <span className="text-foreground">
@@ -152,6 +162,23 @@ export function ScanPanel({
                     <span className="text-foreground">
                       <span className="font-bold">Fully interactive</span>
                       {" "}—{" "}Pedal and computer talk to each other.
+                    </span>
+                  ),
+                },
+                {
+                  icon: Usb,
+                  text: (
+                    <span>
+                      SnapTones require{" "}
+                      <button
+                        type="button"
+                        className="cursor-pointer text-foreground/75 underline underline-offset-2 transition-colors hover:text-foreground"
+                        onClick={() => {
+                          onLinkTabChange("usb");
+                        }}
+                      >
+                        USB
+                      </button>
                     </span>
                   ),
                 },

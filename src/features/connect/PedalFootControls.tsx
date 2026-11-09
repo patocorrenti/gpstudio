@@ -50,7 +50,7 @@ export function PedalFootControls() {
   }
 
   const busy =
-    snapshot.sync !== "ready" || snapshot.chainSync === "syncing";
+    snapshot.sync !== "ready" || snapshot.chainSync === "syncing" || snapshot.snapFileSend;
   const presses = switchButtons(snapshot.model);
   const tunerOn = snapshot.tunerOn;
 
