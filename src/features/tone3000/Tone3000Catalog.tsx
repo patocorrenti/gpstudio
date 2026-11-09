@@ -1185,7 +1185,7 @@ export function Tone3000Catalog({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto pr-3">
-              <div className="flex items-start gap-5">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
                 {tone.imageUrl ? (
                   <img
                     src={tone.imageUrl}
