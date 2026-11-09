@@ -47,7 +47,10 @@ import {
 import { useDeviceSession, useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
 import { ChainSlotIcon } from "@/features/controller/ChainSlotIcon";
 import { ModelSelect } from "@/features/controller/ModelSelect";
-import { requestSnapToneLoad } from "@/features/controller/snap-tones-bridge";
+import {
+  requestSnapToneLoad,
+  SNAP_USB_REQUIRED,
+} from "@/features/controller/snap-tones-bridge";
 import { getTone3000Account } from "@/features/tone3000/account";
 import { publishableKey } from "@/features/tone3000/oauth";
 import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
@@ -456,11 +459,20 @@ export function SlotControlPanel({
       >
         {emptyUserSnap ? (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-1">
-            <Popover open={loadMenuOpen} onOpenChange={setLoadMenuOpen}>
+            <Popover
+              open={loadMenuOpen}
+              onOpenChange={(next) => {
+                if (next && !acceptsSnapUpload) {
+                  toast(SNAP_USB_REQUIRED);
+                  return;
+                }
+                setLoadMenuOpen(next);
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  disabled={disabled || !acceptsSnapUpload}
+                  disabled={disabled}
                   className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-foreground/15 bg-background/95 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-default disabled:opacity-50"
                 >
                   Load a SnapTone
@@ -473,7 +485,6 @@ export function SlotControlPanel({
                   type="button"
                   variant="ghost"
                   className="h-8 w-full justify-start gap-2 px-2 font-normal"
-                  disabled={!acceptsSnapUpload}
                   onClick={loadFromComputer}
                 >
                   My Computer
@@ -483,7 +494,6 @@ export function SlotControlPanel({
                     type="button"
                     variant="ghost"
                     className="h-8 w-full justify-start gap-2 px-2 font-normal"
-                    disabled={!acceptsSnapUpload}
                     onClick={loadFromTone3000}
                   >
                     TONE3000

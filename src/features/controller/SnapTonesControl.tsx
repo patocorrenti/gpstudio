@@ -1,5 +1,6 @@
 import { AudioLines } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -8,22 +9,27 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSessionSnapshot } from "@/features/connect/DeviceSessionProvider";
-import { requestOpenSnapTones } from "@/features/controller/snap-tones-bridge";
+import {
+  requestOpenSnapTones,
+  SNAP_USB_REQUIRED,
+} from "@/features/controller/snap-tones-bridge";
 
 const headerChipClass =
   "size-8 gap-0 px-0 text-xs md:h-7 md:w-auto md:gap-2 md:px-2 md:text-[0.72rem]";
 
-/** Header SnapTones control when USB is connected. */
+/** Header SnapTones control. Bluetooth can only explain that management requires USB. */
 export function SnapTonesControl() {
   const navigate = useNavigate();
   const snapshot = useSessionSnapshot();
 
-  if (snapshot.status !== "connected" || snapshot.linkMode !== "usb") {
+  if (snapshot.status !== "connected") {
     return null;
   }
 
+  const usb = snapshot.linkMode === "usb";
   const busy =
-    snapshot.sync !== "ready" || snapshot.chainSync === "syncing" || snapshot.snapFileSend;
+    usb &&
+    (snapshot.sync !== "ready" || snapshot.chainSync === "syncing" || snapshot.snapFileSend);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -37,6 +43,10 @@ export function SnapTonesControl() {
             className={headerChipClass}
             aria-label="SnapTones"
             onClick={() => {
+              if (!usb) {
+                toast(SNAP_USB_REQUIRED);
+                return;
+              }
               navigate("/");
               requestOpenSnapTones();
             }}
