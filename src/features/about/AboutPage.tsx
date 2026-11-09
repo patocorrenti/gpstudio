@@ -138,7 +138,7 @@ export function AboutPage() {
               rel="noopener noreferrer"
               className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
             >
-              Version 2.0.1
+              Version 2.0.2
             </a>{" "}
             · Free controller for the Valeton GP-5/50 multi-effects.
           </p>
@@ -305,7 +305,8 @@ export function AboutPage() {
             Works on Windows, Mac and Linux (Chrome or Edge) and Android (Chrome,
             Bluetooth only).
             <br />
-            iPhone and iPad can&apos;t connect to the pedal.
+            On iPhone or iPad, try a browser with Bluetooth, such as Bluefy or a
+            similar one.
           </p>
         </div>
       ) : null}
