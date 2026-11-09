@@ -190,22 +190,32 @@ The About page SHALL include an English Install section for the installed web ap
 
 ### Requirement: iPhone and iPad web home shows a connection notice
 
-When the web app is opened on an iPhone or iPad, the home screen SHALL show an English notice over the home content. The notice MUST state that connecting from iPhone or iPad is not supported for now, briefly explain that USB and Bluetooth are blocked in every browser on those devices including Chrome, and link to the same subscribe-for-updates form as About so the user can stay informed about the project. The subscribe line MUST be visually separate from the explanation. The notice MUST cover the home content so that content cannot be used while it is shown. The notice MUST NOT appear on About, Log, Editor, or Library, and MUST NOT appear in a desktop browser or in the desktop shell.
+When the web app is opened on an iPhone or iPad in a browser that does not expose Web Bluetooth, the home screen SHALL show an English banner. The banner MUST state that this browser can't reach the pedal, and that Bluetooth on iPhone or iPad needs a browser that supports it, such as Bluefy. The banner MUST leave the home content usable. The banner MUST offer a control that dismisses it for the rest of that visit; a later visit MUST show the banner again. The banner MUST NOT appear when that browser exposes Web Bluetooth. The banner MUST NOT appear on About, Log, Editor, or Library, and MUST NOT appear in a desktop browser or in the desktop shell. iPhone and iPad remain unaffirmed platforms in About.
 
-#### Scenario: iPhone or iPad home
-- **WHEN** a user opens the home screen in a browser on an iPhone or iPad
-- **THEN** a notice covers the home content
-- **AND** the notice states that connecting from iPhone or iPad is not supported for now
-- **AND** the notice explains that USB and Bluetooth are blocked in every browser, including Chrome
-- **AND** the notice links to the subscribe-for-updates form to stay informed about the project
+#### Scenario: iPhone or iPad home without Web Bluetooth
+- **WHEN** a user opens the home screen in a browser on an iPhone or iPad that does not expose Web Bluetooth
+- **THEN** a banner is shown and the home content remains usable
+- **AND** the banner states that this browser can't reach the pedal
+- **AND** the banner states that Bluetooth on iPhone or iPad needs a browser that supports it, such as Bluefy
+
+#### Scenario: Dismiss hides the banner for the visit
+- **WHEN** that user dismisses the banner
+- **THEN** the banner is no longer shown
+- **AND** it stays hidden for the rest of that visit, including after leaving the home screen and returning
+- **AND** a later visit shows the banner again
+
+#### Scenario: Web Bluetooth browser has no banner
+- **WHEN** a user opens the home screen on an iPhone or iPad in a browser that exposes Web Bluetooth
+- **THEN** the banner is not shown
+- **AND** the home content is usable
 
 #### Scenario: Other sections stay clear
 - **WHEN** that user opens About, Log, Editor, or Library
-- **THEN** the notice is not shown
+- **THEN** the banner is not shown
 
 #### Scenario: Desktop home has no notice
 - **WHEN** a user opens the home screen in a desktop browser or the desktop shell
-- **THEN** the notice is not shown
+- **THEN** the banner is not shown
 
 ### Requirement: Shell hosts a global toast region
 

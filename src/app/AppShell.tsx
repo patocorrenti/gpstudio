@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import logoDark from "@/assets/img/gp-studio-logo-dark.png";
 import logoLight from "@/assets/img/gp-studio-logo-light.png";
-import { isIosWeb } from "@/app/ios-web";
+import { hasWebBluetooth, isIosWeb } from "@/app/ios-web";
 import {
   getPwaInstallAvailability,
   promptPwaInstall,
@@ -75,7 +75,9 @@ function FooterInstallCta() {
 
 export function AppShell() {
   const { pathname } = useLocation();
-  const showIosNotice = pathname === "/" && isIosWeb();
+  const [iosNoticeDismissed, setIosNoticeDismissed] = useState(false);
+  const showIosNotice =
+    pathname === "/" && isIosWeb() && !hasWebBluetooth() && !iosNoticeDismissed;
   const [installAvailability, setInstallAvailability] =
     useState<PwaInstallAvailability>(() => getPwaInstallAvailability());
 
@@ -114,10 +116,12 @@ export function AppShell() {
         <MainMenu />
       </header>
       <div className="relative flex min-h-0 flex-1 flex-col">
+        {showIosNotice ? (
+          <IosWebNotice onDismiss={() => setIosNoticeDismissed(true)} />
+        ) : null}
         <main className="flex min-h-0 flex-1 flex-col bg-linear-to-t from-muted/80 to-transparent p-6 dark:from-[oklch(0.11_0.055_255)] dark:via-[oklch(0.15_0.05_255)/80] dark:to-transparent">
           <Outlet />
         </main>
-        {showIosNotice ? <IosWebNotice /> : null}
       </div>
       <footer className="flex items-center gap-4 border-t bg-background pt-2 pr-6 pb-2.5 pl-6 text-[12px] leading-none text-muted-foreground/70">
         <p className="min-w-0 flex-1 text-left">
