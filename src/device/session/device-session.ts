@@ -158,6 +158,15 @@ const PATCH_BPM_MAX = 260;
 /** Debug stomp-press variants: gap between back-to-back CC writes. */
 const STOMP_DEBUG_GAP_MS = 30;
 
+/** DEBUG (GP-5 Bluetooth CTL investigation): remove with the press variants. */
+function debugStompLog(step: string, detail: Record<string, unknown>): void {
+  console.info(`[GP Studio stomp debug] ${step}`, detail);
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(" ");
+}
+
 function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -730,10 +739,12 @@ export class DeviceSession {
     stompIndex: number,
     variant: StompPressVariant = "cc127",
   ): Promise<void> {
+    debugStompLog("called", { stompIndex, variant, status: this.snapshot.status });
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
     if (this.writesBlocked()) {
+      debugStompLog("writes blocked (sync in progress); nothing sent", {});
       return;
     }
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
@@ -745,6 +756,13 @@ export class DeviceSession {
       return;
     }
     const assigned = this.snapshot.stomps[stompIndex] ?? [];
+    debugStompLog("press", {
+      model: this.snapshot.model,
+      linkMode,
+      stompIndex,
+      variant,
+      assigned,
+    });
     const chain = this.snapshot.chain.map((slot) =>
       slot.id !== "exp" && assigned.includes(slot.id)
         ? { ...slot, enabled: !slot.enabled }
@@ -761,17 +779,24 @@ export class DeviceSession {
         if (n > 0) {
           await pause(STOMP_DEBUG_GAP_MS);
         }
-        await this.sendBytes(encodeModule(linkMode, slot.id, slot.enabled));
+        const bytes = encodeModule(linkMode, slot.id, slot.enabled);
+        debugStompLog("send module", { id: slot.id, enabled: slot.enabled, bytes: hex(bytes) });
+        await this.sendBytes(bytes);
+      }
+      if (flipped.length === 0) {
+        debugStompLog("nothing assigned to this footswitch; no bytes sent", {});
       }
       return;
     }
     if (variant === "cc0then127") {
       const reset = encodeStompPress(linkMode, this.snapshot.model, stompIndex, 0);
       if (reset) {
+        debugStompLog("send", { bytes: hex(reset) });
         await this.sendBytes(reset);
         await pause(STOMP_DEBUG_GAP_MS);
       }
     }
+    debugStompLog("send", { bytes: hex(packet) });
     await this.sendBytes(packet);
   }
 
