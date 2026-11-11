@@ -14,6 +14,7 @@ import {
   encodeSlotModelSysex,
   encodeStompAssignmentEffectSysex,
   encodeStompAssignmentSysex,
+  encodeStompMaskSetSysex,
 } from "@/device/chain-codec";
 import {
   encodePatchRecallSysex,
@@ -95,9 +96,10 @@ const STOMP_PRESS_VALUE = 127;
  * Debug: how a stomp press is sent, while GP-5 Bluetooth CTL is investigated.
  * `cc127` is the shipped path. `cc0then127` sends CC 0 then CC 127 on the same
  * controller. `emulated` sends no CTL CC: the session flips each assigned module
- * with its own CC 48–57 instead.
+ * with its own CC 48–57 instead. `set114e` sends the guessed stomp-mask SET
+ * (family `114e`, unconfirmed) with the assigned modules flipped.
  */
-export type StompPressVariant = "cc127" | "cc0then127" | "emulated";
+export type StompPressVariant = "cc127" | "cc0then127" | "emulated" | "set114e";
 
 export function encodeStompPress(
   linkMode: LinkMode,
@@ -643,4 +645,12 @@ function assertTuner(): void {
   ) {
     throw new Error("Tuner must be CC 58 (0x3a) with 0x7F on and 0x00 off");
   }
+}
+/** DEBUG: guessed stomp-mask SET `114e` (see `encodeStompMaskSetSysex`). */
+export function encodeStompMaskSet(
+  linkMode: LinkMode,
+  enabled: readonly EffectId[],
+  tail?: readonly [number, number],
+): Uint8Array {
+  return encodeLinkMidi(linkMode, encodeStompMaskSetSysex(enabled, tail));
 }

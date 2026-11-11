@@ -21,6 +21,7 @@ import {
 import {
   ChainDecoder,
   emptyStomps,
+  liveStompMaskBody,
   type ChainDumpResult,
   type StompAssignment,
 } from "@/device/chain-codec";
@@ -143,6 +144,7 @@ import {
   encodeStompAssignment,
   encodeStompAssignmentEffect,
   encodeStompPress,
+  encodeStompMaskSet,
   type StompPressVariant,
   encodeTuner,
 } from "@/device/encode";
@@ -297,6 +299,8 @@ export class DeviceSession {
   private pendingPatchSource: "app" | "pedal" | null = null;
   /** Last loaded or stored working patch (chain, stomps, volume, GP-50 BPM) for the selected slot. */
   private baseline: WorkingBaseline | null = null;
+  /** DEBUG: trailing two bytes of the last pedal stomp notify (`0E`). */
+  private debugStompTail: [number, number] | null = null;
   /**
    * Download of an already edited patch keeps on-screen volume and BPM when the
    * refreshed dump arrives. Cleared once that dump is applied.
@@ -786,6 +790,16 @@ export class DeviceSession {
       if (flipped.length === 0) {
         debugStompLog("nothing assigned to this footswitch; no bytes sent", {});
       }
+      return;
+    }
+    if (variant === "set114e") {
+      const enabledIds = chain
+        .filter((slot) => slot.id !== "exp" && slot.enabled)
+        .map((slot) => slot.id as EffectId);
+      const tail = this.debugStompTail ?? [0, 0];
+      const bytes = encodeStompMaskSet(linkMode, enabledIds, tail);
+      debugStompLog("send 114e", { enabled: enabledIds, tail, bytes: hex(bytes) });
+      await this.sendBytes(bytes);
       return;
     }
     if (variant === "cc0then127") {
@@ -1327,6 +1341,15 @@ export class DeviceSession {
     for (const message of this.sysex.push(bytes)) {
       if (this.noteDeleteAck(message) || this.noteSnapFrame(message)) {
         continue;
+      }
+      const stompBody = liveStompMaskBody(message);
+      if (stompBody) {
+        // DEBUG (GP-5 Bluetooth CTL investigation): raw footswitch notify.
+        this.debugStompTail = [stompBody[2], stompBody[3]];
+        debugStompLog("pedal stomp notify (0E)", {
+          body: hex(Uint8Array.from(stompBody)),
+          raw: hex(message),
+        });
       }
       this.noteRecallAck(message);
       const liveVolume = applyLivePatchVolume(host, message);

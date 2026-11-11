@@ -824,6 +824,51 @@ export function decodeLiveStompMask(bytes: Uint8Array): LiveOnOffChange[] | null
 }
 
 /**
+ * DEBUG (GP-5 Bluetooth CTL investigation), unconfirmed on hardware.
+ * Raw packed body of a live stomp-mask notify (`12 4e`): mask low, mask high,
+ * and the two trailing bytes whose meaning is unknown. Null if not a `0E` notify.
+ */
+export function liveStompMaskBody(bytes: Uint8Array): number[] | null {
+  if (decodeLiveStompMask(bytes) === null) {
+    return null;
+  }
+  const midi = midiPayload(bytes);
+  return [nibble(midi, 13), nibble(midi, 15), nibble(midi, 17), nibble(midi, 19)];
+}
+
+/**
+ * DEBUG (GP-5 Bluetooth CTL investigation), unconfirmed on hardware.
+ * Guessed SET for the stomp-mask notify: every known notify `12 4x` has a SET
+ * `11 4x` with the same body (chain order 44, model 47, control 48, assignment
+ * 4d). This builds `01 00 06 11 4e` + mask low + mask high + two tail bytes.
+ * Mask bits follow `DUMP_MODULE_IDS` (bit0 NR … bit7 DLY, then RVB, NS).
+ */
+export function encodeStompMaskSetSysex(
+  enabled: readonly EffectId[],
+  tail: readonly [number, number] = [0, 0],
+): Uint8Array {
+  let mask = 0;
+  DUMP_MODULE_IDS.forEach((id, bit) => {
+    if (enabled.includes(id)) {
+      mask |= 1 << bit;
+    }
+  });
+  return framePackedSet(
+    Uint8Array.from([
+      0x01,
+      0x00,
+      0x06,
+      0x11,
+      0x4e,
+      mask & 0xff,
+      (mask >> 8) & 0xff,
+      tail[0] & 0xff,
+      tail[1] & 0xff,
+    ]),
+  );
+}
+
+/**
  * Every module/EXP on/off carried by one live or Stomp notify.
  * Command 09 / 02 are one slot; command 0E is the ten-module stomp mask.
  */
