@@ -31,36 +31,14 @@ const GP50_SWITCH = [
 
 /**
  * DEBUG (GP-5 Bluetooth CTL investigation): the shipped CC 69 = 127 is ignored
- * on GP-5 over Bluetooth. These variants are offered there only, so the
+ * on GP-5 over Bluetooth. There, each variant is its own press button, so the
  * operator can test which one the pedal accepts. Remove once settled.
  */
 const DEBUG_VARIANTS: { value: StompPressVariant; label: string }[] = [
-  { value: "cc127", label: "CC 69 = 127" },
-  { value: "cc0then127", label: "CC 69 = 0, then 127" },
-  { value: "emulated", label: "Emulated (CC 48–57)" },
+  { value: "cc127", label: "Footswitch: CC 69 = 127" },
+  { value: "cc0then127", label: "Footswitch: CC 69 = 0, 127" },
+  { value: "emulated", label: "Footswitch: emulated (CC 48–57)" },
 ];
-const DEBUG_VARIANT_KEY = "gpstudio.debug.gp5BtStompVariant";
-
-function readDebugVariant(): StompPressVariant {
-  try {
-    const stored = localStorage.getItem(DEBUG_VARIANT_KEY);
-    if (DEBUG_VARIANTS.some((variant) => variant.value === stored)) {
-      return stored as StompPressVariant;
-    }
-  } catch {
-    // Storage unavailable; use the default.
-  }
-  return "cc127";
-}
-
-function writeDebugVariant(variant: StompPressVariant): void {
-  try {
-    localStorage.setItem(DEBUG_VARIANT_KEY, variant);
-  } catch {
-    // Storage unavailable; the choice lasts for this page only.
-  }
-}
-
 function switchButtons(pedal: DeviceModel) {
   return pedal === "gp5" ? GP5_SWITCH : GP50_SWITCH;
 }
@@ -73,7 +51,6 @@ export function PedalFootControls() {
   const session = useDeviceSession();
   const snapshot = useSessionSnapshot();
   const [open, setOpen] = useState(false);
-  const [debugVariant, setDebugVariant] = useState<StompPressVariant>(readDebugVariant);
 
   if (snapshot.status !== "connected") {
     return null;
@@ -122,62 +99,68 @@ export function PedalFootControls() {
             </TooltipTrigger>
             <TooltipContent side="bottom">Press Footswitch</TooltipContent>
           </Tooltip>
-          <PopoverContent align="end" className="w-52 gap-0.5 p-1">
-            {presses.map((press) => (
-              <Button
-                key={press.index}
-                type="button"
-                variant="ghost"
-                disabled={busy}
-                className="h-8 w-full justify-start px-2 font-normal"
-                aria-label={press.aria}
-                onClick={() => {
-                  setOpen(false);
-                  navigate("/");
-                  void session.pressStomp(
-                    press.index,
-                    gp5Bluetooth ? debugVariant : "cc127",
-                  );
-                }}
-              >
-                {press.label}
-              </Button>
-            ))}
+          <PopoverContent align="end" className="w-60 gap-0.5 p-1">
             {gp5Bluetooth ? (
-              <div className="mt-1 border-t pt-1" role="radiogroup" aria-label="Debug press method">
-                <p className="px-2 py-1 text-xs text-muted-foreground">Debug: press method</p>
+              <>
+                <p className="px-2 py-1 text-xs text-muted-foreground">
+                  Debug: each button sends one press
+                </p>
                 {DEBUG_VARIANTS.map((variant) => (
                   <Button
                     key={variant.value}
                     type="button"
-                    role="radio"
-                    aria-checked={debugVariant === variant.value}
-                    variant={debugVariant === variant.value ? "secondary" : "ghost"}
-                    className="h-7 w-full justify-start px-2 text-xs font-normal"
+                    variant="ghost"
+                    className="h-8 w-full justify-start px-2 text-xs font-normal"
                     onClick={() => {
-                      setDebugVariant(variant.value);
-                      writeDebugVariant(variant.value);
+                      // Not disabled while busy: the session logs why it drops a press.
+                      console.info("[GP Studio stomp debug] click", {
+                        variant: variant.value,
+                        busy,
+                      });
+                      navigate("/");
+                      void session.pressStomp(0, variant.value).catch((error: unknown) => {
+                        console.info("[GP Studio stomp debug] error", error);
+                      });
                     }}
                   >
                     {variant.label}
                   </Button>
                 ))}
-              </div>
+              </>
             ) : (
-              <Button
-                type="button"
-                variant={tunerOn ? "secondary" : "ghost"}
-                disabled={busy}
-                className="h-8 w-full justify-start px-2 font-normal"
-                aria-label={tunerOn ? "Exit tuner" : "Enter tuner"}
-                aria-pressed={tunerOn}
-                onClick={() => {
-                  navigate("/");
-                  void session.setTuner(!tunerOn);
-                }}
-              >
-                Tuner
-              </Button>
+              <>
+                {presses.map((press) => (
+                  <Button
+                    key={press.index}
+                    type="button"
+                    variant="ghost"
+                    disabled={busy}
+                    className="h-8 w-full justify-start px-2 font-normal"
+                    aria-label={press.aria}
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/");
+                      void session.pressStomp(press.index);
+                    }}
+                  >
+                    {press.label}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant={tunerOn ? "secondary" : "ghost"}
+                  disabled={busy}
+                  className="h-8 w-full justify-start px-2 font-normal"
+                  aria-label={tunerOn ? "Exit tuner" : "Enter tuner"}
+                  aria-pressed={tunerOn}
+                  onClick={() => {
+                    navigate("/");
+                    void session.setTuner(!tunerOn);
+                  }}
+                >
+                  Tuner
+                </Button>
+              </>
             )}
           </PopoverContent>
         </Popover>
