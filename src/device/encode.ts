@@ -91,16 +91,25 @@ export function encodePatch(linkMode: LinkMode, patch: number): Uint8Array {
 /** One stomp press: GP-5 and GP-50 A are CC 69; GP-50 B is CC 70. Value 127. */
 const STOMP_PRESS_VALUE = 127;
 
+/**
+ * Debug: how a stomp press is sent, while GP-5 Bluetooth CTL is investigated.
+ * `cc127` is the shipped path. `cc0then127` sends CC 0 then CC 127 on the same
+ * controller. `emulated` sends no CTL CC: the session flips each assigned module
+ * with its own CC 48–57 instead.
+ */
+export type StompPressVariant = "cc127" | "cc0then127" | "emulated";
+
 export function encodeStompPress(
   linkMode: LinkMode,
   model: DeviceModel,
   stompIndex: number,
+  value: number = STOMP_PRESS_VALUE,
 ): Uint8Array | null {
   const controller = stompPressController(model, stompIndex);
   if (controller === null) {
     return null;
   }
-  return encodeLinkMidi(linkMode, midiCc(controller, STOMP_PRESS_VALUE));
+  return encodeLinkMidi(linkMode, midiCc(controller, value));
 }
 
 function stompPressController(model: DeviceModel, stompIndex: number): number | null {

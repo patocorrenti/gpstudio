@@ -143,6 +143,7 @@ import {
   encodeStompAssignment,
   encodeStompAssignmentEffect,
   encodeStompPress,
+  type StompPressVariant,
   encodeTuner,
 } from "@/device/encode";
 import type { LinkEndpoint } from "@/device/endpoint";
@@ -154,6 +155,12 @@ const INBOUND_LIMIT = 40;
 const PATCH_VOLUME_MAX = 100;
 const PATCH_BPM_MIN = 40;
 const PATCH_BPM_MAX = 260;
+/** Debug stomp-press variants: gap between back-to-back CC writes. */
+const STOMP_DEBUG_GAP_MS = 30;
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type SessionSync = "syncing" | "ready";
 export type ChainSync = "idle" | "syncing";
@@ -719,7 +726,10 @@ export class DeviceSession {
     await this.sendBytes(encodeModule(this.snapshot.linkMode, id, enabled));
   }
 
-  async pressStomp(stompIndex: number): Promise<void> {
+  async pressStomp(
+    stompIndex: number,
+    variant: StompPressVariant = "cc127",
+  ): Promise<void> {
     if (this.snapshot.status !== "connected") {
       throw new Error("No pedal is connected.");
     }
@@ -729,11 +739,8 @@ export class DeviceSession {
     if (!capabilitiesForLink(this.snapshot.linkMode).commandToPedal) {
       throw new Error("Stomp press is not available on this link.");
     }
-    const packet = encodeStompPress(
-      this.snapshot.linkMode,
-      this.snapshot.model,
-      stompIndex,
-    );
+    const linkMode = this.snapshot.linkMode;
+    const packet = encodeStompPress(linkMode, this.snapshot.model, stompIndex);
     if (!packet) {
       return;
     }
@@ -744,6 +751,27 @@ export class DeviceSession {
         : slot,
     );
     this.setChain(chain);
+
+    if (variant === "emulated") {
+      // Debug: flip each assigned module with its own CC 48–57 (no CTL CC).
+      const flipped = chain.filter(
+        (slot) => slot.id !== "exp" && assigned.includes(slot.id),
+      );
+      for (const [n, slot] of flipped.entries()) {
+        if (n > 0) {
+          await pause(STOMP_DEBUG_GAP_MS);
+        }
+        await this.sendBytes(encodeModule(linkMode, slot.id, slot.enabled));
+      }
+      return;
+    }
+    if (variant === "cc0then127") {
+      const reset = encodeStompPress(linkMode, this.snapshot.model, stompIndex, 0);
+      if (reset) {
+        await this.sendBytes(reset);
+        await pause(STOMP_DEBUG_GAP_MS);
+      }
+    }
     await this.sendBytes(packet);
   }
 
