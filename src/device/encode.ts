@@ -97,9 +97,17 @@ const STOMP_PRESS_VALUE = 127;
  * `cc127` is the shipped path. `cc0then127` sends CC 0 then CC 127 on the same
  * controller. `emulated` sends no CTL CC: the session flips each assigned module
  * with its own CC 48–57 instead. `set114e` sends the guessed stomp-mask SET
- * (family `114e`, unconfirmed) with the assigned modules flipped.
+ * (family `114e`, unconfirmed) with the assigned modules flipped and the
+ * last notify's extra bits kept. `set114eCtl` also flips the CTL byte (tail
+ * byte 0); `set114eCtlBit` flips that byte and high-mask bit `0x08`.
  */
-export type StompPressVariant = "cc127" | "cc0then127" | "emulated" | "set114e";
+export type StompPressVariant =
+  | "cc127"
+  | "cc0then127"
+  | "emulated"
+  | "set114e"
+  | "set114eCtl"
+  | "set114eCtlBit";
 
 export function encodeStompPress(
   linkMode: LinkMode,
@@ -651,6 +659,7 @@ export function encodeStompMaskSet(
   linkMode: LinkMode,
   enabled: readonly EffectId[],
   tail?: readonly [number, number],
+  extraHigh?: number,
 ): Uint8Array {
-  return encodeLinkMidi(linkMode, encodeStompMaskSetSysex(enabled, tail));
+  return encodeLinkMidi(linkMode, encodeStompMaskSetSysex(enabled, tail, extraHigh));
 }

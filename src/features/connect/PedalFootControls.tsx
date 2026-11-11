@@ -39,6 +39,8 @@ const DEBUG_VARIANTS: { value: StompPressVariant; label: string }[] = [
   { value: "cc0then127", label: "Footswitch: CC 69 = 0, 127" },
   { value: "emulated", label: "Footswitch: emulated (CC 48–57)" },
   { value: "set114e", label: "Footswitch: SysEx 114e (guess)" },
+  { value: "set114eCtl", label: "114e + CTL byte" },
+  { value: "set114eCtlBit", label: "114e + CTL byte + bit 08" },
 ];
 function switchButtons(pedal: DeviceModel) {
   return pedal === "gp5" ? GP5_SWITCH : GP50_SWITCH;

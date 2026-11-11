@@ -842,12 +842,15 @@ export function liveStompMaskBody(bytes: Uint8Array): number[] | null {
  * `11 4x` with the same body (chain order 44, model 47, control 48, assignment
  * 4d). This builds `01 00 06 11 4e` + mask low + mask high + two tail bytes.
  * Mask bits follow `DUMP_MODULE_IDS` (bit0 NR … bit7 DLY, then RVB, NS).
+ * `extraHigh` carries the non-module high-byte bits (GP-5 capture: `0x08` set
+ * while CTL is red). GP-5 capture: tail byte 0 is `01` while CTL is red.
  */
 export function encodeStompMaskSetSysex(
   enabled: readonly EffectId[],
   tail: readonly [number, number] = [0, 0],
+  extraHigh = 0,
 ): Uint8Array {
-  let mask = 0;
+  let mask = (extraHigh & 0xfc) << 8;
   DUMP_MODULE_IDS.forEach((id, bit) => {
     if (enabled.includes(id)) {
       mask |= 1 << bit;

@@ -20,6 +20,7 @@ import {
 } from "@/device/chain";
 import {
   ChainDecoder,
+  DUMP_MODULE_IDS,
   emptyStomps,
   liveStompMaskBody,
   type ChainDumpResult,
@@ -299,8 +300,8 @@ export class DeviceSession {
   private pendingPatchSource: "app" | "pedal" | null = null;
   /** Last loaded or stored working patch (chain, stomps, volume, GP-50 BPM) for the selected slot. */
   private baseline: WorkingBaseline | null = null;
-  /** DEBUG: trailing two bytes of the last pedal stomp notify (`0E`). */
-  private debugStompTail: [number, number] | null = null;
+  /** DEBUG: packed body of the last pedal stomp notify (`0E`) or 114e sent. */
+  private debugStompBody: number[] | null = null;
   /**
    * Download of an already edited patch keeps on-screen volume and BPM when the
    * refreshed dump arrives. Cleared once that dump is applied.
@@ -792,13 +793,36 @@ export class DeviceSession {
       }
       return;
     }
-    if (variant === "set114e") {
+    if (variant === "set114e" || variant === "set114eCtl" || variant === "set114eCtlBit") {
       const enabledIds = chain
         .filter((slot) => slot.id !== "exp" && slot.enabled)
         .map((slot) => slot.id as EffectId);
-      const tail = this.debugStompTail ?? [0, 0];
-      const bytes = encodeStompMaskSet(linkMode, enabledIds, tail);
-      debugStompLog("send 114e", { enabled: enabledIds, tail, bytes: hex(bytes) });
+      const last = this.debugStompBody ?? [0, 0, 0, 0];
+      let extraHigh = last[1] & 0xfc;
+      let ctl = last[2];
+      if (variant !== "set114e") {
+        ctl = ctl ? 0 : 1;
+      }
+      if (variant === "set114eCtlBit") {
+        extraHigh = ctl ? extraHigh | 0x08 : extraHigh & ~0x08;
+      }
+      const tail: [number, number] = [ctl, last[3]];
+      const bytes = encodeStompMaskSet(linkMode, enabledIds, tail, extraHigh);
+      debugStompLog("send 114e", {
+        variant,
+        enabled: enabledIds,
+        ctl,
+        extraHigh: extraHigh.toString(16),
+        bytes: hex(bytes),
+      });
+      // Track what was sent in case the pedal does not answer with a 0E notify.
+      let mask = 0;
+      DUMP_MODULE_IDS.forEach((id, bit) => {
+        if (enabledIds.includes(id)) {
+          mask |= 1 << bit;
+        }
+      });
+      this.debugStompBody = [mask & 0xff, ((mask >> 8) & 0x03) | extraHigh, ctl, last[3]];
       await this.sendBytes(bytes);
       return;
     }
@@ -1345,7 +1369,7 @@ export class DeviceSession {
       const stompBody = liveStompMaskBody(message);
       if (stompBody) {
         // DEBUG (GP-5 Bluetooth CTL investigation): raw footswitch notify.
-        this.debugStompTail = [stompBody[2], stompBody[3]];
+        this.debugStompBody = stompBody;
         debugStompLog("pedal stomp notify (0E)", {
           body: hex(Uint8Array.from(stompBody)),
           raw: hex(message),
