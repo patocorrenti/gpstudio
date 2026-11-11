@@ -42,6 +42,7 @@ export function PedalFootControls() {
   const [open, setOpen] = useState(false);
 
   // GP-5 Bluetooth ignores both the stomp-press and tuner CCs.
+  // Tests and failed writes: docs/spike-gp5-bluetooth-ctl.md.
   if (
     snapshot.status !== "connected" ||
     (snapshot.model === "gp5" && snapshot.linkMode === "bluetooth")
