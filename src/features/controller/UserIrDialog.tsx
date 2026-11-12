@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { SearchIcon, Upload } from "lucide-react";
 import { toast } from "sonner";
 import tone3000Logo from "@/assets/img/tone3000-logo.png";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,14 @@ function typedName(value: string): string {
   return [...value].filter(isUserIrNameChar).join("").slice(0, USER_IR_NAME_MAX);
 }
 
+function matchesQuery(query: string, slot: number, label: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+  return label.toLowerCase().includes(needle) || pad(slot).includes(needle) || String(slot).includes(needle);
+}
+
 function describeSource(ir: UserIrFile): string {
   const khz = `${(ir.sourceRate / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} kHz`;
   const channels = ir.sourceChannels === 1 ? "mono" : `${ir.sourceChannels} ch (first channel used)`;
@@ -108,6 +116,7 @@ export function UserIrDialog({
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(USER_IR_FIRST);
   const toldRef = useRef(false);
+  const [query, setQuery] = useState("");
   const [toneSlot, setToneSlot] = useState<number | null>(null);
   const [uploadMenuSlot, setUploadMenuSlot] = useState<number | null>(null);
 
@@ -131,6 +140,7 @@ export function UserIrDialog({
     if (!open) {
       return;
     }
+    setQuery("");
     // The connect-time IR-name dump already fills the table on USB; read again in case it was missed.
     const now = session.getSnapshot();
     if (now.status === "connected" && now.snapFileLink && now.userIrSlots.some((entry) => entry.flag === null)) {
@@ -351,6 +361,7 @@ export function UserIrDialog({
           ) : null}
           {draft ? null : (
             <TooltipProvider delayDuration={300}>
+              <div className="flex flex-col gap-2">
               {offerTone3000 ? (
                 <div className="flex justify-end">
                   <Button
@@ -370,11 +381,32 @@ export function UserIrDialog({
                   </Button>
                 </div>
               ) : null}
-              <div className="max-h-[60vh] divide-y divide-foreground/10 overflow-y-auto">
+              <div className="relative">
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  placeholder="Search"
+                  aria-label="Search IRs"
+                  className="rounded-sm pl-8"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                  }}
+                />
+              </div>
+              <div className="max-h-[50vh] divide-y divide-foreground/10 overflow-y-auto">
+                {Array.from({ length: USER_IR_LAST - USER_IR_FIRST + 1 }, (_, index) => {
+                  const slot = USER_IR_FIRST + index;
+                  return matchesQuery(query, slot, slotLabel(slot, snapshot.userIrSlots[index], names[index] ?? null));
+                }).every((match) => !match) ? (
+                  <p className="px-1 py-3 text-sm text-muted-foreground">No matches.</p>
+                ) : null}
                 {Array.from({ length: USER_IR_LAST - USER_IR_FIRST + 1 }, (_, index) => {
                   const slot = USER_IR_FIRST + index;
                   const entry = snapshot.userIrSlots[index];
                   const name = slotName(slot, entry, names[index] ?? null);
+                  if (!matchesQuery(query, slot, name ?? "Empty")) {
+                    return null;
+                  }
                   return (
                     <div
                       key={slot}
@@ -467,6 +499,7 @@ export function UserIrDialog({
                     </div>
                   );
                 })}
+              </div>
               </div>
             </TooltipProvider>
           )}
