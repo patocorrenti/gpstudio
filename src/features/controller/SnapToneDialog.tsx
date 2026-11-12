@@ -474,7 +474,7 @@ export function SnapToneDialog({
       <DialogContent
         aria-describedby={undefined}
         showCloseButton={draft?.phase !== "sending" && deleteAsk?.phase !== "deleting" && renameAsk?.phase !== "renaming"}
-        className="max-h-[85vh] overflow-hidden sm:max-w-lg"
+        className="max-h-[85vh] grid-cols-1 overflow-hidden sm:max-w-lg"
       >
         <DialogHeader>
           <DialogTitle>SnapTones</DialogTitle>

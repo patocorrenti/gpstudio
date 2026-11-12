@@ -250,7 +250,7 @@ export function UserIrDialog({
         <DialogContent
           aria-describedby={undefined}
           showCloseButton={!sending}
-          className="max-h-[85vh] overflow-hidden sm:max-w-lg"
+          className="max-h-[85vh] grid-cols-1 overflow-hidden sm:max-w-lg"
         >
           <DialogHeader>
             <DialogTitle>IRs</DialogTitle>

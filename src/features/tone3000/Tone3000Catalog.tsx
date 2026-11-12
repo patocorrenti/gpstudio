@@ -997,7 +997,7 @@ export function Tone3000Catalog({
         className={
           wide
             ? "flex h-[min(85vh,52rem)] max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl"
-            : "max-h-[85vh] overflow-hidden sm:max-w-lg"
+            : "max-h-[85vh] grid-cols-1 overflow-hidden sm:max-w-lg"
         }
       >
         {showPartnership ? (
