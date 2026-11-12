@@ -1,4 +1,4 @@
-import { AudioLines } from "lucide-react";
+import { AudioLines, AudioWaveform } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,12 @@ import {
   requestOpenSnapTones,
   SNAP_USB_REQUIRED,
 } from "@/features/controller/snap-tones-bridge";
+import { IR_USB_REQUIRED, requestOpenUserIr } from "@/features/controller/user-ir-bridge";
 
 const headerChipClass =
   "size-8 gap-0 px-0 text-xs md:h-7 md:w-auto md:gap-2 md:px-2 md:text-[0.72rem]";
 
-/** Header SnapTones control. Bluetooth can only explain that management requires USB. */
+/** Header SnapTones and IR controls. Bluetooth can only explain that management requires USB. */
 export function SnapTonesControl() {
   const navigate = useNavigate();
   const snapshot = useSessionSnapshot();
@@ -33,6 +34,7 @@ export function SnapTonesControl() {
 
   return (
     <TooltipProvider delayDuration={0}>
+      <div className="flex items-center gap-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -57,6 +59,31 @@ export function SnapTonesControl() {
         </TooltipTrigger>
         <TooltipContent side="bottom">SnapTones</TooltipContent>
       </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            className={headerChipClass}
+            aria-label="IR"
+            onClick={() => {
+              if (!usb) {
+                toast(IR_USB_REQUIRED);
+                return;
+              }
+              navigate("/");
+              requestOpenUserIr();
+            }}
+          >
+            <AudioWaveform className="size-3.5 text-muted-foreground" aria-hidden />
+            <span className="hidden md:inline">IR</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">IR</TooltipContent>
+      </Tooltip>
+      </div>
     </TooltipProvider>
   );
 }

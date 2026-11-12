@@ -4,7 +4,7 @@ The SnapTone conversion in this folder contains work from the projects below. Ea
 
 ## VLTN Tone Studio
 
-- Source: https://github.com/grzmol/VLTN-Tone-Studio, commit `9591679ea3c41ec56938ff5af937af6c3ba2bdef`.
+- Source: https://github.com/grzmol/VLTN-Tone-Studio, commit `9591679ea3c41ec56938ff5af937af6c3ba2bdef` (SnapTone) and `1eb3facf38d9a9bf18783ad31bed3dfa0149184c` (`ir-wav.ts`).
 - License: GNU General Public License v3.0 only (GPL-3.0-only). The full text is in the repository's [`LICENSE`](../../LICENSE).
 - Copyright (c) 2026 VLTN Tone Studio contributors.
 - Used in: the files listed in [`README.md`](README.md). GP Studio modified them; each file header gives the date.

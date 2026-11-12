@@ -19,9 +19,10 @@ Third-party notices and licenses (VLTN, NeuralAmpModelerCore, r8brain-free-src, 
 | `signal.ts` | `app/src/shared/host/snaptone.ts` |
 | `file.ts` | `app/src/renderer/src/gp5/lib/snaptone.mjs` `cloneToSnapToneFile` |
 | `worker.ts`, `convert.ts` | `app/src/renderer/src/snaptone/worker.ts`, `convert.ts` (rewritten here: warm assets, parallel render, wasm clone) |
+| `ir-wav.ts` | `app/src/renderer/src/userir/convert.ts` at `1eb3facf38d9a9bf18783ad31bed3dfa0149184c` (GP-5 family only, resampler loaded on demand) |
 | `inspect.ts` | `app/src/shared/nam.ts` plus `LocalNamDialog` metadata name |
 
-The module exports `inspectNam` and `convertNamToSnapTone` only. It does not import the session, React, or a MIDI transport. GP-5 and GP-50 share one blob, so convert has no `device` option.
+The module exports `inspectNam`, `convertNamToSnapTone`, and `prepareUserIr` (WAV → 2048-byte User IR block) only. It does not import the session, React, or a MIDI transport. GP-5 and GP-50 share one blob, so convert has no `device` option.
 
 `nam_input_wav.wav` is Valeton's test signal (from a Valeton Suite install). It is not committed and not part of the build: `convert.ts` fetches it once per page at `/snaptone/nam_input_wav.wav`. Locally it sits in `public/snaptone/` (gitignored); on the server nginx serves one shared copy to staging and live. `fixtures/nam_core_a2.nam` is NeuralAmpModelerCore's A2 example (MIT). `scripts/snaptone-golden.ts` compares that fixture's 8840-byte clone to VLTN's `snaptone-a2.clo`. The current diff is recorded in `RESEARCH.md`.
 

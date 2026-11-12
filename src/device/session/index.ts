@@ -29,6 +29,9 @@ export {
   type SnapRenameResult,
   type SnapSlot,
   type SnapUploadResult,
+  type UserIrFile,
+  type UserIrSlot,
+  type UserIrUploadResult,
   type UploadPatchPreview,
   type UploadPatchResult,
 } from "./device-session";

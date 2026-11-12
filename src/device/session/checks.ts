@@ -17,6 +17,14 @@ import {
   encodeUserSnapRenameCommit,
   parseSnapSysex,
 } from "@/device/snaptone-table";
+import {
+  USER_IR_DATA_BYTES,
+  decodeUserIrTable,
+  encodeUserIrImportFrames,
+  encodeUserIrTableRequest,
+  sanitizeUserIrName,
+} from "@/device/user-ir-table";
+import { encodeTestWav, prepareUserIr } from "@/snaptone/ir-wav";
 import type { MidiTransport } from "@/midi/types";
 import type { EffectId } from "@/device/chain";
 import {
@@ -2076,6 +2084,282 @@ async function assertSnapToneUpload(): Promise<void> {
 }
 
 void assertSnapToneUpload().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+function userIrTable(slot: number | null, name: string): Uint8Array[] {
+  const flags = new Uint8Array(20).fill(1);
+  const names = new Uint8Array(20 * 16);
+  for (let index = 0; index < 20; index += 1) {
+    const label = new TextEncoder().encode(`User IR ${index + 1}`);
+    names.set(label, index * 16);
+  }
+  if (slot !== null) {
+    flags[slot - 1] = 0;
+    names.fill(0, (slot - 1) * 16, slot * 16);
+    names.set(new TextEncoder().encode(name).subarray(0, 16), (slot - 1) * 16);
+  }
+  const payload = new Uint8Array(2 + flags.length + names.length);
+  payload[0] = 0x12;
+  payload[1] = 0x20;
+  payload.set(flags, 2);
+  payload.set(names, 2 + flags.length);
+  return encodeSnapPayload(payload);
+}
+
+function isUserIrTableRequest(bytes: Uint8Array): boolean {
+  const frame = parseSnapSysex(bytes);
+  return Boolean(
+    frame?.crcOk && frame.total === 1 && frame.payload[0] === 0x12 && frame.payload[1] === 0x20,
+  );
+}
+
+function assertUserIrWires(): void {
+  if (sanitizeUserIrName("Greenback 412.wav") !== "Greenback " || sanitizeUserIrName("$$$") !== "X") {
+    throw new Error("User IR names keep Suite's printable set, cut to 10, and blank becomes X");
+  }
+  const data = new Uint8Array(USER_IR_DATA_BYTES);
+  for (const slot of [0, 21, 2.5]) {
+    let refused = false;
+    try {
+      encodeUserIrImportFrames(slot, "Cab", data);
+    } catch {
+      refused = true;
+    }
+    if (!refused) {
+      throw new Error(`User IR import must refuse slot ${slot}`);
+    }
+  }
+  const frames = encodeUserIrImportFrames(3, "Greenback", data);
+  if (frames.length !== 112) {
+    throw new Error("A User IR import must use 112 frames");
+  }
+  const first = parseSnapSysex(frames[0] ?? new Uint8Array());
+  const last = parseSnapSysex(frames[111] ?? new Uint8Array());
+  // fxId of User IR 03 is the CAB wire 02 00 10 0a.
+  if (
+    !first?.crcOk ||
+    first.total !== 112 ||
+    first.payload[0] !== 0x11 ||
+    first.payload[1] !== 0x21 ||
+    first.payload[6] !== 0x02 ||
+    first.payload[7] !== 0x00 ||
+    first.payload[8] !== 0x10 ||
+    first.payload[9] !== 0x0a ||
+    !last?.crcOk ||
+    last.payload.length !== 2122 - 111 * 19
+  ) {
+    throw new Error("User IR 03 import must be 11 21 with fxId 0x0A100002 in 19-byte frames");
+  }
+  const request = parseSnapSysex(encodeUserIrTableRequest());
+  if (
+    !request?.crcOk ||
+    request.payload[0] !== 0x12 ||
+    request.payload[1] !== 0x20 ||
+    !packetsEqual(encodeUserIrTableRequest(), encodeIrNames("usb"))
+  ) {
+    throw new Error("User IR table request must be 12 20, the same bytes as the USB IR-name ask");
+  }
+  const parts = userIrTable(3, "Greenback");
+  const merged = parts.flatMap((part) => [...(parseSnapSysex(part)?.payload ?? [])]);
+  const table = decodeUserIrTable(Uint8Array.from(merged));
+  if (
+    !table ||
+    table.length !== 20 ||
+    table[2]?.flag !== 0 ||
+    table[2]?.name !== "Greenback" ||
+    table[0]?.flag !== 1 ||
+    table[0]?.name !== "User IR 1"
+  ) {
+    throw new Error("User IR table must decode 20 flags and names");
+  }
+}
+
+assertUserIrWires();
+
+async function assertUserIrWav(): Promise<void> {
+  // 24-bit 44.1 kHz goes through untouched; longer than 512 samples is truncated.
+  const long = Array.from({ length: 600 }, (_, index) => (index === 0 ? 0x7fffff : index === 1 ? -0x800000 : index));
+  const direct = await prepareUserIr(encodeTestWav(long, 44_100, 24));
+  const view = new DataView(direct.data.buffer);
+  if (
+    direct.data.length !== 2048 ||
+    !direct.truncated ||
+    view.getInt32(0, true) !== 0x7fffff ||
+    view.getInt32(4, true) !== -0x800000 ||
+    view.getInt32(511 * 4, true) !== 511
+  ) {
+    throw new Error("A 24-bit 44.1 kHz IR must reach the pedal untouched and cut at 512 samples");
+  }
+  // 16-bit shorter IR: scaled to 24-bit, zero-padded.
+  const short = await prepareUserIr(encodeTestWav([0x4000, -0x4000], 44_100, 16));
+  const shortView = new DataView(short.data.buffer);
+  if (
+    short.truncated ||
+    shortView.getInt32(0, true) !== 0x400000 ||
+    shortView.getInt32(4, true) !== -0x400000 ||
+    shortView.getInt32(8, true) !== 0
+  ) {
+    throw new Error("A 16-bit IR must scale to 24-bit and pad with silence");
+  }
+  // 48 kHz goes through the resampler and keeps 512 samples.
+  const impulse = Array.from({ length: 1024 }, (_, index) => (index === 0 ? 0x7fffff : 0));
+  const resampled = await prepareUserIr(encodeTestWav(impulse, 48_000, 24));
+  if (resampled.data.length !== 2048 || resampled.sourceRate !== 48_000 || !resampled.truncated) {
+    throw new Error("A 48 kHz IR must resample to 512 samples at 44.1 kHz");
+  }
+  let rejected = false;
+  try {
+    await prepareUserIr(new TextEncoder().encode("not a wav file at all"));
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) {
+    throw new Error("A non-WAV file must be rejected");
+  }
+}
+
+void assertUserIrWav().catch((error) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertUserIrUpload(): Promise<void> {
+  const data = new Uint8Array(USER_IR_DATA_BYTES);
+  const bluetooth = scriptedBluetooth();
+  const bleSession = new DeviceSession(recordingUsb().transport, bluetooth.link);
+  try {
+    await connectBluetoothReady(bleSession, bluetooth, 0);
+    const sentBefore = bluetooth.sent.length;
+    const blocked = await bleSession.uploadUserIr(3, "Cab", data);
+    if (blocked.ok || blocked.reason !== "link" || bluetooth.sent.length !== sentBefore) {
+      throw new Error("Bluetooth must not send a User IR file");
+    }
+  } finally {
+    await bleSession.disconnect();
+  }
+
+  const sent: Uint8Array[] = [];
+  let handler: ((bytes: Uint8Array) => void) | null = null;
+  let open = false;
+  let stored: string | null = null;
+  const usb = {
+    sent,
+    push(bytes: Uint8Array) {
+      handler?.(bytes);
+    },
+    transport: {
+      discover: async () => [],
+      open: async () => {
+        open = true;
+      },
+      send: async (bytes: Uint8Array) => {
+        sent.push(Uint8Array.from(bytes));
+        const frame = parseSnapSysex(bytes);
+        if (!frame?.crcOk) {
+          return;
+        }
+        if (isUserIrTableRequest(bytes)) {
+          for (const part of userIrTable(stored === null ? null : 3, stored ?? "")) {
+            handler?.(part);
+          }
+          return;
+        }
+        if (frame.total > 1) {
+          if (frame.index === frame.total - 1) {
+            stored = "Greenback";
+          }
+          handler?.(snapAckFrame());
+        }
+      },
+      subscribe: (next: (bytes: Uint8Array) => void) => {
+        handler = next;
+        return () => {
+          if (handler === next) {
+            handler = null;
+          }
+        };
+      },
+      subscribeDisconnect: () => () => undefined,
+      isOpen: () => open,
+      close: async () => {
+        open = false;
+      },
+      sysexEnabled: () => true,
+    },
+  };
+  const session = new DeviceSession(usb.transport, stubBluetooth());
+  session.setSnapPaceForTests(0, 0, 40);
+  try {
+    const connecting = session.connect({ id: "usb-1", label: "GP-50", kind: "usb-midi" }, "gp50");
+    await untilReady("User IR fixture did not ask for names", () => usb.sent.length > 0);
+    await tick();
+    usb.push(usbNameList());
+    await connecting;
+    await untilReady("User IR fixture did not ask for current patch", () => usb.sent.length > 1);
+    await tick();
+    usb.push(currentPatchAt(0));
+    await untilReady("User IR fixture did not become ready", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.sync === "ready";
+    });
+    for (const packet of gp50UsbChainWithCab(Uint8Array.from([0x02, 0x00, 0x10, 0x0a]), 50)) {
+      usb.push(packet);
+    }
+    await untilReady("User IR fixture chain did not go idle", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.chainSync === "idle";
+    });
+    await untilReady("User IR fixture did not apply the connect-time IR table", () => {
+      const snapshot = session.getSnapshot();
+      return snapshot.status === "connected" && snapshot.userIrSlots[2]?.flag === 1;
+    });
+    const read = await session.refreshUserIrSlots();
+    if (!read || read[2]?.flag !== 1) {
+      throw new Error("Reading the User IR table must report slot 3 empty before the upload");
+    }
+    const before = usb.sent.length;
+    const patchBefore = session.getSnapshot();
+    const refused = await session.uploadUserIr(21, "Cab", data);
+    if (refused.ok || refused.reason !== "slot" || usb.sent.length !== before) {
+      throw new Error("User IR slot 21 must be refused before any byte");
+    }
+    const pending = session.uploadUserIr(3, "Greenback.wav", data);
+    const during = session.getSnapshot();
+    if (during.status !== "connected" || !during.snapFileSend || during.chainSync === "syncing") {
+      throw new Error("A User IR send must block writes without looking like a chain refresh");
+    }
+    if ((await session.savePatch()) !== "busy") {
+      throw new Error("Save during a User IR send must return busy");
+    }
+    const result = await pending;
+    if (!result.ok || result.name !== "Greenback") {
+      throw new Error("A finished User IR write must verify the stored name");
+    }
+    const after = session.getSnapshot();
+    const importFrames = usb.sent.slice(before).filter((bytes) => {
+      const frame = parseSnapSysex(bytes);
+      return Boolean(frame?.crcOk && frame.total > 1);
+    });
+    if (
+      after.status !== "connected" ||
+      after.snapFileSend ||
+      after.userIrSlots[2]?.flag !== 0 ||
+      after.userIrNames[2] !== "Greenback" ||
+      after.patch !== (patchBefore.status === "connected" ? patchBefore.patch : -1) ||
+      importFrames.length !== 112 ||
+      usb.sent.slice(before).filter(isUserIrTableRequest).length !== 1 ||
+      usb.sent.slice(before).some((bytes) => bytes[0] === 0xb0 && bytes[1] === 0x00)
+    ) {
+      throw new Error("A User IR write must send 112 frames, read the table once, and refresh the IR name");
+    }
+  } finally {
+    await session.disconnect();
+  }
+}
+
+void assertUserIrUpload().catch((error) => {
   console.error(error);
   throw error;
 });

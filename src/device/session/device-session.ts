@@ -42,10 +42,23 @@ import {
   SnapPayloadReassembler,
   USER_SNAP_FIRST,
   USER_SNAP_LAST,
+  type SnapFrame,
   type SnapSlot,
 } from "@/device/snaptone-table";
 import { inspectNam as inspectNamFile, type NamInspection } from "@/snaptone/inspect";
 import { convertNamToSnapTone as convertNamFile } from "@/snaptone/convert";
+import { prepareUserIr as prepareUserIrWav, type UserIrFile } from "@/snaptone/ir-wav";
+import {
+  decodeUserIrTable,
+  emptyUserIrSlots,
+  encodeUserIrImportFrames,
+  encodeUserIrTableRequest,
+  isUserIrSlot,
+  sanitizeUserIrName,
+  USER_IR_DATA_BYTES,
+  USER_IR_FIRST,
+  type UserIrSlot,
+} from "@/device/user-ir-table";
 import {
   sendSnapFrames,
   SNAP_ACK_MS,
@@ -183,7 +196,15 @@ export type SnapRenameResult =
       ok: false;
       reason: "busy" | "disconnected" | "link" | "factory" | "empty" | "verify" | "closed" | "port";
     };
-export type { NamInspection, SnapSlot };
+export type UserIrUploadResult =
+  | { ok: true; name: string }
+  | {
+      ok: false;
+      reason: "busy" | "disconnected" | "link" | "slot" | "verify" | "cancelled" | "closed" | "port";
+      /** True once any file byte was written. The slot is unknown until the table is read again. */
+      sent?: boolean;
+    };
+export type { NamInspection, SnapSlot, UserIrFile, UserIrSlot };
 export type { OmittedFactoryModel };
 
 export type SessionSnapshot =
@@ -198,9 +219,11 @@ export type SessionSnapshot =
       userNsNames: (string | null)[];
       /** Protocol indices 50–79. Flag 0 holds a capture, including a blank name. */
       userSnapSlots: SnapSlot[];
-      /** A SnapTone file write or user-slot delete is in progress. This is not a chain refresh. */
+      /** User IR slots 1–20 from the `12 20` table. Flag null until that table is read (USB only). */
+      userIrSlots: UserIrSlot[];
+      /** A SnapTone or User IR file write or user-slot delete is in progress. This is not a chain refresh. */
       snapFileSend: boolean;
-      /** USB can accept a SnapTone file. Bluetooth cannot. */
+      /** USB can accept a SnapTone or User IR file. Bluetooth cannot. */
       snapFileLink: boolean;
       /** Device globals for the connected model. Null only while disconnected. */
       globals: DeviceGlobals | null;
@@ -252,6 +275,9 @@ export class DeviceSession {
   private snapRenameNotifyMs = 4_000;
   private snapTableWait: ((slots: SnapSlot[] | null) => void) | null = null;
   private snapCollecting = false;
+  private readonly irReassembler = new SnapPayloadReassembler();
+  private irTableWait: ((slots: UserIrSlot[] | null) => void) | null = null;
+  private irCollecting = false;
   private snapTableReady = false;
   private snapTableConnectSent = false;
   private snapLeadMs = SNAP_LEAD_MS;
@@ -428,6 +454,7 @@ export class DeviceSession {
         userIrNames: emptyUserIrNames(),
         userNsNames: emptyUserNsNames(),
         userSnapSlots: emptySnapSlots(),
+        userIrSlots: emptyUserIrSlots(),
         snapFileSend: false,
         snapFileLink: false,
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
@@ -453,6 +480,7 @@ export class DeviceSession {
         userIrNames: emptyUserIrNames(),
         userNsNames: emptyUserNsNames(),
         userSnapSlots: emptySnapSlots(),
+        userIrSlots: emptyUserIrSlots(),
         snapFileSend: false,
         snapFileLink: true,
         globals: model === "gp50" ? emptyGp50Globals() : emptyGp5Globals(),
@@ -2217,6 +2245,173 @@ export class DeviceSession {
     }
   }
 
+  /** WAV → 2048-byte User IR block. Throws a user-facing Error. */
+  prepareUserIr(file: ArrayBuffer): Promise<UserIrFile> {
+    return prepareUserIrWav(new Uint8Array(file));
+  }
+
+  /** Read the `12 20` table (USB). Updates `userIrSlots`; `userIrNames` follow the same reply. */
+  async refreshUserIrSlots(): Promise<UserIrSlot[] | null> {
+    if (this.snapshot.status !== "connected" || !this.snapshot.snapFileLink) {
+      return null;
+    }
+    return this.readIrTable();
+  }
+
+  /**
+   * Write a prepared User IR block to slot 1–20. Same framed transport as a
+   * SnapTone import (command `11 21`). The pedal sends no final reply, so the
+   * slot is verified from the `12 20` table.
+   */
+  async uploadUserIr(
+    slot: number,
+    name: string,
+    data: Uint8Array,
+    signal?: AbortSignal,
+    onProgress?: (fraction: number) => void,
+  ): Promise<UserIrUploadResult> {
+    if (this.snapshot.status !== "connected") {
+      return { ok: false, reason: "disconnected" };
+    }
+    if (this.writesBlocked()) {
+      return { ok: false, reason: "busy" };
+    }
+    if (!this.snapshot.snapFileLink) {
+      return { ok: false, reason: "link" };
+    }
+    if (!isUserIrSlot(slot)) {
+      return { ok: false, reason: "slot" };
+    }
+    if (data.length !== USER_IR_DATA_BYTES) {
+      return { ok: false, reason: "verify" };
+    }
+    const frames = encodeUserIrImportFrames(slot, name, data);
+    const storedName = sanitizeUserIrName(name).trim();
+    this.snapshot = { ...this.snapshot, snapFileSend: true };
+    this.emitSnapshot();
+    try {
+      const status = await sendSnapFrames({
+        frames,
+        send: (frame) => this.sendSnapFrame(frame),
+        waitAck: () => this.waitSnapAck(this.snapAckMs, signal),
+        delay: (ms) => this.delay(ms),
+        aborted: () => signal?.aborted === true,
+        stillOpen: () => this.linkIsOpen(),
+        leadMs: this.snapLeadMs,
+        gapMs: this.snapGapMs,
+        onFrame: (accepted, total) => onProgress?.(accepted / total),
+      });
+      if (status.status !== "sent") {
+        if ((status.status === "cancelled" || status.status === "closed") && status.sent) {
+          this.forgetIrSlot(slot);
+        }
+        return { ok: false, reason: status.status, sent: status.sent };
+      }
+      const verified = await this.verifyIrSlot(slot, storedName);
+      return verified ? { ok: true, name: storedName } : { ok: false, reason: "verify" };
+    } finally {
+      if (this.snapshot.status === "connected" && this.snapshot.snapFileSend) {
+        this.snapshot = { ...this.snapshot, snapFileSend: false };
+        this.emitSnapshot();
+      }
+    }
+  }
+
+  private noteIrTableFrame(frame: SnapFrame, starts: boolean): void {
+    if (starts) {
+      this.irCollecting = true;
+    }
+    const payload = this.irReassembler.push(frame);
+    if (!payload) {
+      return;
+    }
+    this.irCollecting = false;
+    const slots = decodeUserIrTable(payload);
+    if (slots) {
+      this.applyIrSlots(slots);
+    }
+  }
+
+  private applyIrSlots(slots: UserIrSlot[]): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    // Names follow IrNameDecoder, which reads the same `12 20` reply.
+    this.snapshot = { ...this.snapshot, userIrSlots: slots };
+    this.emitSnapshot();
+    const waiting = this.irTableWait;
+    this.irTableWait = null;
+    waiting?.(slots);
+  }
+
+  private forgetIrSlot(slot: number): void {
+    if (this.snapshot.status !== "connected") {
+      return;
+    }
+    const index = slot - USER_IR_FIRST;
+    if (index < 0 || index >= this.snapshot.userIrSlots.length) {
+      return;
+    }
+    const userIrSlots = this.snapshot.userIrSlots.map((entry, entryIndex) =>
+      entryIndex === index ? { name: null, flag: null } : entry,
+    );
+    this.snapshot = { ...this.snapshot, userIrSlots };
+    this.emitSnapshot();
+  }
+
+  private readIrTable(): Promise<UserIrSlot[] | null> {
+    if (this.snapshot.status !== "connected" || this.snapshot.linkMode !== "usb") {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (slots: UserIrSlot[] | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (this.irTableWait === onTable) {
+          this.irTableWait = null;
+        }
+        resolve(slots);
+      };
+      const onTable = (slots: UserIrSlot[] | null) => finish(slots);
+      const timer = setTimeout(() => finish(null), 2_500);
+      this.irTableWait = onTable;
+      void this.sendBytes(encodeUserIrTableRequest()).then(() => {
+        if (this.snapshot.status !== "connected") {
+          finish(null);
+        }
+      });
+    });
+  }
+
+  private async verifyIrSlot(slot: number, name: string): Promise<boolean> {
+    let read = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) {
+        await this.delay(500);
+      }
+      if (this.snapshot.status !== "connected") {
+        return false;
+      }
+      const slots = await this.readIrTable();
+      if (!slots) {
+        continue;
+      }
+      read = true;
+      const entry = slots[slot - USER_IR_FIRST];
+      if (entry?.flag === 0 && entry.name === name.trim()) {
+        return true;
+      }
+    }
+    if (!read) {
+      this.forgetIrSlot(slot);
+    }
+    return false;
+  }
+
   private async sendSnapFrame(bytes: Uint8Array): Promise<"ok" | "port" | "closed"> {
     if (!this.linkIsOpen() || this.snapshot.status !== "connected" || this.snapshot.linkMode !== "usb") {
       return "closed";
@@ -2340,6 +2535,17 @@ export class DeviceSession {
       resolve(frame.payload[2] === 0);
       return true;
     }
+    // `12 20` is also the connect-time IR-name dump. Read the flags here and
+    // let the message through to IrNameDecoder (names + Nam-ask ordering).
+    const startsIrTable = frame.index === 0 && kind === 0x12 && frame.payload[1] === 0x20;
+    if (
+      this.snapshot.status === "connected" &&
+      this.snapshot.linkMode === "usb" &&
+      (startsIrTable || (this.irCollecting && !(frame.index === 0 && kind === 0x12)))
+    ) {
+      this.noteIrTableFrame(frame, startsIrTable);
+      return false;
+    }
     const startsTable = frame.index === 0 && kind === 0x12 && frame.payload[1] === 0x24;
     if (!startsTable && !this.snapCollecting) {
       return false;
@@ -2387,6 +2593,11 @@ export class DeviceSession {
   }
 
   private failSnapWaiters(): void {
+    this.irCollecting = false;
+    this.irReassembler.reset();
+    const irTable = this.irTableWait;
+    this.irTableWait = null;
+    irTable?.(null);
     this.snapCollecting = false;
     this.snapTableReady = false;
     this.snapTableConnectSent = false;

@@ -21,6 +21,8 @@ export async function sendSnapFrames(args: {
   stillOpen: () => boolean;
   leadMs: number;
   gapMs: number;
+  /** Called after each accepted frame with (accepted, total). */
+  onFrame?: (accepted: number, total: number) => void;
 }): Promise<SnapSendStatus> {
   let sent = false;
   if (args.aborted()) {
@@ -33,7 +35,7 @@ export async function sendSnapFrames(args: {
   if (!args.stillOpen()) {
     return { status: "closed", sent };
   }
-  for (const frame of args.frames) {
+  for (const [index, frame] of args.frames.entries()) {
     let resends = 0;
     for (;;) {
       if (args.aborted()) {
@@ -63,6 +65,7 @@ export async function sendSnapFrames(args: {
       }
       resends += 1;
     }
+    args.onFrame?.(index + 1, args.frames.length);
     await args.delay(args.gapMs);
   }
   return { status: "sent" };

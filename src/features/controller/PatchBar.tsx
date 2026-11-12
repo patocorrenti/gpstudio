@@ -44,6 +44,8 @@ import { useDeviceSession } from "@/features/connect/DeviceSessionProvider";
 import { useAbCycleClaim } from "@/features/controller/AbCycleClaim";
 import { SnapToneDialog } from "@/features/controller/SnapToneDialog";
 import { setSnapTonesOpenHandler } from "@/features/controller/snap-tones-bridge";
+import { setUserIrOpenHandler } from "@/features/controller/user-ir-bridge";
+import { UserIrDialog } from "@/features/controller/UserIrDialog";
 import { AbSideLabel } from "@/features/controller/AbSideLabel";
 import {
   AB_SECONDS_DEFAULT,
@@ -250,6 +252,7 @@ export function PatchBar({
   const [downloadWarn, setDownloadWarn] = useState<CustomAssetWarning | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
+  const [irOpen, setIrOpen] = useState(false);
   const [abOpen, setAbOpen] = useState(false);
   const [abSecondsText, setAbSecondsText] = useState(String(AB_SECONDS_DEFAULT));
   const [abSideA, setAbSideA] = useState(0);
@@ -509,6 +512,15 @@ export function PatchBar({
     });
     return () => {
       setSnapTonesOpenHandler(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    setUserIrOpenHandler(() => {
+      setIrOpen(true);
+    });
+    return () => {
+      setUserIrOpenHandler(null);
     };
   }, []);
 
@@ -1121,6 +1133,7 @@ export function PatchBar({
       </div>
       </TooltipProvider>
       <SnapToneDialog open={snapOpen} onOpenChange={setSnapOpen} session={session} />
+      <UserIrDialog open={irOpen} onOpenChange={setIrOpen} session={session} />
       <Dialog
         open={renameOpen}
         onOpenChange={(open) => {
