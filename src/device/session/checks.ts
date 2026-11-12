@@ -2192,11 +2192,31 @@ async function assertUserIrWav(): Promise<void> {
   ) {
     throw new Error("A 24-bit 44.1 kHz IR must reach the pedal untouched and cut at 512 samples");
   }
+  // Longer file whose tail is silence: cut, but nothing worth mentioning.
+  const quietTail = Array.from({ length: 2048 }, (_, index) => (index < 64 ? 0x400000 >> (index >> 3) : 0));
+  const quiet = await prepareUserIr(encodeTestWav(quietTail, 44_100, 24));
+  if (!quiet.truncated || quiet.audibleCut || quiet.cutDb !== -Infinity) {
+    throw new Error("A silent tail past 512 samples must not count as an audible cut");
+  }
+  // A loud tail is worth mentioning.
+  const loud = Array.from({ length: 2048 }, (_, index) => (index % 100 === 0 ? 0x400000 : 0));
+  const loudIr = await prepareUserIr(encodeTestWav(loud, 44_100, 24));
+  if (!loudIr.audibleCut || loudIr.cutDb === null || loudIr.cutDb < -6) {
+    throw new Error("A loud tail past 512 samples must count as an audible cut");
+  }
+  // A faint tail (about -70 dB) is not worth mentioning.
+  const faint = Array.from({ length: 2048 }, (_, index) => (index === 0 ? 0x7fffff : index === 1000 ? 0x0a00 : 0));
+  const faintIr = await prepareUserIr(encodeTestWav(faint, 44_100, 24));
+  if (faintIr.audibleCut || faintIr.cutDb === null || faintIr.cutDb > -60) {
+    throw new Error("A tail below -60 dB must not count as an audible cut");
+  }
   // 16-bit shorter IR: scaled to 24-bit, zero-padded.
   const short = await prepareUserIr(encodeTestWav([0x4000, -0x4000], 44_100, 16));
   const shortView = new DataView(short.data.buffer);
   if (
     short.truncated ||
+    short.audibleCut ||
+    short.cutDb !== null ||
     shortView.getInt32(0, true) !== 0x400000 ||
     shortView.getInt32(4, true) !== -0x400000 ||
     shortView.getInt32(8, true) !== 0

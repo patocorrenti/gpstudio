@@ -13,6 +13,8 @@
 export const IR_RATE = 44_100;
 export const IR_SAMPLES = 512;
 export const IR_DATA_BYTES = IR_SAMPLES * 4;
+/** Energy past sample 512, relative to the whole IR, above which the cut is worth mentioning. */
+export const AUDIBLE_CUT_DB = -60;
 
 export interface UserIrFile {
   /** 512 24-bit samples as int32 LE (2048 bytes), for the session's User IR upload. */
@@ -23,6 +25,32 @@ export interface UserIrFile {
   sourceBits: number;
   /** The IR was longer than the 512 samples (about 11.6 ms) the pedal keeps. */
   truncated: boolean;
+  /**
+   * Energy of the part past sample 512 relative to the whole IR, in dB (at 44.1 kHz).
+   * null when nothing is cut or the IR is silent.
+   */
+  cutDb: number | null;
+  /** The cut part is above {@link AUDIBLE_CUT_DB}: worth telling the user. */
+  audibleCut: boolean;
+}
+
+function cutEnergyDb(samples: Float32Array): number | null {
+  if (samples.length <= IR_SAMPLES) {
+    return null;
+  }
+  let total = 0;
+  let tail = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const energy = (samples[i] ?? 0) ** 2;
+    total += energy;
+    if (i >= IR_SAMPLES) {
+      tail += energy;
+    }
+  }
+  if (total === 0) {
+    return null;
+  }
+  return tail === 0 ? -Infinity : 10 * Math.log10(tail / total);
 }
 
 const FORMAT_PCM = 1;
@@ -153,12 +181,14 @@ export async function prepareUserIr(wav: Uint8Array): Promise<UserIrFile> {
   // Zero-filled: shorter IRs are padded with silence, as Suite does.
   const samples24 = new Int32Array(IR_SAMPLES);
   let frames44 = sourceFrames;
+  let cutDb: number | null;
   if (fmt.rate === IR_RATE && fmt.format === FORMAT_PCM && fmt.bits === 24) {
     // Suite's direct path: the 24-bit values go to the pedal untouched (int / 2^23 is exact in a float).
     const n = Math.min(sourceFrames, IR_SAMPLES);
     for (let i = 0; i < n; i++) {
       samples24[i] = Math.round((source[i] ?? 0) * 0x800000);
     }
+    cutDb = cutEnergyDb(source);
   } else {
     let ch0 = source;
     if (fmt.rate !== IR_RATE) {
@@ -173,6 +203,7 @@ export async function prepareUserIr(wav: Uint8Array): Promise<UserIrFile> {
     for (let i = 0; i < n; i++) {
       samples24[i] = to24(ch0[i] ?? 0);
     }
+    cutDb = cutEnergyDb(ch0);
   }
   return {
     data: encodeSamples(samples24),
@@ -181,6 +212,8 @@ export async function prepareUserIr(wav: Uint8Array): Promise<UserIrFile> {
     sourceChannels: fmt.channels,
     sourceBits: fmt.bits,
     truncated: frames44 > IR_SAMPLES,
+    cutDb,
+    audibleCut: cutDb !== null && cutDb > AUDIBLE_CUT_DB,
   };
 }
 

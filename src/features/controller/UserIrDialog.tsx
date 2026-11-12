@@ -287,9 +287,10 @@ export function UserIrDialog({
                   }}
                 />
               </div>
-              {draft.ir.truncated ? (
+              {draft.ir.audibleCut ? (
                 <p className="text-xs text-muted-foreground">
-                  The pedal keeps the first 512 samples (about 11.6 ms at 44.1 kHz). The rest of this IR is cut.
+                  The pedal uses the first 11.6 ms of each IR, like Valeton Suite. This file has some sound after that,
+                  which is left out.
                 </p>
               ) : null}
               {draft.message ? <p className="text-sm">{draft.message}</p> : null}
