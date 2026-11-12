@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -24,6 +25,47 @@ import type { FxModel } from "@/device/catalog";
 import { cn } from "@/lib/utils";
 
 const SEARCHABLE_THRESHOLD = 15;
+const SOURCE_KEY = "gpstudio.modelSelect.source";
+
+type SourceFilter = "all" | "factory" | "custom";
+
+const SOURCE_OPTIONS: readonly (readonly [SourceFilter, string])[] = [
+  ["all", "All"],
+  ["factory", "Factory"],
+  ["custom", "Custom"],
+];
+
+/** User IR slots (CAB) and user SnapTone slots 50–79 (NS). */
+function isCustomModel(option: FxModel): boolean {
+  return option.userIrSlot !== undefined || (option.userNsSlot ?? -1) >= 50;
+}
+
+function readSourceFilter(): SourceFilter {
+  try {
+    const stored = window.localStorage.getItem(SOURCE_KEY);
+    if (stored === "factory" || stored === "custom") {
+      return stored;
+    }
+  } catch {
+    // Storage unavailable: All.
+  }
+  return "all";
+}
+
+function writeSourceFilter(source: SourceFilter): void {
+  try {
+    window.localStorage.setItem(SOURCE_KEY, source);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function matchesSource(option: FxModel, source: SourceFilter): boolean {
+  if (source === "all") {
+    return true;
+  }
+  return source === "custom" ? isCustomModel(option) : !isCustomModel(option);
+}
 
 function matchesModelQuery(option: FxModel, query: string): boolean {
   const trimmed = query.trim().toLowerCase();
@@ -104,12 +146,19 @@ function SearchableModelSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeOption, setActiveOption] = useState(value);
+  const [source, setSource] = useState<SourceFilter>(readSourceFilter);
   const activeRef = useRef<HTMLButtonElement>(null);
   const selected = options.find((option) => option.id === value);
+  // Only CAB and NS mix factory models with user slots.
+  const hasSources = options.some(isCustomModel) && options.some((option) => !isCustomModel(option));
 
   const filtered = useMemo(
-    () => options.filter((option) => matchesModelQuery(option, query)),
-    [options, query],
+    () =>
+      options.filter(
+        (option) =>
+          matchesModelQuery(option, query) && (!hasSources || matchesSource(option, source)),
+      ),
+    [options, query, hasSources, source],
   );
 
   useEffect(() => {
@@ -205,6 +254,10 @@ function SearchableModelSelect({
         if (disabled && next) {
           return;
         }
+        if (next) {
+          // Another module may have changed the remembered filter.
+          setSource(readSourceFilter());
+        }
         setOpen(next);
       }}
     >
@@ -233,6 +286,36 @@ function SearchableModelSelect({
           input?.focus();
         }}
       >
+        {hasSources ? (
+          <div className="border-b border-border px-2.5 py-2">
+            <ButtonGroup aria-label="Model source" className="w-full">
+              {SOURCE_OPTIONS.map(([option, label]) => {
+                const pressed = source === option;
+                return (
+                  <Button
+                    key={option}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-pressed={pressed}
+                    className={cn(
+                      "h-7 flex-1 px-2.5",
+                      pressed
+                        ? "bg-muted text-foreground hover:bg-muted dark:bg-input dark:hover:bg-input"
+                        : "text-muted-foreground/70",
+                    )}
+                    onClick={() => {
+                      setSource(option);
+                      writeSourceFilter(option);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </ButtonGroup>
+          </div>
+        ) : null}
         <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
           <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
           <Input

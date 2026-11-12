@@ -61,6 +61,30 @@ export function userIrDisplayName(
   return dumped ? dumped : model.label;
 }
 
+/**
+ * CAB module label: like {@link userIrDisplayName}, but a vacant slot reads `Empty`.
+ * Vacant is flag 1 in the `12 20` table, or the pedal's own `User IR n` name when the
+ * table was not read (Bluetooth). With neither known, the catalog label stays.
+ */
+export function userIrModuleLabel(
+  model: { label: string; userIrSlot?: number },
+  names: readonly (string | null)[] | undefined,
+  slots: readonly { flag: number | null }[] | undefined,
+): string {
+  if (model.userIrSlot === undefined) {
+    return model.label;
+  }
+  const flag = slots?.[model.userIrSlot - 1]?.flag;
+  if (flag !== null && flag !== undefined && flag !== 0) {
+    return "Empty";
+  }
+  const dumped = names?.[model.userIrSlot - 1]?.trim();
+  if (dumped && /^User IR \d+$/.test(dumped)) {
+    return "Empty";
+  }
+  return dumped ? dumped : model.label;
+}
+
 function midiPayload(bytes: Uint8Array): Uint8Array {
   if (bytes.length >= 3 && bytes[0] === 0x80 && bytes[1] === 0x80 && bytes[2] === 0xf0) {
     return bytes.subarray(2);
@@ -299,6 +323,17 @@ function assertIrNameFixtures(): void {
   );
   if (blank !== "User IR 07") {
     throw new Error("A blank IR name must keep the User IR fallback");
+  }
+  const user3 = { label: "User IR 03", userIrSlot: 3 };
+  const vacantNames = emptyUserIrNames();
+  vacantNames[2] = "User IR 3";
+  if (
+    userIrModuleLabel(user3, vacantNames, undefined) !== "Empty" ||
+    userIrModuleLabel(user3, decoded, [{ flag: 1 }, { flag: 1 }, { flag: 1 }]) !== "Empty" ||
+    userIrModuleLabel(user3, decoded, [{ flag: 1 }, { flag: 1 }, { flag: 0 }]) !== "Greenback 412" ||
+    userIrModuleLabel(user3, undefined, undefined) !== "User IR 03"
+  ) {
+    throw new Error("The CAB module must show a vacant user IR as Empty and keep a stored name");
   }
 }
 
