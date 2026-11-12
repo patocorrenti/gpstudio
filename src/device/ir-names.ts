@@ -74,15 +74,25 @@ export function userIrModuleLabel(
   if (model.userIrSlot === undefined) {
     return model.label;
   }
-  const flag = slots?.[model.userIrSlot - 1]?.flag;
-  if (flag !== null && flag !== undefined && flag !== 0) {
+  if (userIrSlotVacant(model.userIrSlot, names, slots)) {
     return "Empty";
   }
   const dumped = names?.[model.userIrSlot - 1]?.trim();
-  if (dumped && /^User IR \d+$/.test(dumped)) {
-    return "Empty";
-  }
   return dumped ? dumped : model.label;
+}
+
+/** User IR slot 1–20 is known to be empty. Unknown (nothing read yet) is not vacant. */
+export function userIrSlotVacant(
+  slot: number,
+  names: readonly (string | null)[] | undefined,
+  slots: readonly { flag: number | null }[] | undefined,
+): boolean {
+  const flag = slots?.[slot - 1]?.flag;
+  if (flag !== null && flag !== undefined) {
+    return flag !== 0;
+  }
+  const dumped = names?.[slot - 1]?.trim();
+  return Boolean(dumped && /^User IR \d+$/.test(dumped));
 }
 
 function midiPayload(bytes: Uint8Array): Uint8Array {

@@ -30,7 +30,8 @@ import {
   modelsForKind,
   type FxControl,
 } from "@/device/catalog";
-import { userIrModuleLabel } from "@/device/ir-names";
+import { userIrModuleLabel, userIrSlotVacant } from "@/device/ir-names";
+import { IR_USB_REQUIRED, requestUserIrLoad } from "@/features/controller/user-ir-bridge";
 import { userSnapDisplayName } from "@/device/nam-names";
 import type { DeviceModel } from "@/device/models";
 import { snapSlotHoldsCapture } from "@/device/snaptone-table";
@@ -298,6 +299,12 @@ export function SlotControlPanel({
     userNsSlot !== undefined &&
     userNsSlot >= 50 &&
     !snapSlotHoldsCapture(userSnapSlots?.[userNsSlot - 50]);
+  const userIrSlot = model.userIrSlot;
+  const emptyUserIr =
+    slot.id === "cab" &&
+    userIrSlot !== undefined &&
+    userIrSlotVacant(userIrSlot, userIrNames, userIrSlots);
+  const emptyUserSlot = emptyUserSnap || emptyUserIr;
   const acceptsSnapUpload = snapshot.status === "connected" && snapshot.snapFileLink;
   const offerTone3000 = isTone3000ControlVisible({
     connected: snapshot.status === "connected",
@@ -312,6 +319,10 @@ export function SlotControlPanel({
 
   function loadFromComputer() {
     setLoadMenuOpen(false);
+    if (emptyUserIr && userIrSlot !== undefined) {
+      requestUserIrLoad(userIrSlot, "computer");
+      return;
+    }
     if (userNsSlot === undefined) {
       return;
     }
@@ -320,7 +331,7 @@ export function SlotControlPanel({
 
   function loadFromTone3000() {
     setLoadMenuOpen(false);
-    if (userNsSlot === undefined) {
+    if (userNsSlot === undefined && !(emptyUserIr && userIrSlot !== undefined)) {
       return;
     }
     if (getTone3000Account().status !== "signed-in") {
@@ -331,7 +342,13 @@ export function SlotControlPanel({
       }
       holdTone3000Popup(popup);
     }
-    requestSnapToneLoad(userNsSlot, "tone3000");
+    if (emptyUserIr && userIrSlot !== undefined) {
+      requestUserIrLoad(userIrSlot, "tone3000");
+      return;
+    }
+    if (userNsSlot !== undefined) {
+      requestSnapToneLoad(userNsSlot, "tone3000");
+    }
   }
 
 
@@ -458,13 +475,13 @@ export function SlotControlPanel({
           collapsed ? "hidden md:block" : "block",
         )}
       >
-        {emptyUserSnap ? (
+        {emptyUserSlot ? (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-1">
             <Popover
               open={loadMenuOpen}
               onOpenChange={(next) => {
                 if (next && !acceptsSnapUpload) {
-                  toast(SNAP_USB_REQUIRED);
+                  toast(emptyUserIr ? IR_USB_REQUIRED : SNAP_USB_REQUIRED);
                   return;
                 }
                 setLoadMenuOpen(next);
@@ -476,7 +493,7 @@ export function SlotControlPanel({
                   disabled={disabled}
                   className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-foreground/15 bg-background/95 px-3 py-1.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-default disabled:opacity-50"
                 >
-                  Load a SnapTone
+                  {emptyUserIr ? "Load an IR" : "Load a SnapTone"}
                   <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
                 </button>
               </PopoverTrigger>
@@ -507,7 +524,7 @@ export function SlotControlPanel({
         <div
           className={cn(
             "flex flex-col gap-3",
-            emptyUserSnap && "pointer-events-none opacity-25",
+            emptyUserSlot && "pointer-events-none opacity-25",
           )}
         >
           {controlsForPedal(model, pedal).map((control) => (
@@ -516,7 +533,7 @@ export function SlotControlPanel({
               kind={slot.id}
               control={control}
               value={slot.values[control.index] ?? control.default}
-              disabled={disabled || emptyUserSnap}
+              disabled={disabled || emptyUserSlot}
               onControlChange={onControlChange}
             />
           ))}

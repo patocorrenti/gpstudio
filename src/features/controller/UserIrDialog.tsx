@@ -40,6 +40,7 @@ import {
   sanitizeUserIrName,
   USER_IR_FIRST, USER_IR_LAST, USER_IR_NAME_MAX,
 } from "@/device/user-ir-table";
+import { setUserIrLoadListener } from "@/features/controller/user-ir-bridge";
 import { getTone3000Account } from "@/features/tone3000/account";
 import { publishableKey } from "@/features/tone3000/oauth";
 import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
@@ -111,6 +112,20 @@ export function UserIrDialog({
   const [uploadMenuSlot, setUploadMenuSlot] = useState<number | null>(null);
 
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
+
+  useEffect(() => {
+    setUserIrLoadListener((request) => {
+      if (request.source === "tone3000") {
+        setToneSlot(request.slot);
+        return;
+      }
+      slotRef.current = request.slot;
+      fileRef.current?.click();
+    });
+    return () => {
+      setUserIrLoadListener(null);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) {
