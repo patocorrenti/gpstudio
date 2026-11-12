@@ -1,6 +1,7 @@
 const API_ORIGIN = "https://www.tone3000.com";
 
 export const NO_A2_MODEL = "This tone has no A2 model.";
+export const NO_IR_MODEL = "This tone has no IR.";
 
 export type A2Model = {
   name: string;
@@ -12,7 +13,7 @@ export type A2ToneModels =
       ok: true;
       title: string;
       gear: string;
-      format: "NAM";
+      format: "NAM" | "IR";
       username: string;
       userUrl: string | null;
       userAvatarUrl: string | null;
@@ -26,7 +27,10 @@ export type A2ToneModels =
 
 export type ToneListKind = "favorites" | "created" | "downloaded" | "trending" | "latest";
 
-export type ToneListGear = "amp" | "amp-cab";
+export type ToneListGear = "amp" | "amp-cab" | "cab";
+
+/** What the catalog lists and loads: NAM captures for SnapTones, or cabinet IRs. */
+export type ToneTarget = "snaptone" | "ir";
 
 export type ToneListRow = {
   id: string;
@@ -48,6 +52,8 @@ export type ToneListOptions = {
   pageSize?: number;
   gear?: ToneListGear;
   query?: string;
+  /** `ir`: cabinet IRs only (gear `cab`, format `ir`). Lists have no format param, so this filters rows. */
+  format?: "ir";
 };
 
 const LIST_PATH: Record<ToneListKind, string> = {
@@ -64,6 +70,9 @@ export function tone3000GearLabel(gear: string): string {
   }
   if (gear === "amp-cab") {
     return "Amp + Cab";
+  }
+  if (gear === "cab") {
+    return "Cab";
   }
   return gear;
 }
@@ -181,6 +190,9 @@ function formatOf(value: unknown): string {
   }
   if (raw.toLowerCase() === "nam") {
     return "NAM";
+  }
+  if (raw.toLowerCase() === "ir") {
+    return "IR";
   }
   return raw;
 }
@@ -335,6 +347,14 @@ export async function loadToneList(
   options: ToneListOptions = {},
   fetchImpl: typeof fetch = fetch,
 ): Promise<ToneListPage> {
+  if (options.format === "ir") {
+    const irOptions = { ...options, gear: "cab" as const };
+    const page =
+      kind === "latest"
+        ? await fetchToneListPage(kind, accessToken, {}, fetchImpl)
+        : await fetchToneListPage(kind, accessToken, irOptions, fetchImpl);
+    return { ...page, rows: page.rows.filter((row) => row.format.toLowerCase() === "ir") };
+  }
   if (kind === "latest") {
     const page = await fetchToneListPage(kind, accessToken, {}, fetchImpl);
     return { ...page, rows: filterRowsByGear(page.rows, options.gear) };
@@ -359,6 +379,58 @@ export async function loadToneList(
     rows,
     page: Math.max(1, options.page ?? 1),
     totalPages: Math.max(amp.totalPages, cab.totalPages, 1),
+  };
+}
+
+function irModels(body: unknown): A2Model[] {
+  const data =
+    body && typeof body === "object" && "data" in body
+      ? (body as { data: unknown }).data
+      : body;
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  const models: A2Model[] = [];
+  for (const item of data) {
+    const modelUrl = stringField(item, "model_url");
+    if (!modelUrl) {
+      continue;
+    }
+    models.push({ name: stringField(item, "name") ?? "IR", modelUrl });
+  }
+  return models;
+}
+
+/** An IR tone (format `ir`) and its WAV files. Same shape as the A2 result. */
+export async function loadToneIrModels(
+  toneId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<A2ToneModels> {
+  const toneUrl = `${API_ORIGIN}/api/v1/tones/${encodeURIComponent(toneId)}`;
+  const modelsUrl = `${API_ORIGIN}/api/v1/models?tone_id=${encodeURIComponent(toneId)}&page_size=300`;
+  const tone = await authedJson(toneUrl, accessToken, fetchImpl);
+  const format = stringField(tone, "format");
+  if (format && format.toLowerCase() !== "ir") {
+    return { ok: false, message: NO_IR_MODEL };
+  }
+  const models = irModels(await authedJson(modelsUrl, accessToken, fetchImpl));
+  if (models.length === 0) {
+    return { ok: false, message: NO_IR_MODEL };
+  }
+  return {
+    ok: true,
+    title: stringField(tone, "title") ?? "Tone",
+    gear: stringField(tone, "gear") ?? "",
+    format: "IR",
+    username: usernameOf(tone),
+    userUrl: userUrlOf(tone),
+    userAvatarUrl: avatarUrlOf(tone),
+    toneUrl: stringField(tone, "url"),
+    license: stringField(tone, "license"),
+    description: stringField(tone, "description"),
+    imageUrl: imageUrlOf(tone),
+    models,
   };
 }
 
@@ -456,6 +528,56 @@ void assertListParse().catch((error: unknown) => {
   console.error(error);
   throw error;
 });
+
+void assertIrList().catch((error: unknown) => {
+  console.error(error);
+  throw error;
+});
+
+async function assertIrList(): Promise<void> {
+  const fetched: string[] = [];
+  const page = await loadToneList("favorites", "token", { page: 1, pageSize: 20, format: "ir" }, async (input) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    fetched.push(url);
+    return jsonResponse({
+      data: [
+        { id: 1, title: "V30 4x12", gear: "cab", format: "ir", user: { username: "a" } },
+        { id: 2, title: "Cab NAM", gear: "cab", format: "nam", user: { username: "b" } },
+      ],
+      page: 1,
+      total_pages: 2,
+    });
+  });
+  if (
+    fetched.length !== 1 ||
+    new URL(fetched[0] ?? "https://x").searchParams.get("gear") !== "cab" ||
+    page.rows.length !== 1 ||
+    page.rows[0]?.title !== "V30 4x12" ||
+    page.totalPages !== 2
+  ) {
+    throw new Error("IR lists must request gear=cab once and keep only format ir");
+  }
+  const modelUrls: string[] = [];
+  const loaded = await loadToneIrModels("90730", "token", async (input) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    modelUrls.push(url);
+    if (url.includes("/models")) {
+      return jsonResponse({
+        data: [{ name: "SM57 Cap", model_url: "https://files.example/sm57.wav", architecture_version: null }],
+      });
+    }
+    return jsonResponse({ title: "Orange V30", gear: "cab", format: "ir", user: { username: "irs" } });
+  });
+  if (
+    !loaded.ok ||
+    loaded.format !== "IR" ||
+    loaded.models.length !== 1 ||
+    modelUrls.some((url) => url.includes("architecture")) ||
+    modelUrls.some((url) => url.includes("files.example"))
+  ) {
+    throw new Error("IR models must load without an architecture filter and without downloading");
+  }
+}
 
 void assertNoA2Model().catch((error: unknown) => {
   console.error(error);

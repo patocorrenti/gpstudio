@@ -30,19 +30,27 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "cn";
-import type { DeviceSession, NamInspection } from "@/device/session";
+import type { DeviceSession, NamInspection, UserIrFile } from "@/device/session";
 import { USER_SNAP_COUNT, USER_SNAP_FIRST } from "@/device/snaptone-table";
 import {
+  isUserIrNameChar,
+  sanitizeUserIrName,
+  USER_IR_FIRST,
+  USER_IR_LAST,
+  USER_IR_NAME_MAX,
+} from "@/device/user-ir-table";
+import {
   loadToneA2Models,
+  loadToneIrModels,
   loadToneList,
   tone3000GearLabel,
   tone3000LicenseLabel,
   downloadModelFile,
   type A2Model,
   type A2ToneModels,
-  type ToneListGear,
   type ToneListKind,
   type ToneListRow,
+  type ToneTarget,
 } from "@/features/tone3000/api";
 import {
   completeTone3000SignIn,
@@ -68,6 +76,7 @@ import {
 } from "@/features/tone3000/tokens";
 
 const UNKNOWN_SLOT = "This slot is unknown until SnapTone names are read again.";
+const UNKNOWN_IR_SLOT = "This IR slot is unknown until the IR list is read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
 const EMPTY_LIST = "No tones in this list.";
 const PAGE_SIZE = 20;
@@ -77,7 +86,10 @@ const LIST_GEAR_KEY = "gpstudio.tone3000.listGear";
 type Draft = {
   fileName: string;
   file: ArrayBuffer;
-  inspection: NamInspection;
+  /** SnapTone target: the NAM inspection. Null for an IR. */
+  inspection: NamInspection | null;
+  /** IR target: the prepared 2048-byte block. Null for a SnapTone. */
+  ir: UserIrFile | null;
   name: string;
   phase: "ready" | "converting" | "sending" | "error";
   message: string;
@@ -85,7 +97,7 @@ type Draft = {
 
 type ListedTone = Extract<A2ToneModels, { ok: true }>;
 
-type GearFilter = "all" | ToneListGear;
+type GearFilter = "all" | "amp" | "amp-cab";
 
 const DISCOVER_LABELS: { kind: ToneListKind; label: string }[] = [
   { kind: "trending", label: "Trending" },
@@ -192,8 +204,27 @@ function NamListSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-function namDownloadName(fileName: string): string {
-  return fileName.toLowerCase().endsWith(".nam") ? fileName : `${fileName}.nam`;
+function downloadName(fileName: string, extension: ".nam" | ".wav"): string {
+  return fileName.toLowerCase().endsWith(extension) ? fileName : `${fileName}${extension}`;
+}
+
+function irTypedName(value: string): string {
+  return [...value.replace(/\.wav$/i, "")].filter(isUserIrNameChar).join("").slice(0, USER_IR_NAME_MAX);
+}
+
+function irSlotLabel(
+  slot: number,
+  entry: { name: string | null; flag: number | null } | undefined,
+  dumped: string | null | undefined,
+): string {
+  const padded = String(slot).padStart(2, "0");
+  if (entry?.flag === 0) {
+    return `${padded} · ${entry.name && entry.name.length > 0 ? entry.name : `User IR ${padded}`}`;
+  }
+  if (entry?.flag == null && dumped && !/^User IR \d+$/.test(dumped)) {
+    return `${padded} · ${dumped}`;
+  }
+  return `${padded} · Empty`;
 }
 
 function customSlotLabel(
@@ -209,14 +240,14 @@ function customSlotLabel(
   return `${padded} · Empty`;
 }
 
-function triggerNamDownload(fileName: string, bytes: ArrayBuffer): void {
+function triggerFileDownload(fileName: string, bytes: ArrayBuffer): void {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(new Uint8Array(bytes));
   const blob = new Blob([copy], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = namDownloadName(fileName);
+  anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -272,13 +303,19 @@ export function Tone3000Catalog({
   slot,
   session,
   onUploaded,
+  target = "snaptone",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   slot: number | null;
   session: DeviceSession;
   onUploaded: () => void;
+  /** `ir`: list cabinet IRs (gear cab, format ir) and upload to a User IR slot 1–20. */
+  target?: ToneTarget;
 }) {
+  const isIr = target === "ir";
+  const loadModels = isIr ? loadToneIrModels : loadToneA2Models;
+  const catalogGears = (filter: GearFilter) => (isIr ? "cab" : catalogGearsForFilter(filter));
   const account = useSyncExternalStore(
     subscribeTone3000Account,
     getTone3000Account,
@@ -461,7 +498,8 @@ export function Tone3000Catalog({
         const loaded = await loadToneList(listKind, access, {
           page: listIsPaged(listKind) ? page : undefined,
           pageSize: listIsPaged(listKind) ? PAGE_SIZE : undefined,
-          gear: gear !== "all" ? gear : undefined,
+          gear: !isIr && gear !== "all" ? gear : undefined,
+          format: isIr ? "ir" : undefined,
         });
         if (cancelled || requestId !== listRequestRef.current) {
           return;
@@ -482,7 +520,7 @@ export function Tone3000Catalog({
     return () => {
       cancelled = true;
     };
-  }, [open, listReady, listKind, gear, page, browsing, tone, draft, signingIn]);
+  }, [open, listReady, listKind, gear, page, browsing, tone, draft, signingIn, isIr]);
 
   useEffect(() => {
     if (!open) {
@@ -571,7 +609,7 @@ export function Tone3000Catalog({
         holdTone3000Popup(popup);
         try {
           const next = await beginAuthorize("catalog", window.sessionStorage, window.location.origin, {
-            gears: catalogGearsForFilter(gearRef.current),
+            gears: catalogGears(gearRef.current),
           });
           if (popup.closed) {
             setBrowsing(false);
@@ -608,7 +646,7 @@ export function Tone3000Catalog({
         return;
       }
       try {
-        const loaded = await loadToneA2Models(toneId, access);
+        const loaded = await loadModels(toneId, access);
         setBrowsing(false);
         browsingRef.current = false;
         if (!loaded.ok) {
@@ -635,7 +673,7 @@ export function Tone3000Catalog({
       ok: true,
       title: row.title,
       gear: row.gear,
-      format: "NAM",
+      format: isIr ? "IR" : "NAM",
       username: row.username,
       userUrl: null,
       userAvatarUrl: null,
@@ -653,7 +691,7 @@ export function Tone3000Catalog({
         setNotice("TONE3000 sign-in did not finish.");
         return;
       }
-      const loaded = await loadToneA2Models(row.id, access);
+      const loaded = await loadModels(row.id, access);
       if (!loaded.ok) {
         setTone(null);
         setNotice(loaded.message);
@@ -680,12 +718,26 @@ export function Tone3000Catalog({
         return;
       }
       const bytes = await downloadModelFile(model.modelUrl, access);
-      const inspection = await session.inspectNam(bytes);
       setSaveNamLocal(true);
+      if (isIr) {
+        const ir = await session.prepareUserIr(bytes);
+        setDraft({
+          fileName: model.name,
+          file: bytes,
+          inspection: null,
+          ir,
+          name: irTypedName(model.name),
+          phase: "ready",
+          message: "",
+        });
+        return;
+      }
+      const inspection = await session.inspectNam(bytes);
       setDraft({
         fileName: model.name,
         file: bytes,
         inspection,
+        ir: null,
         name: snapName(model.name),
         phase: "ready",
         message: "",
@@ -709,10 +761,63 @@ export function Tone3000Catalog({
     setDraft(null);
   }
 
+  async function startIrSend(): Promise<void> {
+    if (!draft?.ir || targetSlot === null || draft.phase === "sending") {
+      return;
+    }
+    const uploadSlot = targetSlot;
+    const generation = previewRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const name = sanitizeUserIrName(draft.name);
+    if (saveNamLocal) {
+      triggerFileDownload(downloadName(draft.fileName, ".wav"), draft.file);
+    }
+    realProgress.current = 0;
+    setConvertProgress(0);
+    setShownProgress(0);
+    setDraft({ ...draft, name, phase: "sending", message: "Uploading the IR to the Multi-Effects…" });
+    const result = await session.uploadUserIr(uploadSlot, name, draft.ir.data, controller.signal, (fraction) => {
+      if (previewRef.current === generation) {
+        realProgress.current = fraction;
+        setConvertProgress(fraction);
+      }
+    });
+    if (previewRef.current !== generation) {
+      return;
+    }
+    if (result.ok) {
+      toast.success(`${result.name} uploaded into User IR ${String(uploadSlot).padStart(2, "0")}.`);
+      setDraft(null);
+      onUploaded();
+      return;
+    }
+    if ((result.reason === "cancelled" || result.reason === "closed") && result.sent) {
+      setDraft((current) => (current ? { ...current, phase: "error", message: UNKNOWN_IR_SLOT } : current));
+      return;
+    }
+    if (result.reason === "cancelled") {
+      return;
+    }
+    const message =
+      result.reason === "port"
+        ? PORT_ERROR
+        : result.reason === "link"
+          ? "Bluetooth cannot send an IR file. Connect with USB."
+          : result.reason === "busy"
+            ? "The pedal is busy."
+            : "The IR was not stored under the submitted name.";
+    setDraft((current) => (current ? { ...current, phase: "error", message } : current));
+  }
+
   async function startSend(): Promise<void> {
+    if (isIr) {
+      await startIrSend();
+      return;
+    }
     if (
       !draft ||
-      draft.inspection.kind !== "A2" ||
+      draft.inspection?.kind !== "A2" ||
       targetSlot === null ||
       draft.phase === "converting" ||
       draft.phase === "sending"
@@ -725,7 +830,7 @@ export function Tone3000Catalog({
     abortRef.current = controller;
     const name = snapName(draft.name);
     if (saveNamLocal) {
-      triggerNamDownload(draft.fileName, draft.file);
+      triggerFileDownload(downloadName(draft.fileName, ".nam"), draft.file);
     }
     realProgress.current = 0;
     setConvertProgress(0);
@@ -816,7 +921,7 @@ export function Tone3000Catalog({
     setBrowsing(true);
     browsingRef.current = true;
     void beginAuthorize("catalog", window.sessionStorage, window.location.origin, {
-      gears: catalogGearsForFilter(gear),
+      gears: catalogGears(gear),
     })
       .then((next) => {
         if (popup.closed) {
@@ -861,6 +966,7 @@ export function Tone3000Catalog({
   }
 
   const busy = draft?.phase === "converting" || draft?.phase === "sending";
+  const draftReady = draft !== null && (isIr ? draft.ir !== null : draft.inspection?.kind === "A2");
   const showModels = draft === null && tone !== null;
   const showLists = draft === null && tone === null && listReady && !signingIn;
   const showPartnership =
@@ -1073,7 +1179,7 @@ export function Tone3000Catalog({
                 Choose a tone in the TONE3000 window. This page stays open.
               </p>
             ) : null}
-            {!browsing ? (
+            {!browsing && !isIr ? (
               <div className="flex flex-wrap items-center gap-2">
                 <ButtonGroup aria-label="Gear filter">
                   {(
@@ -1236,14 +1342,14 @@ export function Tone3000Catalog({
                     </div>
                   </div>
                   <div className="mt-7 mb-7 space-y-3">
-                    <p className="text-sm font-medium">Select a Capture:</p>
+                    <p className="text-sm font-medium">{isIr ? "Select an IR:" : "Select a Capture:"}</p>
                     {toneLoading ? (
                       <NamListSkeleton rows={4} />
                     ) : (
                       <div
                         className="max-h-[10.5rem] overflow-y-auto rounded-md border border-foreground/15 bg-muted/20 ring-1 ring-foreground/5"
                         role="listbox"
-                        aria-label="Select a Capture"
+                        aria-label={isIr ? "Select an IR" : "Select a Capture"}
                       >
                         <div className="divide-y divide-foreground/10">
                           {tone.models.map((model) => (
@@ -1256,7 +1362,7 @@ export function Tone3000Catalog({
                             >
                               <span className="truncate font-medium">{model.name}</span>
                               <span className="shrink-0 rounded-sm bg-background/80 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground ring-1 ring-foreground/10">
-                                NAM
+                                {isIr ? "IR" : "NAM"}
                               </span>
                             </button>
                           ))}
@@ -1314,7 +1420,7 @@ export function Tone3000Catalog({
         {draft && !busy ? (
           <div className="flex flex-col gap-3 py-1">
             <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-              <span className="text-sm text-muted-foreground">Capture</span>
+              <span className="text-sm text-muted-foreground">{isIr ? "IR" : "Capture"}</span>
               <span className="truncate text-sm">{draft.fileName}</span>
               <span className="self-start pt-1.5 text-sm text-muted-foreground">In Slot</span>
               <div className="min-w-0">
@@ -1329,13 +1435,25 @@ export function Tone3000Catalog({
                 >
                   <SelectTrigger
                     size="sm"
-                    aria-label="SnapTone slot"
+                    aria-label={isIr ? "IR slot" : "SnapTone slot"}
                     className="h-8 w-full min-w-0"
                   >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" className="max-h-72">
-                    {Array.from({ length: USER_SNAP_COUNT }, (_, index) => {
+                    {isIr
+                      ? Array.from({ length: USER_IR_LAST - USER_IR_FIRST + 1 }, (_, index) => {
+                          const irSlot = USER_IR_FIRST + index;
+                          return (
+                            <SelectItem key={irSlot} value={String(irSlot)}>
+                              {snapshot.status === "connected"
+                                ? irSlotLabel(irSlot, snapshot.userIrSlots[index], snapshot.userIrNames[index])
+                                : irSlotLabel(irSlot, undefined, null)}
+                            </SelectItem>
+                          );
+                        })
+                      : null}
+                    {isIr ? null : Array.from({ length: USER_SNAP_COUNT }, (_, index) => {
                       const protocol = USER_SNAP_FIRST + index;
                       const entry =
                         snapshot.status === "connected"
@@ -1352,6 +1470,19 @@ export function Tone3000Catalog({
                 {(() => {
                   if (targetSlot === null || snapshot.status !== "connected") {
                     return null;
+                  }
+                  if (isIr) {
+                    const irEntry = snapshot.userIrSlots[targetSlot - USER_IR_FIRST];
+                    const label = irSlotLabel(targetSlot, irEntry, snapshot.userIrNames[targetSlot - USER_IR_FIRST]);
+                    const occupiedName = label.split(" · ")[1];
+                    if (!occupiedName || occupiedName === "Empty") {
+                      return null;
+                    }
+                    return (
+                      <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                        {`${occupiedName} will be overwritten`}
+                      </p>
+                    );
                   }
                   const entry = snapshot.userSnapSlots[targetSlot - USER_SNAP_FIRST];
                   if (entry?.flag !== 0) {
@@ -1370,13 +1501,15 @@ export function Tone3000Catalog({
               </div>
               <span className="text-sm text-muted-foreground">As</span>
               <Input
-                aria-label="SnapTone name"
+                aria-label={isIr ? "IR name" : "SnapTone name"}
                 value={draft.name}
                 maxLength={10}
                 className="rounded-sm"
-                disabled={draft.inspection.kind !== "A2"}
+                disabled={!draftReady}
                 onChange={(event) => {
-                  const name = event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
+                  const name = isIr
+                    ? irTypedName(event.target.value)
+                    : event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
                   setDraft((current) => (current ? { ...current, name } : current));
                 }}
               />
@@ -1390,10 +1523,18 @@ export function Tone3000Catalog({
                     setSaveNamLocal(checked === true);
                   }}
                 />
-                Also save .nam file to this computer
+                {isIr ? "Also save .wav file to this computer" : "Also save .nam file to this computer"}
               </span>
             </label>
-            {draft.inspection.kind === "A2" ? null : <p className="text-sm">{draft.inspection.reason}</p>}
+            {draft.inspection && draft.inspection.kind !== "A2" ? (
+              <p className="text-sm">{draft.inspection.reason}</p>
+            ) : null}
+            {draft.ir?.audibleCut ? (
+              <p className="text-xs text-muted-foreground">
+                The pedal uses the first 11.6 ms of each IR, like Valeton Suite. This file has some sound after that,
+                which is left out.
+              </p>
+            ) : null}
             {draft.message ? <p className="text-sm">{draft.message}</p> : null}
           </div>
         ) : null}
@@ -1405,7 +1546,7 @@ export function Tone3000Catalog({
             <Button
               type="button"
               onClick={() => void startSend()}
-              disabled={busy || draft.inspection.kind !== "A2"}
+              disabled={busy || !draftReady}
             >
               Confirm
             </Button>

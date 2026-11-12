@@ -5,7 +5,8 @@ export const TONE3000_TOKEN_URL = "https://www.tone3000.com/api/v1/oauth/token";
 export type AuthorizeKind = "sign-in" | "catalog";
 
 /** Select-catalog `gears` query: All → amp + amp-cab; otherwise one gear. */
-export type CatalogGears = "amp" | "amp-cab" | "amp_amp-cab";
+/** `cab` is the cabinet-IR catalog: it selects `format=ir` and no NAM architecture. */
+export type CatalogGears = "amp" | "amp-cab" | "amp_amp-cab" | "cab";
 
 export function catalogGearsForFilter(gear: "all" | "amp" | "amp-cab"): CatalogGears {
   if (gear === "amp") {
@@ -61,8 +62,12 @@ export function buildAuthorizeUrl(input: {
   url.searchParams.set("state", input.state);
   if (input.kind === "catalog") {
     url.searchParams.set("prompt", "select_tone");
-    url.searchParams.set("format", "nam");
-    url.searchParams.set("architecture", "2");
+    if (input.gears === "cab") {
+      url.searchParams.set("format", "ir");
+    } else {
+      url.searchParams.set("format", "nam");
+      url.searchParams.set("architecture", "2");
+    }
     url.searchParams.set("gears", input.gears ?? "amp_amp-cab");
     url.searchParams.set("menubar", "true");
   }
@@ -141,6 +146,24 @@ function assertOAuth(): void {
   );
   if (ampOnly.searchParams.get("gears") !== "amp" || catalogGearsForFilter("all") !== "amp_amp-cab") {
     throw new Error("Catalog gears must follow the Amp / Amp + Cab / All filter");
+  }
+  const irCatalog = new URL(
+    buildAuthorizeUrl({
+      kind: "catalog",
+      clientId: "pub_key",
+      redirectUri,
+      state: "state1",
+      challenge: "challenge1",
+      gears: "cab",
+    }),
+  );
+  if (
+    irCatalog.searchParams.get("format") !== "ir" ||
+    irCatalog.searchParams.get("gears") !== "cab" ||
+    irCatalog.searchParams.has("architecture") ||
+    irCatalog.searchParams.get("prompt") !== "select_tone"
+  ) {
+    throw new Error("The IR catalog must select format=ir, gears=cab, and no architecture");
   }
   let missing = false;
   try {

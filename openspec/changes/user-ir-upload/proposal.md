@@ -10,6 +10,7 @@ GP Studio can select the twenty onboard User IR slots and show their names, but 
 - `DeviceSession.uploadUserIr` sends `[0x11, 0x21, nId 0, fxId 0x0A100000 + (slot − 1), name[16], node[16], fPara[32], data[2048]]` — 2122 bytes, 112 frames — through `sendSnapFrames` (per-frame ACK, resend, 20 ms gap) and reports per-frame progress. Other writes return `busy` while it runs. It verifies by reading `12 20` until the slot has flag 0 and the stored name.
 - The `12 20` read is byte-for-byte the USB IR-name ask already sent on connect. The session now also reads the flags from that reply (`userIrSlots`) and still lets it through to `IrNameDecoder`, so names and the Nam-ask order are unchanged.
 - Bluetooth does not send the file and the control explains USB is required.
+- TONE3000, as in the SnapTone modal: a `Browse TONE3000` button and a per-slot `My Computer` / `TONE3000` menu open `Tone3000Catalog` with `target="ir"`. Lists request `gear=cab` and keep rows with `format=ir` (lists have no format param; latest filters client-side). The gear filter is hidden. A tone loads its files from `/api/v1/models` without `architecture`. `Browse all` opens the select popup with `format=ir&gears=cab` and no architecture. A chosen file goes through `prepareUserIr` and the IR upload; `Also save .wav file` keeps the download option.
 
 ## Non-goals
 

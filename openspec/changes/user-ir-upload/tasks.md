@@ -11,10 +11,13 @@
 
 - [x] 3.1 Header `IR` control (USB; Bluetooth toast), IR modal with slot list, WAV pick/drop, preview (format, slot, overwrite note, name, truncation note), per-frame progress, errors.
 
+- [x] 3.2 TONE3000 in the IR modal: `Tone3000Catalog` `target="ir"` (cab/ir lists, IR models, `format=ir` select popup, IR preview and upload). Self-checks in `api.ts` and `oauth.ts`.
+
 ## 4. Hardware
 
-- [ ] 4.1 Pato runs the User IR section of `src/snaptone/HARDWARE_TEST.md` on GP-5.
-- [ ] 4.2 Same on GP-50. If it fails, capture Suite's USB upload before changing the wire.
+- [x] 4.1 Pato runs the User IR section of `src/snaptone/HARDWARE_TEST.md` on GP-5.
+- [x] 4.2 Same on GP-50.
+- [ ] 4.3 Pick an IR from TONE3000 (list and Browse all) on a real account and upload it.
 
 ## 5. Later
 

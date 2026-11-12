@@ -37,3 +37,5 @@ Pato runs this on a pedal over USB. There is no in-browser pass. The wire is con
 - Overwrite an occupied slot that the current patch uses. The patch keeps the slot and plays the new IR.
 - Cancel and unplug USB mid-upload. The pedal still works and the slot reads again on reconnect.
 - Repeat on GP-50. If the GP-50 rejects frames or verify fails, stop and capture the Suite USB upload.
+- From the IR modal, open TONE3000 on a slot: the lists show only Cab / IR tones. Pick one, upload it, and check the sound.
+- Browse all from the IR modal: the TONE3000 window shows only IRs, and the chosen tone comes back to the IR list.

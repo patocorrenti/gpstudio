@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
+import tone3000Logo from "@/assets/img/tone3000-logo.png";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -34,6 +40,11 @@ import {
   sanitizeUserIrName,
   USER_IR_FIRST, USER_IR_LAST, USER_IR_NAME_MAX,
 } from "@/device/user-ir-table";
+import { getTone3000Account } from "@/features/tone3000/account";
+import { publishableKey } from "@/features/tone3000/oauth";
+import { holdTone3000Popup, openTone3000Popup } from "@/features/tone3000/popup";
+import { Tone3000Catalog } from "@/features/tone3000/Tone3000Catalog";
+import { isNativeDesktop, isTone3000ControlVisible } from "@/features/tone3000/visibility";
 
 const UNKNOWN_SLOT = "This IR slot is unknown until the IR list is read again.";
 const PORT_ERROR = "The MIDI port cannot be written. Close Valeton Suite and try again.";
@@ -96,6 +107,8 @@ export function UserIrDialog({
   const fileRef = useRef<HTMLInputElement>(null);
   const slotRef = useRef(USER_IR_FIRST);
   const toldRef = useRef(false);
+  const [toneSlot, setToneSlot] = useState<number | null>(null);
+  const [uploadMenuSlot, setUploadMenuSlot] = useState<number | null>(null);
 
   useEffect(() => session.subscribe(() => setSnapshot(session.getSnapshot())), [session]);
 
@@ -118,6 +131,7 @@ export function UserIrDialog({
       toldRef.current = true;
       toast(UNKNOWN_SLOT);
     }
+    setToneSlot(null);
     onOpenChange(false);
   }, [draft?.phase, onOpenChange, open, snapshot.status]);
 
@@ -129,6 +143,29 @@ export function UserIrDialog({
   const sending = draft?.phase === "sending";
   const busy = sending || snapshot.snapFileSend;
   const names = snapshot.userIrNames;
+  const offerTone3000 = isTone3000ControlVisible({
+    connected: true,
+    usb: snapshot.linkMode === "usb",
+    publishableKey: publishableKey(),
+    tauri: isNativeDesktop(),
+  });
+
+  function openTone3000(slot: number) {
+    if (getTone3000Account().status !== "signed-in") {
+      const popup = openTone3000Popup();
+      if (!popup) {
+        toast("Allow popups for GP Studio and try again.");
+        return;
+      }
+      holdTone3000Popup(popup);
+    }
+    setToneSlot(slot);
+  }
+
+  function pickFile(slot: number) {
+    slotRef.current = slot;
+    fileRef.current?.click();
+  }
 
   async function onFile(slot: number, file: File) {
     if (!accepts || busy) {
@@ -205,6 +242,7 @@ export function UserIrDialog({
             abortRef.current?.abort();
             setDraft(null);
             setProgress(0);
+            setToneSlot(null);
           }
           onOpenChange(next);
         }}
@@ -298,6 +336,25 @@ export function UserIrDialog({
           ) : null}
           {draft ? null : (
             <TooltipProvider delayDuration={300}>
+              {offerTone3000 ? (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-[34px] gap-2 bg-black px-3 text-white hover:bg-black hover:text-white dark:bg-black dark:text-white dark:hover:bg-black dark:hover:text-white"
+                    disabled={!accepts || busy}
+                    aria-label="Browse TONE3000"
+                    onClick={() => {
+                      const emptyIndex = snapshot.userIrSlots.findIndex((entry) => entry.flag !== 0);
+                      openTone3000(USER_IR_FIRST + (emptyIndex >= 0 ? emptyIndex : 0));
+                    }}
+                  >
+                    <span>Browse</span>
+                    <img src={tone3000Logo} alt="TONE3000" className="h-3.5 w-auto" />
+                  </Button>
+                </div>
+              ) : null}
               <div className="max-h-[60vh] divide-y divide-foreground/10 overflow-y-auto">
                 {Array.from({ length: USER_IR_LAST - USER_IR_FIRST + 1 }, (_, index) => {
                   const slot = USER_IR_FIRST + index;
@@ -331,24 +388,67 @@ export function UserIrDialog({
                           {name ?? "Empty"}
                         </span>
                       </span>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label={`Load a WAV into User IR ${pad(slot)}`}
-                            disabled={!accepts || busy}
-                            onClick={() => {
-                              slotRef.current = slot;
-                              fileRef.current?.click();
-                            }}
-                          >
-                            <Upload />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">Load WAV</TooltipContent>
-                      </Tooltip>
+                      {offerTone3000 ? (
+                        <Popover
+                          open={uploadMenuSlot === slot}
+                          onOpenChange={(next) => {
+                            setUploadMenuSlot(next ? slot : null);
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Load an IR into User IR ${pad(slot)}`}
+                              disabled={!accepts || busy}
+                            >
+                              <Upload />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-44 gap-0.5 p-1">
+                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Browse in</p>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                              onClick={() => {
+                                setUploadMenuSlot(null);
+                                pickFile(slot);
+                              }}
+                            >
+                              My Computer
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-8 w-full justify-start gap-2 px-2 font-normal"
+                              onClick={() => {
+                                setUploadMenuSlot(null);
+                                openTone3000(slot);
+                              }}
+                            >
+                              TONE3000
+                            </Button>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Load a WAV into User IR ${pad(slot)}`}
+                              disabled={!accepts || busy}
+                              onClick={() => pickFile(slot)}
+                            >
+                              <Upload />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Load WAV</TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   );
                 })}
@@ -387,6 +487,21 @@ export function UserIrDialog({
           if (file) {
             void onFile(slotRef.current, file);
           }
+        }}
+      />
+      <Tone3000Catalog
+        open={toneSlot !== null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setToneSlot(null);
+          }
+        }}
+        slot={toneSlot}
+        session={session}
+        target="ir"
+        onUploaded={() => {
+          setToneSlot(null);
+          onOpenChange(false);
         }}
       />
     </>
