@@ -67,7 +67,7 @@ export function SnapTonesControl() {
             size="sm"
             disabled={busy}
             className={headerChipClass}
-            aria-label="IR"
+            aria-label="IRs"
             onClick={() => {
               if (!usb) {
                 toast(IR_USB_REQUIRED);
@@ -78,10 +78,10 @@ export function SnapTonesControl() {
             }}
           >
             <AudioWaveform className="size-3.5 text-muted-foreground" aria-hidden />
-            <span className="hidden md:inline">IR</span>
+            <span className="hidden md:inline">IRs</span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">IR</TooltipContent>
+        <TooltipContent side="bottom">IRs</TooltipContent>
       </Tooltip>
       </div>
     </TooltipProvider>
